@@ -1,0 +1,12 @@
+*.o
+*.cmd
+*.ko
+*.cm
+Module.symvers
+modules.order
+.tmp_versions
+fl2000_drm.mod.c
+.cproject
+.project
+.settings
+.cache.mk
