@@ -36,6 +36,7 @@ static int fl2000_device_probe(struct usb_interface *interface,
 {
 	struct fl2000_drm_intfdata *intfdata;
 	int ret = 0;
+	u8 int_num = interface->cur_altsetting->desc.bInterfaceNumber;
 
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	dev_dbg(&usb_dev->dev, " ...%s", __func__);
@@ -48,7 +49,7 @@ static int fl2000_device_probe(struct usb_interface *interface,
 
 	usb_set_intfdata(interface, intfdata);
 
-	switch (interface->cur_altsetting->desc.bInterfaceNumber) {
+	switch (int_num) {
 	case FL2000_USBIF_AVCONTROL:
 		/* TODO:
 		 * 1. register DRM device (NOTE: resolution etc is yet unknown)
@@ -60,9 +61,7 @@ static int fl2000_device_probe(struct usb_interface *interface,
 		 * 1. allocate streaming structures
 		 * 2. attach interface to device
 		 * 3.  */
-		usb_set_interface(usb_dev,
-			interface->cur_altsetting->desc.bInterfaceNumber,
-			FL2000_USBIF_STREAMING);
+		usb_set_interface(usb_dev, int_num, FL2000_USBIF_STREAMING);
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
@@ -102,7 +101,6 @@ static void fl2000_disconnect(struct usb_interface *interface)
 		break;
 
 	case FL2000_USBIF_STREAMING:
-		usb_set_interface(usb_dev, interface->cur_altsetting->desc.bInterfaceNumber, 0);
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
