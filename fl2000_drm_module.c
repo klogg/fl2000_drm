@@ -34,11 +34,11 @@ MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 static int fl2000_device_probe(struct usb_interface *interface,
 		const struct usb_device_id *usb_dev_id)
 {
-	struct usb_device		*usb_dev;
-	struct fl2000_drm_intfdata	*intfdata;
+	struct fl2000_drm_intfdata *intfdata;
 	int ret = 0;
 
-	usb_dev = interface_to_usbdev(interface);
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	dev_dbg(&usb_dev->dev, " ...%s", __func__);
 
 	intfdata = kzalloc(sizeof(struct fl2000_drm_intfdata), GFP_KERNEL);
 	if (!intfdata) {
@@ -59,15 +59,19 @@ static int fl2000_device_probe(struct usb_interface *interface,
 		/* TODO:
 		 * 1. allocate streaming structures
 		 * 2. attach interface to device
-		 * 3. create i2c interface + 2 gpio pins */
-		usb_set_interface(usb_dev, interface->cur_altsetting->desc.bInterfaceNumber, 1);
+		 * 3.  */
+		usb_set_interface(usb_dev,
+			interface->cur_altsetting->desc.bInterfaceNumber,
+			FL2000_USBIF_STREAMING);
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
 		/* TODO:
 		 * 1. create/allocate pipes for interrupt
 		 * 2. attach interface to device
-		 * 3. probe HDMI chips */
+		 * 3. create i2c interface + 2 gpio pins
+		 * NOTE: HDMI interface shall sit on top of I2C (I guess) */
+
 		break;
 
 	case FL2000_USBIF_MASSSTORAGE:
@@ -86,10 +90,10 @@ exit:
 
 static void fl2000_disconnect(struct usb_interface *interface)
 {
-	struct usb_device		*usb_dev;
-	struct fl2000_drm_intfdata 	*intfdata;
+	struct fl2000_drm_intfdata *intfdata;
 
-	usb_dev = interface_to_usbdev(interface);
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	dev_dbg(&usb_dev->dev, " ...%s", __func__);
 
 	intfdata = usb_get_intfdata(interface);
 
@@ -120,12 +124,19 @@ static void fl2000_disconnect(struct usb_interface *interface)
 static int fl2000_suspend(struct usb_interface *interface,
 			   pm_message_t message)
 {
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	dev_dbg(&usb_dev->dev, " ...%s", __func__);
+
 	return 0;
 }
 
 static int fl2000_resume(struct usb_interface *interface)
 {
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	dev_dbg(&usb_dev->dev, " ...%s", __func__);
+
 	/* modeset restore */
+
 	return 0;
 }
 
