@@ -8,6 +8,7 @@
 #include <linux/printk.h>
 #include <linux/init.h>
 #include <linux/usb.h>
+#include <linux/i2c.h>
 #include <drm/drm_device.h>
 
 #endif /* __FL2000_DRM_H__ */

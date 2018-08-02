@@ -1,4 +1,5 @@
-fl2000_drm-y := fl2000_drm_module.o
+fl2000_drm-y := fl2000_drm_module.o \
+		fl2000_drm_i2c.o
 
 obj-m := fl2000_drm.o
 
