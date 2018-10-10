@@ -39,7 +39,7 @@ static int fl2000_device_probe(struct usb_interface *interface,
 	u8 int_num = interface->cur_altsetting->desc.bInterfaceNumber;
 
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	dev_dbg(&usb_dev->dev, " ...%s", __func__);
+	dev_dbg(&usb_dev->dev, " ...%s: %u", __func__, int_num);
 
 	intfdata = kzalloc(sizeof(struct fl2000_drm_intfdata), GFP_KERNEL);
 	if (!intfdata) {
@@ -90,13 +90,14 @@ exit:
 static void fl2000_disconnect(struct usb_interface *interface)
 {
 	struct fl2000_drm_intfdata *intfdata;
+	u8 int_num = interface->cur_altsetting->desc.bInterfaceNumber;
 
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	dev_dbg(&usb_dev->dev, " ...%s", __func__);
+	dev_dbg(&usb_dev->dev, " ...%s: %d", __func__, int_num);
 
 	intfdata = usb_get_intfdata(interface);
 
-	switch (interface->cur_altsetting->desc.bInterfaceNumber) {
+	switch (int_num) {
 	case FL2000_USBIF_AVCONTROL:
 		break;
 
