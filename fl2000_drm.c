@@ -20,10 +20,6 @@
 #define FL2000_USBIF_INTERRUPT		2
 #define FL2000_USBIF_MASSSTORAGE	3
 
-struct fl2000_drm_intfdata {
-	struct device *dev;
-};
-
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
 		USB_PRODUCT_ID_FL2000, USB_CLASS_AV) },
@@ -31,80 +27,82 @@ static struct usb_device_id fl2000_id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
-static int fl2000_device_probe(struct usb_interface *interface,
+static int fl2000_probe(struct usb_interface *interface,
 		const struct usb_device_id *usb_dev_id)
 {
-	struct fl2000_drm_intfdata *intfdata;
 	int ret = 0;
-	u8 int_num = interface->cur_altsetting->desc.bInterfaceNumber;
+	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
 
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	dev_dbg(&usb_dev->dev, " ...%s: %u", __func__, int_num);
 
-	intfdata = kzalloc(sizeof(struct fl2000_drm_intfdata), GFP_KERNEL);
-	if (!intfdata) {
-		ret = -ENOMEM;
-		goto exit;
-	}
+	/* TODO:
+	 * - register DRM device (NOTE: resolution etc is yet unknown)
+	 * - allocate control structure for USB
+	 * - allocate streaming structures
+	 * - 2 gpio pins
+	 * NOTE: HDMI interface shall sit on top of I2C (I guess) */
 
-	usb_set_intfdata(interface, intfdata);
-
-	switch (int_num) {
+	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
-		/* TODO:
-		 * 1. register DRM device (NOTE: resolution etc is yet unknown)
-		 * 2. allocate control structure for USB */
+		dev_info(&usb_dev->dev, "Probing AVControl interface (%u)",
+				iface_num);
+
+		/* This is rather useless, AVControl is not properly implemented
+		 * on FL2000 chip - that is why all the "magic" needed */
+		ret = fl2000_i2c_connect(usb_dev);
+		if (ret != 0) goto error;
 		break;
 
 	case FL2000_USBIF_STREAMING:
-		/* TODO:
-		 * 1. allocate streaming structures
-		 * 2. attach interface to device
-		 * 3.  */
-		usb_set_interface(usb_dev, int_num, FL2000_USBIF_STREAMING);
+		dev_info(&usb_dev->dev, "Probing Streaming interface (%u)",
+				iface_num);
+
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
-		/* TODO:
-		 * 1. create/allocate pipes for interrupt
-		 * 2. attach interface to device
-		 * 3. create i2c interface + 2 gpio pins
-		 * NOTE: HDMI interface shall sit on top of I2C (I guess) */
+		dev_info(&usb_dev->dev, "Probing Interrupt interface (%u)",
+				iface_num);
 
+		ret = fl2000_intr_create(interface);
+		if (ret != 0) goto error;
 		break;
 
 	case FL2000_USBIF_MASSSTORAGE:
-		/* What TODO?
-		 */
+		/* This is defined but not getting probed - do nothing */
+		dev_warn(&interface->dev, "Unexpectedly probed Mass Storage");
 		break;
 
 	default:
 		/* Device does not have any other interfaces */
+		dev_warn(&interface->dev, "What interface %d?",
+				interface->cur_altsetting->desc.iInterface);
 		break;
 	}
 
-exit:
+error:
 	return ret;
 }
 
 static void fl2000_disconnect(struct usb_interface *interface)
 {
 	struct fl2000_drm_intfdata *intfdata;
-	u8 int_num = interface->cur_altsetting->desc.bInterfaceNumber;
+	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
 
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	dev_dbg(&usb_dev->dev, " ...%s: %d", __func__, int_num);
+	dev_info(&usb_dev->dev, "Disconnecting interface: %u", iface_num);
 
 	intfdata = usb_get_intfdata(interface);
 
-	switch (int_num) {
+	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
+		fl2000_i2c_disconnect(usb_dev);
 		break;
 
 	case FL2000_USBIF_STREAMING:
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
+		fl2000_intr_destroy(interface);
 		break;
 
 	case FL2000_USBIF_MASSSTORAGE:
@@ -124,7 +122,9 @@ static int fl2000_suspend(struct usb_interface *interface,
 			   pm_message_t message)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	dev_dbg(&usb_dev->dev, " ...%s", __func__);
+	dev_dbg(&usb_dev->dev, "resume");
+
+	/* TODO: suspend */
 
 	return 0;
 }
@@ -132,16 +132,16 @@ static int fl2000_suspend(struct usb_interface *interface,
 static int fl2000_resume(struct usb_interface *interface)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	dev_dbg(&usb_dev->dev, " ...%s", __func__);
+	dev_dbg(&usb_dev->dev, "suspend");
 
-	/* modeset restore */
+	/* TODO: resume */
 
 	return 0;
 }
 
 static struct usb_driver fl2000_driver = {
 	.name 		= "fl2000_drm",
-	.probe 		= fl2000_device_probe,
+	.probe 		= fl2000_probe,
 	.disconnect 	= fl2000_disconnect,
 	.suspend	= fl2000_suspend,
 	.resume		= fl2000_resume,
