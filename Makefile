@@ -1,6 +1,7 @@
 fl2000_drm-y := fl2000_drm.o \
-		fl2000_drm_registers.o
+		fl2000_drm_registers.o \
 		fl2000_drm_interrupt.o \
+		fl2000_drm_streaming.o \
 		fl2000_drm_i2c.o \
 
 obj-m := fl2000_drm.o
