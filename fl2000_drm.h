@@ -1,3 +1,11 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * fl2000_drm.h
+ *
+ * (C) Copyright 2017, Fresco Logic, Incorporated.
+ * (C) Copyright 2018, Artem Mygaiev
+ */
+
 #ifndef __FL2000_DRM_H__
 #define __FL2000_DRM_H__
 

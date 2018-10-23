@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * fl2000_drm_module.c
  *
@@ -154,4 +155,4 @@ module_usb_driver(fl2000_driver); /* @suppress("Unused static function")
 
 MODULE_AUTHOR("Artem Mygaiev");
 MODULE_DESCRIPTION("FL2000 USB HDMI video driver");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");
