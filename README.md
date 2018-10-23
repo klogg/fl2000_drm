@@ -25,3 +25,13 @@ This is not going to happen - both chips are poorly supported by their vendors, 
  * original driver by FrescoLogic: https://github.com/FrescoLogic/FL2000
  * major clean-up by Hans Ulli Kroll: https://github.com/ulli-kroll/FL2000
  * reference IT66121FN driver ftom RK3188 Android KK kernel repositpry: https://github.com/phjanderson/Kernel-3188
+
+## Notes
+ * Not clear if FL2000DX can support USB Bulk Streams. How to check it?
+ * IT66121 can be (probably) separated into a standalone DRM Bridge driver (see drivers/gpu/drm/bridge)
+ * Register address for IT66121 shall be done via regmap (see <linux/regmap.h>)
+ * For registration of CEC I2C device of IT66121 i2c\_new\_dummy() function may be used
+ * How the DDC node is attached to the DRM bridge?
+ * What is the difference between DRM Bridge and DRM Encoder?
+ * Use USB DisplayLink driver as a reference (see drivers/gpu/drm/udl)
+ * How bridges dynamically attached or probed to the DRM device? What if not attached?
