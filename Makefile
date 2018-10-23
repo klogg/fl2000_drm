@@ -1,4 +1,5 @@
-fl2000_drm-y := fl2000_drm.o \
+fl2000_drm-y := \
+		fl2000_drm_usb.o \
 		fl2000_drm_registers.o \
 		fl2000_drm_interrupt.o \
 		fl2000_drm_streaming.o \
