@@ -35,3 +35,4 @@ This is not going to happen - both chips are poorly supported by their vendors, 
  * What is the difference between DRM Bridge and DRM Encoder?
  * Use USB DisplayLink driver as a reference (see drivers/gpu/drm/udl)
  * How bridges dynamically attached or probed to the DRM device? What if not attached?
+ * HW level "Configure" and "Enable" missing for different PLLs, I2C, interrupts, etc.
