@@ -121,9 +121,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 		goto error;
 	}
 
-	dev_info(&interface->dev, "Setting interrupt interface %d:\n" \
-			"   alternate setting %d\n " \
-			"   endpoint %d",
+	dev_info(&interface->dev, "Setting interrupt interface %d: " \
+			"altsetting %d, endpoint %d",
 			host_interface->desc.bInterfaceNumber,
 			host_interface->desc.bAlternateSetting,
 			usb_endpoint_num(desc));
