@@ -62,12 +62,19 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	fl2000_i2c_control_reg control = {.w = 0};
 	bool read = !!(data_msg->flags & I2C_M_RD);
 
-	/* TODO: Possible checks of the message (i2c stack shall do it):
+#if DEBUG
+	/* xfer validation (actually i2c stack shall do it):
 	 *  - there is only 2 messages for an xfer
 	 *  - 1st message size is 2 bytes
 	 *  - 2nd message size is 4 bytes
 	 *  - 1st message is always "write"
 	 *  - both messages have same addresses */
+	WARN_ON((num != I2C_CMESSAGE_SIZE) ||
+		(addr_msg->len != I2C_REG_ADDR_SIZE) ||
+		(data_msg->len != I2C_REG_DATA_SIZE) ||
+		(addr_msg->flags & I2C_M_RD) ||
+		(addr_msg->addr != data_msg->addr));
+#endif
 
 	if (!read) {
 		ret = fl2000_reg_write(i2c_bus->usb_dev, (u32 *)data_msg->buf,

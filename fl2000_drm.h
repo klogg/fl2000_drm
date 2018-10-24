@@ -9,7 +9,7 @@
 #ifndef __FL2000_DRM_H__
 #define __FL2000_DRM_H__
 
-#define DEBUG
+#define DEBUG 1
 
 #include <linux/module.h>
 #include <linux/types.h>
