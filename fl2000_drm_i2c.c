@@ -18,7 +18,7 @@
 /* I2C controller require mandatory 16-bit (2 bite) sub-address provided for any
  * read/write operation. Each read or write operate with 32-bit (4-byte) data.
  * Every exchange shall consist of 2 messages (sub-address + data) combined */
-#define I2C_CMESSAGE_SIZE	2
+#define I2C_CMESSAGES_NUM	2
 #define I2C_REG_ADDR_SIZE	2
 #define I2C_REG_DATA_SIZE	4
 
@@ -69,7 +69,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	 *  - 2nd message size is 4 bytes
 	 *  - 1st message is always "write"
 	 *  - both messages have same addresses */
-	WARN_ON((num != I2C_CMESSAGE_SIZE) ||
+	WARN_ON((num != I2C_CMESSAGES_NUM) ||
 		(addr_msg->len != I2C_REG_ADDR_SIZE) ||
 		(data_msg->len != I2C_REG_DATA_SIZE) ||
 		(addr_msg->flags & I2C_M_RD) ||
@@ -123,7 +123,7 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.flags = I2C_AQ_COMB |		   /* enforce "combined" mode */
 		 I2C_AQ_COMB_WRITE_FIRST | /* address write goes first */
 		 I2C_AQ_COMB_SAME_ADDR,    /* both are on the same address */
-	.max_num_msgs		= I2C_CMESSAGE_SIZE,
+	.max_num_msgs		= I2C_CMESSAGES_NUM,
 	.max_write_len		= I2C_REG_DATA_SIZE,
 	.max_read_len		= I2C_REG_DATA_SIZE,
 	.max_comb_1st_msg_len	= I2C_REG_ADDR_SIZE,
