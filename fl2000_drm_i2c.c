@@ -162,6 +162,7 @@ int fl2000_i2c_connect(struct usb_device *usb_dev)
 	}
 
 	dev_info(&i2c_bus->adapter.dev, "Connected I2C adapter");
+	return 0;
 
 error:
 	/* Enforce cleanup in case of error */
