@@ -8,6 +8,8 @@
 
 #include "fl2000_drm.h"
 
+#define USB_DRIVER_NAME			"fl2000_usb"
+
 #define USB_CLASS_AV 			0x10
 #define USB_SUBCLASS_AV_CONTROL		0x01
 #define USB_SUBCLASS_AV_VIDEO		0x02
@@ -140,7 +142,7 @@ static int fl2000_resume(struct usb_interface *interface)
 }
 
 static struct usb_driver fl2000_driver = {
-	.name 		= "fl2000_drm",
+	.name 		= USB_DRIVER_NAME,
 	.probe 		= fl2000_probe,
 	.disconnect 	= fl2000_disconnect,
 	.suspend	= fl2000_suspend,
