@@ -82,11 +82,15 @@ static void fl2000_intr_completion(struct urb *urb)
 
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 
-	if (queue_work(intr->work_queue, &intr->work)) return;
+	if (queue_work(intr->work_queue, &intr->work))
+		/* Exit on success */
+		return;
+
+	dev_err(&intr->interface->dev, "Cannot queue URB processing work");
 
 	if (atomic_read(&intr->state) != RUN) return;
 
-	/* Restart urb in case of failure */
+	/* Restart urb in case of work queuing failure */
 	ret = fl2000_intr_submit_urb(intr);
 	if (ret != 0) {
 		atomic_set(&intr->state, STOP);
