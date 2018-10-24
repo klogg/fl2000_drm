@@ -40,7 +40,6 @@ static int fl2000_probe(struct usb_interface *interface,
 	 * - register DRM device (NOTE: resolution etc is yet unknown)
 	 * - allocate control structure for USB
 	 * - allocate streaming structures
-	 * - 2 gpio pins
 	 * NOTE: HDMI interface shall sit on top of I2C (I guess) */
 
 	switch (iface_num) {
