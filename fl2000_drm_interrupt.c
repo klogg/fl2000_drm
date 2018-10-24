@@ -11,6 +11,8 @@
 #define RUN	(1U)
 #define STOP	(0U)
 
+#define INTR_BUFSIZE	4
+
 struct fl2000_drm_intr {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
@@ -19,7 +21,7 @@ struct fl2000_drm_intr {
 	struct urb *urb;
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
-	u8 buf;
+	u8 *buf;
 	atomic_t state;
 };
 
@@ -27,13 +29,13 @@ static void fl2000_intr_completion(struct urb *urb);
 
 static inline int fl2000_intr_submit_urb(struct fl2000_drm_intr *intr)
 {
-	/* NOTE: always submit 1 byte for data, never set/process it, why? */
+	/* NOTE: always submit data, never set/process it, why? */
 	usb_fill_int_urb(
 		intr->urb,
 		intr->usb_dev,
 		intr->pipe,
-		&intr->buf,
-		sizeof(intr->buf),
+		intr->buf,
+		INTR_BUFSIZE,
 		fl2000_intr_completion,
 		intr,
 		intr->interval);
@@ -139,6 +141,13 @@ int fl2000_intr_create(struct usb_interface *interface)
 		goto error;
 	}
 
+	intr->buf = kzalloc(INTR_BUFSIZE, GFP_DMA);
+	if (intr->buf == NULL) {
+		dev_err(&interface->dev, "Cannot allocate interrupt data");
+		ret = -ENOMEM;
+		goto error;
+	}
+
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!intr->urb) {
 		dev_err(&interface->dev, "Allocate interrupt URB failed");
@@ -194,6 +203,9 @@ void fl2000_intr_destroy(struct usb_interface *interface)
 		usb_free_urb(intr->urb);
 
 	usb_set_intfdata(interface, NULL);
+
+	if (intr->buf != NULL)
+		kfree(intr->buf);
 
 	kfree(intr);
 }
