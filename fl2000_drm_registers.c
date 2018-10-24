@@ -17,7 +17,7 @@
 
 int fl2000_reg_read(struct usb_device *usb_dev, u32 *data, u16 offset)
 {
-	return usb_control_msg(
+	int ret = usb_control_msg(
 		usb_dev,
 		usb_rcvctrlpipe(usb_dev, 0),
 		CONTROL_MSG_READ,
@@ -27,11 +27,16 @@ int fl2000_reg_read(struct usb_device *usb_dev, u32 *data, u16 offset)
 		data,
 		CONTROL_MSG_LEN,
 		CONTROL_XFER_TIMEOUT);
+	if (ret > 0) {
+		if (ret != CONTROL_MSG_LEN) ret = -1;
+		else ret = 0;
+	}
+	return ret;
 }
 
 int fl2000_reg_write(struct usb_device *usb_dev, u32 *data, u16 offset)
 {
-	return usb_control_msg(
+	int ret = usb_control_msg(
 		usb_dev,
 		usb_sndctrlpipe(usb_dev, 0),
 		CONTROL_MSG_WRITE,
@@ -41,6 +46,11 @@ int fl2000_reg_write(struct usb_device *usb_dev, u32 *data, u16 offset)
 		data,
 		CONTROL_MSG_LEN,
 		CONTROL_XFER_TIMEOUT);
+	if (ret > 0) {
+		if (ret != CONTROL_MSG_LEN) ret = -1;
+		else ret = 0;
+	}
+	return ret;
 }
 
 
