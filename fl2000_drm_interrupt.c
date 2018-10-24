@@ -22,6 +22,7 @@ struct fl2000_drm_intr {
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
 	u8 *buf;
+	u32 status;
 	atomic_t state;
 };
 
@@ -48,12 +49,11 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	int ret;
 	struct fl2000_drm_intr *intr = container_of(work_item,
 			struct fl2000_drm_intr, work);
-	u32 status;
 
 	if (intr == NULL) return;
 
 	/* Read interrupt status register */
-	ret = fl2000_reg_read(intr->usb_dev, &status, FL2000_REG_INT_STATUS);
+	ret = fl2000_reg_read(intr->usb_dev, &intr->status, FL2000_REG_INT_STATUS);
 	if (ret != 0) {
 		dev_err(&intr->interface->dev, "Cannot read interrupt" \
 				"register (%d)", ret);
