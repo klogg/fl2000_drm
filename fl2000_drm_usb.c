@@ -87,13 +87,10 @@ error:
 
 static void fl2000_disconnect(struct usb_interface *interface)
 {
-	struct fl2000_drm_intfdata *intfdata;
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
 
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	dev_info(&usb_dev->dev, "Disconnecting interface: %u", iface_num);
-
-	intfdata = usb_get_intfdata(interface);
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
@@ -114,10 +111,6 @@ static void fl2000_disconnect(struct usb_interface *interface)
 		/* Device does not have any other interfaces */
 		break;
 	}
-
-	usb_set_intfdata(interface, NULL);
-
-	kfree(intfdata);
 }
 
 static int fl2000_suspend(struct usb_interface *interface,

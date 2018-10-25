@@ -26,7 +26,7 @@
 #define I2C_RDWR_TIMEOUT	5
 #define I2C_RDWR_RETRIES	10
 
-struct fl2000_drm_i2c_bus {
+struct fl2000_i2c_bus {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	struct i2c_adapter adapter;
@@ -58,7 +58,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 {
 	int i, ret = 0;
 	struct i2c_msg *addr_msg = &msgs[0], *data_msg = &msgs[1];
-	struct fl2000_drm_i2c_bus *i2c_bus = adapter->algo_data;
+	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
 	fl2000_i2c_control_reg control = {.w = 0};
 	bool read = !!(data_msg->flags & I2C_M_RD);
 
@@ -138,7 +138,7 @@ static const struct i2c_algorithm fl2000_i2c_algorithm = {
 int fl2000_i2c_connect(struct usb_device *usb_dev)
 {
 	int ret = 0;
-	struct fl2000_drm_i2c_bus *i2c_bus;
+	struct fl2000_i2c_bus *i2c_bus;
 
 	i2c_bus = kzalloc(sizeof(*i2c_bus), GFP_KERNEL);
 	if (i2c_bus == NULL) {
@@ -180,7 +180,7 @@ error:
 
 void fl2000_i2c_disconnect(struct usb_device *usb_dev)
 {
-	struct fl2000_drm_i2c_bus *i2c_bus = dev_get_drvdata(&usb_dev->dev);
+	struct fl2000_i2c_bus *i2c_bus = dev_get_drvdata(&usb_dev->dev);
 
 	if (i2c_bus == NULL) return;
 
