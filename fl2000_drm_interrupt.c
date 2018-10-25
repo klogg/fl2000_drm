@@ -13,7 +13,7 @@
 
 #define INTR_BUFSIZE	4
 
-struct fl2000_drm_intr {
+struct fl2000_intr {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	unsigned int pipe;
@@ -28,7 +28,7 @@ struct fl2000_drm_intr {
 
 static void fl2000_intr_completion(struct urb *urb);
 
-static inline int fl2000_intr_submit_urb(struct fl2000_drm_intr *intr)
+static inline int fl2000_intr_submit_urb(struct fl2000_intr *intr)
 {
 	/* NOTE: always submit data, never set/process it, why? */
 	usb_fill_int_urb(
@@ -47,8 +47,8 @@ static inline int fl2000_intr_submit_urb(struct fl2000_drm_intr *intr)
 static void fl2000_intr_work(struct work_struct *work_item)
 {
 	int ret;
-	struct fl2000_drm_intr *intr = container_of(work_item,
-			struct fl2000_drm_intr, work);
+	struct fl2000_intr *intr = container_of(work_item,
+			struct fl2000_intr, work);
 
 	if (intr == NULL) return;
 
@@ -76,7 +76,7 @@ static void fl2000_intr_work(struct work_struct *work_item)
 static void fl2000_intr_completion(struct urb *urb)
 {
 	int ret;
-	struct fl2000_drm_intr *intr = urb->context;
+	struct fl2000_intr *intr = urb->context;
 
 	if (intr == NULL) return;
 
@@ -101,7 +101,7 @@ static void fl2000_intr_completion(struct urb *urb)
 int fl2000_intr_create(struct usb_interface *interface)
 {
 	int i, ret = 0;
-	struct fl2000_drm_intr *intr;
+	struct fl2000_intr *intr;
 	struct usb_host_interface *host_interface = NULL;
 	struct usb_endpoint_descriptor *desc = NULL;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
@@ -186,7 +186,7 @@ error:
 
 void fl2000_intr_destroy(struct usb_interface *interface)
 {
-	struct fl2000_drm_intr *intr = usb_get_intfdata(interface);
+	struct fl2000_intr *intr = usb_get_intfdata(interface);
 
 	if (intr == NULL)
 		return;

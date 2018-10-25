@@ -19,7 +19,10 @@
 #include <linux/init.h>
 #include <linux/usb.h>
 #include <linux/i2c.h>
-#include <drm/drm_device.h>
+#include <linux/shmem_fs.h>
+#include <linux/dma-buf.h>
+#include <drm/drmP.h>
+#include <drm/drm_gem.h>
 
 #define FL2000_I2C_ADDRESS_HDMI		0x4C
 #define FL2000_I2C_ADDRESS_DSUB		0x50
