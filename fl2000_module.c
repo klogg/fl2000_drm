@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * fl2000_drm_module.c
+ * fl2000_module.c
  *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
  * (C) Copyright 2018, Artem Mygaiev
  */
 
-#include "fl2000_drm.h"
+#include "fl2000.h"
 
 #define USB_DRIVER_NAME			"fl2000_usb"
 
