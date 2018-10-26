@@ -1,16 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * fl2000_drm_gem.c
+ * fl2000_gem.c
  *
  * (C) Copyright 2012, Red Hat
  * (C) Copyright 2018, Artem Mygaiev
  */
 
-#include "fl2000_drm.h"
+#include "fl2000.h"
 
 #define UDL_BO_CACHEABLE	(1 << 0)
 #define UDL_BO_WC		(1 << 1)
-
 
 static const struct vm_operations_struct udl_gem_vm_ops = {
 	.fault = udl_gem_fault,
@@ -230,4 +229,3 @@ void udl_gem_free_object(struct drm_gem_object *gem_obj)
 
 	drm_gem_free_mmap_offset(gem_obj);
 }
-

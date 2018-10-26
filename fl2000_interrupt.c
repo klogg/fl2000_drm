@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * fl2000_drm_intr.c
+ * fl2000_intr.c
  *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
  * (C) Copyright 2018, Artem Mygaiev
  */
 
-#include "fl2000_drm.h"
+#include "fl2000.h"
 
 #define RUN	(1U)
 #define STOP	(0U)

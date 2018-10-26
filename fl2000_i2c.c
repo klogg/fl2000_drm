@@ -1,12 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * fl2000_drm_i2c.c
+ * fl2000_i2c.c
  *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
  * (C) Copyright 2018, Artem Mygaiev
  */
 
-#include "fl2000_drm.h"
+#include "fl2000.h"
 
 #define I2C_CMD_WRITE		0
 #define I2C_CMD_READ		1
