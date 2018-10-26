@@ -178,6 +178,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 		goto error;
 	}
 
+	return 0;
 error:
 	/* Enforce cleanup in case of error */
 	fl2000_intr_destroy(interface);
