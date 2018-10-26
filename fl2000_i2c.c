@@ -141,9 +141,9 @@ int fl2000_i2c_connect(struct usb_device *usb_dev)
 	struct fl2000_i2c_bus *i2c_bus;
 
 	i2c_bus = kzalloc(sizeof(*i2c_bus), GFP_KERNEL);
-	if (i2c_bus == NULL) {
+	if (IS_ERR(i2c_bus)) {
 		dev_err(&usb_dev->dev, "Out of memory");
-		ret = -ENOMEM;
+		ret = PTR_ERR(i2c_bus);
 		goto error;
 	}
 
