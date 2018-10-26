@@ -137,31 +137,31 @@ int fl2000_intr_create(struct usb_interface *interface)
 	}
 
 	intr = kzalloc(sizeof(*intr), GFP_KERNEL);
-	if (intr == NULL) {
+	if (IS_ERR(intr)) {
 		dev_err(&interface->dev, "Cannot allocate interrupt private" \
 				"structure");
-		ret = -ENOMEM;
+		ret = PTR_ERR(intr);
 		goto error;
 	}
 
 	intr->buf = kzalloc(INTR_BUFSIZE, GFP_DMA);
-	if (intr->buf == NULL) {
+	if (IS_ERR(intr->buf)) {
 		dev_err(&interface->dev, "Cannot allocate interrupt data");
-		ret = -ENOMEM;
+		ret = PTR_ERR(intr->buf);
 		goto error;
 	}
 
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
-	if (!intr->urb) {
+	if (IS_ERR(intr->urb)) {
 		dev_err(&interface->dev, "Allocate interrupt URB failed");
-		ret = -ENOMEM;
+		ret = PTR_ERR(intr->urb);
 		goto error;
 	}
 
 	intr->work_queue = create_workqueue("work_queue");
-	if (intr->work_queue == NULL) {
+	if (IS_ERR(intr->work_queue)) {
 		dev_err(&interface->dev, "Create interrupt workqueue failed");
-		ret = -ENOMEM;
+		ret = PTR_ERR(intr->work_queue);
 		goto error;
 	}
 	intr->usb_dev = usb_dev;
