@@ -8,37 +8,6 @@
 
 #include "fl2000.h"
 
-#define UDL_BO_CACHEABLE	(1 << 0)
-#define UDL_BO_WC		(1 << 1)
-
-static const struct vm_operations_struct udl_gem_vm_ops = {
-	.fault = udl_gem_fault,
-	.open = drm_gem_vm_open,
-	.close = drm_gem_vm_close,
-};
-
-static struct drm_driver fl2000_drm_driver = {
-
-	.gem_free_object = udl_gem_free_object,
-	.gem_vm_ops = &udl_gem_vm_ops,
-
-	.dumb_create = fl2000_dumb_create,
-	.dumb_map_offset = drm_gem_dumb_map_offset,
-	.dumb_destroy = drm_gem_dumb_destroy,
-
-	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
-	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
-
-	.gem_prime_export = drm_gem_prime_import,
-	.gem_prime_import = drm_gem_prime_export,
-
-	.gem_prime_get_sg_table = NULL,
-	.gem_prime_vmap = NULL,
-	.gem_prime_vunmap = NULL,
-
-};
-
-
 struct udl_gem_object *udl_gem_alloc_object(struct drm_device *dev, size_t size)
 {
 	struct udl_gem_object *obj;
@@ -123,21 +92,20 @@ int udl_drm_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 	return ret;
 }
 
-int udl_gem_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+int fl2000_gem_fault(struct vm_fault *vmf)
 {
-	struct udl_gem_object *obj = to_udl_bo(vma->vm_private_data);
+	struct drm_gem_object *gobj = vmf->vma->vm_private_data;
 	struct page *page;
 	unsigned int page_offset;
 	int ret = 0;
 
-	page_offset = (vmf->address - vma->vm_start) >>
-		PAGE_SHIFT;
+	page_offset = (vmf->address - vmf->vma->vm_start) >> PAGE_SHIFT;
 
 	if (!obj->pages)
 		return VM_FAULT_SIGBUS;
 
 	page = obj->pages[page_offset];
-	ret = vm_insert_page(vma, vmf->address, page);
+	ret = vm_insert_page(vmf->vma, vmf->address, page);
 	switch (ret) {
 	case -EAGAIN:
 	case 0:
