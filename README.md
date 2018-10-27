@@ -11,6 +11,8 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 ## Limitations
  * USB2.0 is not supported
  * Connecting more than one dongles to the same bus is not supported
+ * Static configuration of slave encoder supporting only IT66121 HDMI transmitter
+ * VGA output of FL2000DX is not supported
  * HDMI CEC is not supported
  * HDMI Audio is not supported
  * HDCP is not supported
@@ -25,14 +27,15 @@ This is not going to happen - both chips are poorly supported by their vendors, 
  * original driver by FrescoLogic: https://github.com/FrescoLogic/FL2000
  * major clean-up by Hans Ulli Kroll: https://github.com/ulli-kroll/FL2000
  * reference IT66121FN driver ftom RK3188 Android KK kernel repositpry: https://github.com/phjanderson/Kernel-3188
+ * reference USB DRM implementation of DisplayLink driver (see drivers/gpu/drm/udl)
+ * reference simple DRM implementation of PL111 driver (see drivers/gpu/drm/pl111)
 
 ## Notes
- * Not clear if FL2000DX can support USB Bulk Streams. How to check it?
- * IT66121 can be (probably) separated into a standalone DRM Bridge driver (see drivers/gpu/drm/bridge)
- * Register address for IT66121 shall be done via regmap (see <linux/regmap.h>)
+ * IT66121 can be implemented as a DRM slave encoder
+ * Register address for IT66121 can be done via regmap (see <linux/regmap.h>)
  * For registration of CEC I2C device of IT66121 i2c\_new\_dummy() function may be used
- * How the DDC node is attached to the DRM bridge?
- * What is the difference between DRM Bridge and DRM Encoder?
- * Use USB DisplayLink driver as a reference (see drivers/gpu/drm/udl)
- * How bridges dynamically attached or probed to the DRM device? What if not attached?
- * HW level "Configure" and "Enable" missing for different PLLs, I2C, interrupts, etc.
+
+## Open questions
+ * How the DDC node is attached to the DRM slave encoder?
+ * Can FL2000DX support USB Bulk Streams?
+ * Are there more than 1 plane in FL2000DX? 
