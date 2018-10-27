@@ -4,6 +4,7 @@ fl2000-y := \
 		fl2000_interrupt.o \
 		fl2000_streaming.o \
 		fl2000_i2c.o \
+		fl2000_drm.o
 
 obj-m := fl2000.o
 
