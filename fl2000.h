@@ -37,6 +37,9 @@ void fl2000_intr_destroy(struct usb_interface *interface);
 int fl2000_i2c_connect(struct usb_device *usb_dev);
 void fl2000_i2c_disconnect(struct usb_device *usb_dev);
 
+int fl2000_drm_create(struct usb_interface *interface);
+void fl2000_drm_destroy(struct usb_interface *interface);
+
 #define FL2000_REG_INT_STATUS	0x8000 /* Interrupt status ? */
 #define FL2000_REG_FORMAT	0x8004 /* Picture format / Color mode ? */
 #define FL2000_REG_H_SYNC1	0x8008 /* h_sync_reg_1 */
