@@ -12,7 +12,7 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
  * USB2.0 is not supported
  * Connecting more than one dongles to the same bus is not supported
  * Static configuration of slave encoder supporting only IT66121 HDMI transmitter
- * VGA output of FL2000DX is not supported
+ * VGA (D-Sub) DAC output of FL2000DX is not supported
  * HDMI CEC is not supported
  * HDMI Audio is not supported
  * HDCP is not supported
@@ -24,13 +24,15 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 This is not going to happen - both chips are poorly supported by their vendors, if at all
 
 ## Sources
- * original driver by FrescoLogic: https://github.com/FrescoLogic/FL2000
- * major clean-up by Hans Ulli Kroll: https://github.com/ulli-kroll/FL2000
- * reference IT66121FN driver ftom RK3188 Android KK kernel repositpry: https://github.com/phjanderson/Kernel-3188
- * reference USB DRM implementation of DisplayLink driver (see drivers/gpu/drm/udl)
- * reference simple DRM implementation of PL111 driver (see drivers/gpu/drm/pl111)
+ * Original driver by FrescoLogic: https://github.com/FrescoLogic/FL2000
+ * Major clean-up of original FL driver by Hans Ulli Kroll: https://github.com/ulli-kroll/FL2000
+ * Reference IT66121FN driver ftom RK3188 Android KK kernel repositpry: https://github.com/phjanderson/Kernel-3188
+ * Reference USB DRM implementation of DisplayLink driver (see drivers/gpu/drm/udl)
+ * Reference simple DRM implementation of PL111 driver (see drivers/gpu/drm/pl111)
 
 ## Notes
+ * We can use simple DRM display pipeline (only prime plane -> crtc -> only one encoder)
+ * FL2000DX encoder hsa is DPI interface
  * IT66121 can be implemented as a DRM slave encoder
  * Register address for IT66121 can be done via regmap (see <linux/regmap.h>)
  * For registration of CEC I2C device of IT66121 i2c\_new\_dummy() function may be used
@@ -38,4 +40,4 @@ This is not going to happen - both chips are poorly supported by their vendors, 
 ## Open questions
  * How the DDC node is attached to the DRM slave encoder?
  * Can FL2000DX support USB Bulk Streams?
- * Are there more than 1 plane in FL2000DX? 
+ * How many planes are there in FL2000DX? 
