@@ -138,16 +138,27 @@ static int fl2000_modeset_init(struct drm_device *dev)
 	ret = drm_simple_display_pipe_init(dev, &drm_if->pipe,
 			&fl2000_display_funcs, fl2000_pixel_formats,
 			ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
+	if (ret != 0) {
+		dev_err(&dev->dev, "Cannot configure simple display pipe");
+		goto error;
+	}
 
-	/* attach encoder slave */
+	/* TODO: attach encoder slave */
 
 	drm_mode_config_reset(dev);
 
-	drm_fb_cma_fbdev_init(dev, BPP, 0);
+	ret = drm_fb_cma_fbdev_init(dev, BPP, 0);
+	if (ret != 0) {
+		dev_err(&dev->dev, "Cannot initialize CMA framebuffer");
+		goto error;
+	}
 
 	drm_kms_helper_poll_init(dev);
 
 	return 0;
+
+error:
+	return ret;
 }
 
 int fl2000_drm_create(struct usb_interface *interface)
@@ -159,6 +170,7 @@ int fl2000_drm_create(struct usb_interface *interface)
 
 	drm = drm_dev_alloc(&fl2000_drm_driver, &usb_dev->dev);
 	if (IS_ERR(drm)) {
+		dev_err(&interface->dev, "Cannot allocate DRM device");
 		return PTR_ERR(drm);
 		goto error;
 	}
@@ -176,14 +188,18 @@ int fl2000_drm_create(struct usb_interface *interface)
 	drm_if->drm = drm;
 
 	ret = fl2000_modeset_init(drm);
-	if (ret < 0)
+	if (ret < 0) {
+		dev_err(&interface->dev, "DRM modeset failed");
 		goto error;
+	}
 
 	drm->dev_private = drm_if;
 
 	ret = drm_dev_register(drm, 0);
-	if (ret < 0)
+	if (ret < 0) {
+		dev_err(&interface->dev, "Cannot register DRM device");
 		goto error;
+	}
 
 	usb_set_intfdata(interface, drm_if);
 
