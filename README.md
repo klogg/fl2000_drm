@@ -40,4 +40,6 @@ This is not going to happen - both chips are poorly supported by their vendors, 
 ## Open questions
  * How the DDC node is attached to the DRM slave encoder?
  * Can FL2000DX support USB Bulk Streams?
- * How many planes are there in FL2000DX? 
+ * How many planes are there in FL2000DX?
+ * Any additional pixel formats for FL2000DX except ones in original drivers?
+ * Any need in pixel format modifiers for FL2000DX?
