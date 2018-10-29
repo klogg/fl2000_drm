@@ -212,5 +212,25 @@ error:
 
 void fl2000_drm_destroy(struct usb_interface *interface)
 {
+	struct fl2000_drm_if *drm_if;
+	struct drm_device *drm;
 
+	drm = usb_get_intfdata(interface);
+
+	if (drm == NULL)
+		return;
+
+	drm_dev_unregister(drm);
+
+	drm_fb_cma_fbdev_fini(drm);
+
+	/* TODO: detach encoder slave */
+
+	drm_mode_config_cleanup(drm);
+
+	drm_if = drm->dev_private;
+	if (drm_if != NULL)
+		kfree(drm_if);
+
+	drm_dev_put(drm);
 }
