@@ -58,7 +58,8 @@ static int fl2000_probe(struct usb_interface *interface,
 	case FL2000_USBIF_STREAMING:
 		dev_info(&usb_dev->dev, "Probing Streaming interface (%u)",
 				iface_num);
-
+		ret =  fl2000_drm_create(interface);
+		if (ret != 0) goto error;
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
@@ -98,6 +99,7 @@ static void fl2000_disconnect(struct usb_interface *interface)
 		break;
 
 	case FL2000_USBIF_STREAMING:
+		fl2000_drm_destroy(interface);
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
