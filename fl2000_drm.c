@@ -11,7 +11,10 @@
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
+#include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_atomic_helper.h>
+#include <drm/drm_simple_kms_helper.h>
+#include <drm/drm_crtc_helper.h>
 
 #define DRM_DRIVER_NAME		"fl2000_drm"
 #define DRM_DRIVER_DESC		"USB-HDMI"
@@ -21,10 +24,27 @@
 #define DRM_DRIVER_MINOR	0
 #define DRM_DRIVER_PATCHLEVEL	1
 
+#define MAX_WIDTH	4000
+#define MAX_HEIGHT	4000
+#define BPP		32
+
+static const u32 fl2000_pixel_formats[] = {
+	/* 24-bit RGB le */
+	DRM_FORMAT_RGB888,
+	DRM_FORMAT_ARGB8888,
+	DRM_FORMAT_XRGB8888,
+	/* 16-bit RGB le */
+	DRM_FORMAT_RGB565,
+	/* 15-bit RGB le */
+	DRM_FORMAT_XRGB1555,
+	DRM_FORMAT_ARGB1555,
+};
+
 struct fl2000_drm_if {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	struct drm_device *drm;
+	struct drm_simple_display_pipe pipe;
 };
 
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
@@ -54,29 +74,76 @@ static struct drm_driver fl2000_drm_driver = {
 	.patchlevel = DRM_DRIVER_PATCHLEVEL,
 };
 
-static const struct drm_mode_config_funcs fl200_mode_config_funcs = {
+static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
 	.fb_create = drm_gem_fb_create,
 	.atomic_check = drm_atomic_helper_check,
 	.atomic_commit = drm_atomic_helper_commit,
+};
+
+static enum drm_mode_status fl2000_mode_valid(struct drm_crtc *crtc,
+		const struct drm_display_mode *mode)
+{
+	/* TODO: check mode against USB bulk endpoint bandwidth */
+	return MODE_OK;
+}
+
+static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
+		struct drm_plane_state *pstate, struct drm_crtc_state *cstate)
+{
+	/* TODO: any checks here? */
+	return 0;
+}
+
+static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
+		struct drm_crtc_state *cstate,
+		struct drm_plane_state *plane_state)
+{
+	/* TODO: all FL2000DX HW configuration stuff here */
+}
+
+void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
+{
+	/* TODO: disable HW */
+}
+
+static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
+		struct drm_plane_state *old_pstate)
+{
+	/* TODO: not sure if we need this at all */
+}
+
+static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
+	.mode_valid = fl2000_mode_valid,
+	.check = fl2000_display_check,
+	.enable = fl2000_display_enable,
+	.disable = fl2000_display_disable,
+	.update = fl2000_display_update,
+	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
 
 static int fl2000_modeset_init(struct drm_device *dev)
 {
 	int ret = 0;
 	struct drm_mode_config *mode_config;
+	struct fl2000_drm_if *drm_if = dev->dev_private;
 
 	drm_mode_config_init(dev);
 	mode_config = &dev->mode_config;
-	mode_config->funcs = &fl200_mode_config_funcs;
+	mode_config->funcs = &fl2000_mode_config_funcs;
 	mode_config->min_width = 1;
-	mode_config->max_width = 2560;
+	mode_config->max_width = MAX_WIDTH;
 	mode_config->min_height = 1;
-	mode_config->max_height = 1440;
+	mode_config->max_height = MAX_HEIGHT;
 
+	ret = drm_simple_display_pipe_init(dev, &drm_if->pipe,
+			&fl2000_display_funcs, fl2000_pixel_formats,
+			ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
+
+	/* attach encoder slave */
 
 	drm_mode_config_reset(dev);
 
-	drm_fb_cma_fbdev_init(dev, priv->variant->fb_bpp, 0);
+	drm_fb_cma_fbdev_init(dev, BPP, 0);
 
 	drm_kms_helper_poll_init(dev);
 
