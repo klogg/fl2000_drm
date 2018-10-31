@@ -87,13 +87,6 @@ static enum drm_mode_status fl2000_mode_valid(struct drm_crtc *crtc,
 	return MODE_OK;
 }
 
-static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
-		struct drm_plane_state *pstate, struct drm_crtc_state *cstate)
-{
-	/* TODO: any checks here? */
-	return 0;
-}
-
 static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		struct drm_crtc_state *cstate,
 		struct drm_plane_state *plane_state)
@@ -114,7 +107,6 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 
 static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_mode_valid,
-	.check = fl2000_display_check,
 	.enable = fl2000_display_enable,
 	.disable = fl2000_display_disable,
 	.update = fl2000_display_update,
