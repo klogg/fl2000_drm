@@ -139,7 +139,7 @@ static int fl2000_modeset_init(struct drm_device *dev)
 			&fl2000_display_funcs, fl2000_pixel_formats,
 			ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
 	if (ret != 0) {
-		dev_err(&dev->dev, "Cannot configure simple display pipe");
+		dev_err(dev->dev, "Cannot configure simple display pipe");
 		goto error;
 	}
 
@@ -149,7 +149,7 @@ static int fl2000_modeset_init(struct drm_device *dev)
 
 	ret = drm_fb_cma_fbdev_init(dev, BPP, 0);
 	if (ret != 0) {
-		dev_err(&dev->dev, "Cannot initialize CMA framebuffer");
+		dev_err(dev->dev, "Cannot initialize CMA framebuffer");
 		goto error;
 	}
 
