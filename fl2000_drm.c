@@ -102,7 +102,37 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		struct drm_plane_state *old_pstate)
 {
-	/* TODO: not sure if we need this at all */
+	struct drm_crtc *crtc = &pipe->crtc;
+	struct drm_device *drm = crtc->dev;
+	struct drm_pending_vblank_event *event = crtc->state->event;
+	struct drm_plane *plane = &pipe->plane;
+	struct drm_plane_state *pstate = plane->state;
+	struct drm_framebuffer *fb = pstate->fb;
+
+	if (fb) {
+		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
+		int idx;
+
+		/* TODO: Do we really need this? What if it fails? */
+		if (!drm_dev_enter(drm, &idx)) return;
+
+		/* TODO:
+		 * Calculate & validate real buffer area for transmission
+		 * Schedule transmission of 'addr' over USB */
+
+		drm_dev_exit(idx);
+	}
+
+	if (event) {
+		crtc->state->event = NULL;
+
+		spin_lock_irq(&drm->event_lock);
+		if (crtc->state->active && drm_crtc_vblank_get(crtc) == 0)
+			drm_crtc_arm_vblank_event(crtc, event);
+		else
+			drm_crtc_send_vblank_event(crtc, event);
+		spin_unlock_irq(&drm->event_lock);
+	}
 }
 
 static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
