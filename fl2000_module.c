@@ -150,5 +150,5 @@ module_usb_driver(fl2000_driver); /* @suppress("Unused static function")
 			@suppress("Unused function declaration") */
 
 MODULE_AUTHOR("Artem Mygaiev");
-MODULE_DESCRIPTION("FL2000 USB HDMI video driver");
+MODULE_DESCRIPTION("FL2000 USB display driver");
 MODULE_LICENSE("GPL v2");
