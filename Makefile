@@ -17,4 +17,4 @@ modules:
 
 clean:
 	make -C $(KSRC) M=$(PWD) clean
-	rm -f Module.symvers
+	rm -f $(PWD)/Module.symvers $(PWD)/*.ur-safe
