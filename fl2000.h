@@ -28,8 +28,8 @@
 #define FL2000_I2C_ADDRESS_DSUB		0x50
 #define FL2000_I2C_ADDRESS_EEPROM	0x54
 
-int fl2000_reg_read(struct usb_device *usb_dev, u32 *data, u16 offset);
-int fl2000_reg_write(struct usb_device *usb_dev, u32 *data, u16 offset);
+int fl2000_reg_read(struct usb_device *usb_dev, void *data, u16 offset);
+int fl2000_reg_write(struct usb_device *usb_dev, void *data, u16 offset);
 
 int fl2000_intr_create(struct usb_interface *interface);
 void fl2000_intr_destroy(struct usb_interface *interface);

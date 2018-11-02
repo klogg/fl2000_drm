@@ -20,8 +20,8 @@
  * thus sub-address has to be aligned to 4-byte boundary with 0xFC mask. Every
  * exchange shall consist of 2 messages (sub-address + data) combined. */
 #define I2C_CMESSAGES_NUM	2
-#define I2C_REG_ADDR_SIZE	1
-#define I2C_REG_DATA_SIZE	4
+#define I2C_REG_ADDR_SIZE	(sizeof(u8))
+#define I2C_REG_DATA_SIZE	(sizeof(u32))
 
 /* Timeout in ms for I2C read/write operations */
 #define I2C_RDWR_TIMEOUT	5
@@ -31,7 +31,10 @@ struct fl2000_i2c_bus {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	struct i2c_adapter adapter;
-	u8 buf[I2C_REG_DATA_SIZE];
+	union {
+		u8 buf[I2C_REG_DATA_SIZE];
+		u32 buf_w;
+	};
 };
 
 typedef union {
@@ -46,7 +49,7 @@ typedef union {
 		u32 res_2	:3;
 		u32 op_status	:1; /* I2C operation status, 0 in progress,
 				       1 done. Write 0 to reset */
-	} s __attribute__ ((__packed__));
+	} __attribute__ ((__packed__));
 	u32 w;
 } fl2000_i2c_control_reg;
 
@@ -56,19 +59,19 @@ static u32 fl2000_i2c_func(struct i2c_adapter *adap)
 }
 
 #define fl2000_i2c_read_dword(i2c_bus, addr, offset) \
-		fl2000_i2c_xfer_dword(i2c_bus, true, addr, offset)
+		fl2000_i2c_xfer_buf(i2c_bus, true, addr, offset)
 
 #define fl2000_i2c_write_dword(i2c_bus, addr, offset) \
-		fl2000_i2c_xfer_dword(i2c_bus, false, addr, offset)
+		fl2000_i2c_xfer_buf(i2c_bus, false, addr, offset)
 
-static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
+static int fl2000_i2c_xfer_buf(struct fl2000_i2c_bus *i2c_bus, bool read,
 		u16 addr, u8 offset)
 {
 	int i, ret;
 	fl2000_i2c_control_reg control = {.w = 0};
 
 	if (!read) {
-		ret = fl2000_reg_write(i2c_bus->usb_dev, (u32 *)i2c_bus->buf,
+		ret = fl2000_reg_write(i2c_bus->usb_dev, &i2c_bus->buf,
 				FL2000_REG_I2C_DATA_WR);
 		if (ret != 0) goto error;
 	}
@@ -78,27 +81,32 @@ static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
 	 * actual register contents - useless? Also, bit 28 is always being set
 	 * to 1 nevertheless it always reads 0 */
 
-	control.s.addr = addr;
-	control.s.rw = read ? I2C_CMD_READ : I2C_CMD_WRITE;
-	control.s.offset = offset;
+	control.addr = addr;
+	control.rw = read ? I2C_CMD_READ : I2C_CMD_WRITE;
+	control.offset = offset;
 
-	fl2000_reg_write(i2c_bus->usb_dev, &control.w, FL2000_REG_I2C_CTRL);
+	i2c_bus->buf_w = htons(control.w);
+
+	fl2000_reg_write(i2c_bus->usb_dev, &i2c_bus->buf, FL2000_REG_I2C_CTRL);
 	if (ret != 0) goto error;
 
 	for (i = 0; i < I2C_RDWR_RETRIES; i++) {
 		msleep(I2C_RDWR_TIMEOUT);
-		ret = fl2000_reg_read(i2c_bus->usb_dev, &control.w,
+		ret = fl2000_reg_read(i2c_bus->usb_dev, &i2c_bus->buf,
 				FL2000_REG_I2C_CTRL);
 		if (ret != 0) goto error;
-		if (control.s.op_status == I2C_OP_STATUS_DONE) break;
+
+		control.w = ntohs(i2c_bus->buf_w);
+
+		if (control.op_status == I2C_OP_STATUS_DONE) break;
 	}
 
-	if (control.s.data_status != I2C_DATA_STATUS_PASS ||
-			control.s.op_status != I2C_OP_STATUS_DONE)
+	if (control.data_status != I2C_DATA_STATUS_PASS ||
+			control.op_status != I2C_OP_STATUS_DONE)
 		goto error;
 
 	if (read) {
-		ret = fl2000_reg_read(i2c_bus->usb_dev, (u32 *)i2c_bus->buf,
+		ret = fl2000_reg_read(i2c_bus->usb_dev, &i2c_bus->buf,
 				FL2000_REG_I2C_DATA_RD);
 		if (ret != 0) goto error;
 	}
