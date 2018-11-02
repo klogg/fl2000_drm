@@ -13,6 +13,20 @@
 #include <linux/i2c.h>
 #include <linux/regmap.h>
 
+#define OFFSET_BITS	8
+#define VALUE_BITS	8
+
+static const struct regmap_config it66121_regmap_config = {
+	.reg_bits = OFFSET_BITS,
+	.val_bits = VALUE_BITS,
+
+	.max_register = 0xFF,
+	.cache_type = REGCACHE_RBTREE,
+	.reg_defaults_raw = adv7511_register_defaults,
+	.num_reg_defaults_raw = ARRAY_SIZE(adv7511_register_defaults),
+
+	.volatile_reg = adv7511_register_volatile,
+};
 
 
 #ifdef CONFIG_OF
