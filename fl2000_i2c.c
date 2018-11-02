@@ -122,7 +122,6 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	int ret;
 	struct i2c_msg *addr_msg, *data_msg;
 	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
-	bool read;
 	u8 offset;
 
 	/* xfer validation (actually i2c stack shall do it):
@@ -140,7 +139,6 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	/* Set data only after checks */
 	addr_msg = &msgs[0];
 	data_msg = &msgs[1];
-	read = !!(data_msg->flags & I2C_M_RD);
 	offset = addr_msg->buf[0];
 
 	/* TODO: Somehow the original FL2000 driver forces offset to be bound to
@@ -149,13 +147,12 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	 * Our current implementation ignores that behavior of original driver,
 	 * so we need to do checks with addresses not bound to 4-byte margin. */
 
-	if (read) {
+	if (!!(data_msg->flags & I2C_M_RD)) {
 		ret = fl2000_i2c_read_dword(i2c_bus, addr_msg->addr, offset);
 		if (ret != 0) goto error;
 
 		memcpy(data_msg->buf, i2c_bus->buf, data_msg->len);
-	}
-	else {
+	} else {
 		/* Since FL2000 i2c bus implementation always operates with
 		 * 4-byte messages, we need to read before write in order not to
 		 * corrupt unrelated registers in case if we do not write whole
@@ -171,8 +168,8 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		ret = fl2000_i2c_write_dword(i2c_bus, addr_msg->addr, offset);
 		if (ret != 0) goto error;
 	}
-	return data_msg->len;
 
+	return data_msg->len;
 error:
 	dev_err(&i2c_bus->adapter.dev, "USB I2C operation failed (%d)", ret);
 	return ret;
