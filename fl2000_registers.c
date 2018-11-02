@@ -15,7 +15,7 @@
 /* Timeout in ms for USB Control Message (transport for I2C bus)  */
 #define CONTROL_XFER_TIMEOUT	2000
 
-int fl2000_reg_read(struct usb_device *usb_dev, u32 *data, u16 offset)
+int fl2000_reg_read(struct usb_device *usb_dev, void *data, u16 offset)
 {
 	int ret = usb_control_msg(
 		usb_dev,
@@ -34,7 +34,7 @@ int fl2000_reg_read(struct usb_device *usb_dev, u32 *data, u16 offset)
 	return ret;
 }
 
-int fl2000_reg_write(struct usb_device *usb_dev, u32 *data, u16 offset)
+int fl2000_reg_write(struct usb_device *usb_dev, void *data, u16 offset)
 {
 	int ret = usb_control_msg(
 		usb_dev,
