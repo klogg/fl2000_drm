@@ -8,6 +8,9 @@ The FL2000DX is Fresco Logic’s USB 3.0 Display device controller. It integrate
 ## IT66121FN
 The IT66121 is a high-performance and low-power single channel HDMI transmitter, fully compliant with HDMI 1.3a, HDCP 1.2 and backward compatible to DVI 1.0 specifications. IT66121 also provide the HDMI1.4 3D feature, which enables direct 3D displays through an HDMI link. The IT66121 serves to provide the most cost-effective HDMI solution for DTV-ready consumer electronics such as set-top boxes, DVD players and A/V receivers, as well as DTV-enriched PC products such as notebooks and desktops, without compromising the performance. Its backward compatibility to DVI standard allows connectivity to myriad video displays such as LCD and CRT monitors, in addition to the ever-so-flourishing Flat Panel TVs.
 
+## Implementation
+![Diagram](fl2000.svg)
+
 ## Limitations
  * USB2.0 is not supported
  * Connecting more than one dongles to the same bus is not supported
