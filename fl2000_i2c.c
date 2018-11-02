@@ -131,8 +131,8 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 };
 
 static const struct i2c_algorithm fl2000_i2c_algorithm = {
-        .master_xfer    = fl2000_i2c_xfer,
-        .functionality  = fl2000_i2c_func,
+	.master_xfer    = fl2000_i2c_xfer,
+	.functionality  = fl2000_i2c_func,
 };
 
 int fl2000_i2c_connect(struct usb_device *usb_dev)
