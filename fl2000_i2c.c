@@ -15,11 +15,12 @@
 #define I2C_OP_STATUS_PROGRESS	0
 #define I2C_OP_STATUS_DONE	1
 
-/* I2C controller require mandatory 16-bit (2 bite) sub-address provided for any
- * read/write operation. Each read or write operate with 32-bit (4-byte) data.
- * Every exchange shall consist of 2 messages (sub-address + data) combined */
+/* I2C controller require mandatory 8-bit (1 bite) sub-address provided for any
+ * read/write operation. Each read or write operate with 32-bit (4-byte) data,
+ * thus sub-address has to be aligned to 4-byte boundary with 0xFC mask. Every
+ * exchange shall consist of 2 messages (sub-address + data) combined. */
 #define I2C_CMESSAGES_NUM	2
-#define I2C_REG_ADDR_SIZE	2
+#define I2C_REG_ADDR_SIZE	1
 #define I2C_REG_DATA_SIZE	4
 
 /* Timeout in ms for I2C read/write operations */
@@ -30,6 +31,7 @@ struct fl2000_i2c_bus {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	struct i2c_adapter adapter;
+	u8 buf[I2C_REG_DATA_SIZE];
 };
 
 typedef union {
@@ -53,31 +55,20 @@ static u32 fl2000_i2c_func(struct i2c_adapter *adap)
 	return I2C_FUNC_I2C | I2C_FUNC_NOSTART;
 }
 
-static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
-		struct i2c_msg *msgs, int num)
-{
-	int i, ret = 0;
-	struct i2c_msg *addr_msg = &msgs[0], *data_msg = &msgs[1];
-	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
-	fl2000_i2c_control_reg control = {.w = 0};
-	bool read = !!(data_msg->flags & I2C_M_RD);
+#define fl2000_i2c_read_dword(i2c_bus, addr, offset) \
+		fl2000_i2c_xfer_dword(i2c_bus, true, addr, offset)
 
-#if DEBUG
-	/* xfer validation (actually i2c stack shall do it):
-	 *  - there is only 2 messages for an xfer
-	 *  - 1st message size is 2 bytes
-	 *  - 2nd message size is 4 bytes
-	 *  - 1st message is always "write"
-	 *  - both messages have same addresses */
-	WARN_ON((num != I2C_CMESSAGES_NUM) ||
-		(addr_msg->len != I2C_REG_ADDR_SIZE) ||
-		(data_msg->len != I2C_REG_DATA_SIZE) ||
-		(addr_msg->flags & I2C_M_RD) ||
-		(addr_msg->addr != data_msg->addr));
-#endif
+#define fl2000_i2c_write_dword(i2c_bus, addr, offset) \
+		fl2000_i2c_xfer_dword(i2c_bus, false, addr, offset)
+
+static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
+		u16 addr, u8 offset)
+{
+	int i, ret;
+	fl2000_i2c_control_reg control = {.w = 0};
 
 	if (!read) {
-		ret = fl2000_reg_write(i2c_bus->usb_dev, (u32 *)data_msg->buf,
+		ret = fl2000_reg_write(i2c_bus->usb_dev, (u32 *)i2c_bus->buf,
 				FL2000_REG_I2C_DATA_WR);
 		if (ret != 0) goto error;
 	}
@@ -87,9 +78,9 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	 * actual register contents - useless? Also, bit 28 is always being set
 	 * to 1 nevertheless it always reads 0 */
 
-	control.s.addr = data_msg->addr;
+	control.s.addr = addr;
 	control.s.rw = read ? I2C_CMD_READ : I2C_CMD_WRITE;
-	control.s.offset = *(u16 *)addr_msg->buf;
+	control.s.offset = offset;
 
 	fl2000_reg_write(i2c_bus->usb_dev, &control.w, FL2000_REG_I2C_CTRL);
 	if (ret != 0) goto error;
@@ -107,12 +98,72 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		goto error;
 
 	if (read) {
-		ret = fl2000_reg_read(i2c_bus->usb_dev, (u32 *)data_msg->buf,
+		ret = fl2000_reg_read(i2c_bus->usb_dev, (u32 *)i2c_bus->buf,
 				FL2000_REG_I2C_DATA_RD);
 		if (ret != 0) goto error;
 	}
 
 	return 0;
+error:
+	return ret;
+}
+
+static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
+		struct i2c_msg *msgs, int num)
+{
+	int ret;
+	struct i2c_msg *addr_msg, *data_msg;
+	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
+	bool read;
+	u8 offset;
+
+	/* xfer validation (actually i2c stack shall do it):
+	 *  - there is always only 2 messages for an xfer
+	 *  - 1st message size is 1 byte
+	 *  - 1st message is always "write"
+	 *  - both messages have same addresses
+	 *  - 2nd message size not more than I2C_REG_DATA_SIZE */
+	WARN_ON((num != I2C_CMESSAGES_NUM) ||
+		(msgs[0].len != I2C_REG_ADDR_SIZE) ||
+		(msgs[0].flags & I2C_M_RD) ||
+		(msgs[0].addr != msgs[1].addr) ||
+		(msgs[1].len > I2C_REG_DATA_SIZE));
+
+	/* Set data only after checks */
+	addr_msg = &msgs[0];
+	data_msg = &msgs[1];
+	read = !!(data_msg->flags & I2C_M_RD);
+	offset = addr_msg->buf[0];
+
+	/* TODO: Somehow the original FL2000 driver forces offset to be bound to
+	 * 4-byte margin. This is really strange because i2c operation shall not
+	 * depend on i2c margin, unless the HW design is completely crippled.
+	 * Our current implementation ignores that behavior of original driver,
+	 * so we need to do checks with addresses not bound to 4-byte margin. */
+
+	if (read) {
+		ret = fl2000_i2c_read_dword(i2c_bus, addr_msg->addr, offset);
+		if (ret != 0) goto error;
+
+		memcpy(data_msg->buf, i2c_bus->buf, data_msg->len);
+	}
+	else {
+		/* Since FL2000 i2c bus implementation always operates with
+		 * 4-byte messages, we need to read before write in order not to
+		 * corrupt unrelated registers in case if we do not write whole
+		 * dword */
+		if (data_msg->len < I2C_REG_DATA_SIZE) {
+			ret = fl2000_i2c_read_dword(i2c_bus, addr_msg->addr,
+					offset);
+			if (ret != 0) goto error;
+		}
+
+		memcpy(i2c_bus->buf, data_msg->buf, data_msg->len);
+
+		ret = fl2000_i2c_write_dword(i2c_bus, addr_msg->addr, offset);
+		if (ret != 0) goto error;
+	}
+	return data_msg->len;
 
 error:
 	dev_err(&i2c_bus->adapter.dev, "USB I2C operation failed (%d)", ret);
