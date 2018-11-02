@@ -44,7 +44,7 @@ typedef union {
 		u32 res_2	:3;
 		u32 op_status	:1; /* I2C operation status, 0 in progress,
 				       1 done. Write 0 to reset */
-	} s;
+	} s __attribute__ ((__packed__));
 	u32 w;
 } fl2000_i2c_control_reg;
 
