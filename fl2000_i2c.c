@@ -61,6 +61,7 @@ static int fl2000_i2c_xfer_buf(struct fl2000_i2c_bus *i2c_bus, bool read,
 	control.addr = addr;
 	control.cmd = read ? FL2000_CTRL_CMD_READ : FL2000_CTRL_CMD_WRITE;
 	control.offset = offset;
+	control.bus = FL2000_CTRL_BUS_I2C;
 
 	i2c_bus->buf_w = htons(control.w);
 
