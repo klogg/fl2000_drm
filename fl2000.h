@@ -48,9 +48,9 @@ void fl2000_drm_destroy(struct usb_interface *interface);
 #define FL2000_REG_V_SYNC2	0x8014 /* v_sync_reg_2 */
 #define FL2000_REG_8018		0x8018 /* unknown */
 #define FL2000_REG_ISO_CTRL	0x801C /* ISO 14 bit value ? */
-#define FL2000_REG_I2C_CTRL	0x8020 /* I2C Controller and I2C send */
-#define FL2000_REG_I2C_DATA_RD	0x8024 /* I2C read data, 32 bit wide */
-#define FL2000_REG_I2C_DATA_WR	0x8028 /* I2C write data, 32 bit wide */
+#define FL2000_REG_BUS_CTRL	0x8020 /* I2C/SPI control */
+#define FL2000_REG_BUS_DATA_RD	0x8024 /* I2C/SPI read data, 32 bit wide */
+#define FL2000_REG_BUS_DATA_WR	0x8028 /* I2C/SPI write data, 32 bit wide */
 #define FL2000_REG_PLL		0x802C /* PLL control  */
 #define FL2000_REG_8030		0x8030 /* unknown */
 #define FL2000_REG_8034		0x8034 /* unknown */
@@ -72,5 +72,28 @@ void fl2000_drm_destroy(struct usb_interface *interface);
 #define FL2000_REG_8088		0x8088 /* unknown */
 #define FL2000_REG_0070		0x0070 /* unknown */
 #define FL2000_REG_0078		0x0078 /* unknown */
+
+typedef union {
+	struct {
+		u32 addr	:7; /* I2C address */
+		u32 cmd		:1;
+#define FL2000_CTRL_CMD_WRITE		0
+#define FL2000_CTRL_CMD_READ		1
+		u32 offset	:8; /* I2C offset, only valid for I2C */
+		u32 bus		:1;
+#define FL2000_CTRL_BUS_I2C		0
+#define FL2000_CTRL_BUS_SPI		1
+		u32 spi_erase	:1; /* only valid for SPI */
+		u32 res_1	:6;
+		u32 data_status	:4; /* mask for failed bytes */
+#define FL2000_DATA_STATUS_PASS		0
+#define FL2000_DATA_STATUS_FAIL		1
+		u32 res_2	:3;
+		u32 op_status	:1;
+#define FL2000_CTRL_OP_STATUS_PROGRESS	0
+#define FL2000_CTRL_OP_STATUS_DONE	1
+	} __attribute__ ((__packed__));
+	u32 w;
+} fl2000_i2c_control_reg;
 
 #endif /* __FL2000_DRM_H__ */
