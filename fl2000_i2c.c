@@ -124,6 +124,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
 	u8 offset;
 
+#if DEBUG
 	/* xfer validation (actually i2c stack shall do it):
 	 *  - there is always only 2 messages for an xfer
 	 *  - 1st message size is 1 byte
@@ -135,6 +136,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		(msgs[0].flags & I2C_M_RD) ||
 		(msgs[0].addr != msgs[1].addr) ||
 		(msgs[1].len > I2C_REG_DATA_SIZE));
+#endif
 
 	/* Set data only after checks */
 	addr_msg = &msgs[0];
