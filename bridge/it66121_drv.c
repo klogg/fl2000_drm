@@ -13,6 +13,8 @@
 #include <linux/i2c.h>
 #include <linux/regmap.h>
 
+#define DEVICE_ADDRESS	0x4C
+
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
 
