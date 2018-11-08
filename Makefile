@@ -6,7 +6,10 @@ fl2000-y := \
 		fl2000_i2c.o \
 		fl2000_drm.o
 
-obj-m := fl2000.o
+it66121-y := \
+		bridge/it66121_drv.o
+
+obj-m := fl2000.o it66121.o
 
 KSRC = /lib/modules/$(shell uname -r)/build
 
