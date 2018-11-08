@@ -209,13 +209,13 @@ int fl2000_drm_create(struct usb_interface *interface)
 	drm_if->usb_dev = usb_dev;
 	drm_if->drm = drm;
 
+	drm->dev_private = drm_if;
+
 	ret = fl2000_modeset_init(drm);
 	if (ret < 0) {
 		dev_err(&interface->dev, "DRM modeset failed");
 		goto error;
 	}
-
-	drm->dev_private = drm_if;
 
 	ret = drm_dev_register(drm, 0);
 	if (ret < 0) {
