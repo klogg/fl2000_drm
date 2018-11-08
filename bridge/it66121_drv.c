@@ -15,6 +15,9 @@
 
 #define DEVICE_ADDRESS	0x4C
 
+#define VENDOR_ID	0x4954
+#define DEVICE_ID	0x612
+
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
 
@@ -31,6 +34,59 @@ static const struct regmap_config it66121_regmap_config = {
 	.volatile_reg = adv7511_register_volatile,
 };
 #endif
+
+static struct i2c_xchg_buf
+{
+	u8 offset;
+	u8 data[4];
+} i2c_xchg_buf;
+
+#define ADDR_MSG	0
+#define DATA_MSG	1
+
+static struct i2c_msg msg_xchg[] = {
+	{
+		.flags = I2C_M_RD,
+		.addr = DEVICE_ADDRESS,
+		.len = sizeof(i2c_xchg_buf.offset),
+		.buf = &i2c_xchg_buf.offset
+	},
+	{
+		.flags = I2C_M_RD,
+		.addr = DEVICE_ADDRESS,
+		.len = sizeof(i2c_xchg_buf.data),
+		.buf = i2c_xchg_buf.data
+	}
+};
+
+int it66121_probe(struct i2c_client *client, const struct i2c_device_id *id)
+{
+	int ret;
+
+	dev_info(&client->dev, "Probing IT66121 on %s", client->adapter->name);
+
+	i2c_xchg_buf.offset = 0;
+
+	ret = i2c_transfer(client->adapter, msg_xchg, ARRAY_SIZE(msg_xchg));
+	if (ret != ARRAY_SIZE(msg_xchg)) {
+		dev_err(&client->dev, "I2C transfer failed (%d)", ret);
+		return -1;
+	}
+
+	dev_info(&client->dev, " --- %X %X %X %X",
+			i2c_xchg_buf.data[0],
+			i2c_xchg_buf.data[1],
+			i2c_xchg_buf.data[2],
+			i2c_xchg_buf.data[3]);
+
+	return 0;
+}
+
+int it66121_remove(struct i2c_client *client)
+{
+	dev_info(&client->dev, "Removed IT66121 client");
+	return 0;
+}
 
 
 #ifdef CONFIG_OF
