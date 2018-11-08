@@ -165,7 +165,7 @@ static int fl2000_modeset_init(struct drm_device *dev)
 		goto error;
 	}
 
-	/* TODO: attach encoder slave */
+	/* TODO: attach bridge */
 
 	drm_mode_config_reset(dev);
 
