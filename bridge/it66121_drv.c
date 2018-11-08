@@ -16,6 +16,7 @@
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
 
+#if 0
 static const struct regmap_config it66121_regmap_config = {
 	.reg_bits = OFFSET_BITS,
 	.val_bits = VALUE_BITS,
@@ -27,6 +28,7 @@ static const struct regmap_config it66121_regmap_config = {
 
 	.volatile_reg = adv7511_register_volatile,
 };
+#endif
 
 
 #ifdef CONFIG_OF
