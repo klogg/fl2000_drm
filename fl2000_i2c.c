@@ -226,7 +226,6 @@ void fl2000_i2c_destroy(struct usb_interface *interface)
 
 	if (i2c_bus == NULL) return;
 
-	dev_info(&i2c_bus->adapter.dev, "Disconnected I2C adapter");
 	i2c_del_adapter(&i2c_bus->adapter);
 
 	dev_set_drvdata(&usb_dev->dev, NULL);
