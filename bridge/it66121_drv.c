@@ -22,8 +22,10 @@
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
 
-/* According to datasheet IT66121 addresses are 0x98, 0x9A */
-static const unsigned short it66121_addr[] = {0x4C, 0x4E, I2C_CLIENT_END};
+/* According to datasheet IT66121 addresses are 0x98 or 0x9A, but this is
+ * including lsb which is responsible for r/w command - that's why shift */
+static const unsigned short it66121_addr[] = {(0x98 >> 1), (0x9A >> 1),
+		I2C_CLIENT_END};
 
 #if 0
 static const struct regmap_config it66121_regmap_config = {
