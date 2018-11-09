@@ -17,7 +17,8 @@
 #define I2C_CLASS_HDMI	(1<<9)
 
 #define VENDOR_ID	0x4954
-#define DEVICE_ID	0x612
+#define DEVICE_ID	0x0612
+#define REVISION_MASK	0xF000
 
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
@@ -48,25 +49,37 @@ int it66121_detect(struct i2c_client *client, struct i2c_board_info *info)
 {
 	int i, ret, address = client->addr;
 	struct i2c_adapter *adapter = client->adapter;
-
-	u8 buf[4];
-
+	union {
+		struct {
+			u16 vendor;
+			u16 device;
+		};
+		u8 b[4];
+	} id;
 	dev_info(&adapter->dev, "Detecting IT66121 at address 0x%X on %s",
 			address, adapter->name);
 
 	/* TODO: i2c_check_functionality()? */
 
+	/* TODO: change to register map */
 	for (i = 0; i < 4; i++) {
 		ret = i2c_smbus_read_byte_data(client, i);
 		if (ret < 0) {
 			dev_err(&adapter->dev, "I2C transfer failed (%d)", ret);
 			return -ENODEV;
 		}
-		buf[i] = ret;
+		id.b[i] = ret;
 	}
 
-	dev_info(&adapter->dev, " --- %X %X %X %X",
-			buf[0], buf[1], buf[2], buf[3]);
+	if ((id.vendor != VENDOR_ID) ||
+			((id.device & ~REVISION_MASK) != DEVICE_ID)) {
+		dev_err(&adapter->dev, " ...not found (0x%X-0x%X)",
+				id.vendor, id.device);
+		return -ENODEV;
+	}
+
+	dev_info(&client->dev, " ...found, revision %d",
+			id.device & REVISION_MASK);
 
 	strlcpy(info->type, "it66121", I2C_NAME_SIZE);
 	return 0;
