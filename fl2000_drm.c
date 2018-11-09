@@ -27,6 +27,7 @@
 #define MAX_WIDTH	4000
 #define MAX_HEIGHT	4000
 #define BPP		32
+#define MAX_CONN	1
 
 static const u32 fl2000_pixel_formats[] = {
 	/* 24-bit RGB le */
@@ -169,7 +170,7 @@ static int fl2000_modeset_init(struct drm_device *dev)
 
 	drm_mode_config_reset(dev);
 
-	ret = drm_fb_cma_fbdev_init(dev, BPP, 0);
+	ret = drm_fb_cma_fbdev_init(dev, BPP, MAX_CONN);
 	if (ret != 0) {
 		dev_err(dev->dev, "Cannot initialize CMA framebuffer");
 		goto error;
@@ -246,7 +247,7 @@ void fl2000_drm_destroy(struct usb_interface *interface)
 
 	drm_fb_cma_fbdev_fini(drm);
 
-	/* TODO: detach encoder slave */
+	/* TODO: detach bridge */
 
 	drm_mode_config_cleanup(drm);
 

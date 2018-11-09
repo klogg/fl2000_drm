@@ -13,6 +13,12 @@
 #include <linux/i2c.h>
 #include <linux/regmap.h>
 
+#include <drm/drmP.h>
+#include <drm/drm_atomic.h>
+#include <drm/drm_atomic_helper.h>
+#include <drm/drm_crtc_helper.h>
+#include <drm/drm_edid.h>
+
 /* Custom class for DRM bridge autodetection */
 #define I2C_CLASS_HDMI	(1<<9)
 
@@ -23,6 +29,17 @@
 
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
+
+struct it66121_priv {
+	struct i2c_client *client;
+	struct regmap *regmap;
+	struct drm_display_mode curr_mode;
+	struct drm_bridge bridge;
+	struct drm_connector connector;
+	enum drm_connector_status status;
+};
+
+int it66121_remove(struct i2c_client *client);
 
 /* According to datasheet IT66121 addresses are 0x98 or 0x9A, but this is
  * including lsb which is responsible for r/w command - that's why shift */
@@ -43,8 +60,124 @@ static const struct regmap_config it66121_regmap_config = {
 };
 #endif
 
-#define ADDR_MSG	0
-#define DATA_MSG	1
+int it66121_connector_get_modes(struct drm_connector *connector)
+{
+	return 0;
+}
+
+static struct drm_connector_helper_funcs it66121_connector_helper_funcs = {
+	.get_modes = it66121_connector_get_modes,
+};
+
+enum drm_connector_status it66121_connector_detect(struct drm_connector *connector,
+					    bool force)
+{
+	return connector_status_disconnected;
+}
+
+static const struct drm_connector_funcs it66121_connector_funcs = {
+	.fill_modes = drm_helper_probe_single_connector_modes,
+	.detect = it66121_connector_detect,
+	.destroy = drm_connector_cleanup,
+	.reset = drm_atomic_helper_connector_reset,
+	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+};
+
+int it66121_bridge_attach(struct drm_bridge *bridge)
+{
+	int ret;
+	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
+			bridge);
+
+	if (!bridge->encoder) {
+		DRM_ERROR("Parent encoder object not found");
+		return -ENODEV;
+	}
+
+	ret = drm_connector_init(bridge->dev, &priv->connector,
+					 &it66121_connector_funcs,
+					 DRM_MODE_CONNECTOR_HDMIA);
+	if (ret != 0) return ret;
+
+	drm_connector_helper_add(&priv->connector,
+			&it66121_connector_helper_funcs);
+
+	drm_mode_connector_attach_encoder(&priv->connector, bridge->encoder);
+
+	return 0;
+}
+
+void it66121_bridge_detach(struct drm_bridge *bridge)
+{
+}
+
+void it66121_bridge_enable(struct drm_bridge *bridge)
+{
+}
+
+void it66121_bridge_disable(struct drm_bridge *bridge)
+{
+}
+
+void it66121_bridge_mode_set(struct drm_bridge *bridge,
+		struct drm_display_mode *mode,
+		struct drm_display_mode *adjusted_mode)
+{
+}
+
+static const struct drm_bridge_funcs it66121_bridge_funcs = {
+	.attach = it66121_bridge_attach,
+	.detach = it66121_bridge_detach,
+	.enable = it66121_bridge_enable,
+	.disable = it66121_bridge_disable,
+	.mode_set = it66121_bridge_mode_set,
+};
+
+int it66121_probe(struct i2c_client *client)
+{
+	int ret;
+	struct it66121_priv *priv;
+
+	dev_info(&client->dev, "Probing IT66121 client");
+
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	if (IS_ERR(priv)) {
+		dev_err(&client->dev, "Cannot allocate IT66121 client private" \
+				"structure");
+		ret = PTR_ERR(priv);
+		goto error;
+	}
+
+	priv->client = client;
+	priv->regmap = NULL;
+	priv->bridge.funcs = &it66121_bridge_funcs;
+
+	drm_bridge_add(&priv->bridge);
+
+	i2c_set_clientdata(client, priv);
+
+	return 0;
+
+error:
+	it66121_remove(client);
+	return ret;
+}
+
+int it66121_remove(struct i2c_client *client)
+{
+	struct it66121_priv *priv = i2c_get_clientdata(client);
+
+	if (priv == NULL)
+		return 0;
+
+	drm_bridge_remove(&priv->bridge);
+
+	i2c_set_clientdata(client, NULL);
+	kfree(priv);
+
+	return 0;
+}
 
 int it66121_detect(struct i2c_client *client, struct i2c_board_info *info)
 {
@@ -85,19 +218,6 @@ int it66121_detect(struct i2c_client *client, struct i2c_board_info *info)
 	strlcpy(info->type, "it66121", I2C_NAME_SIZE);
 	return 0;
 }
-
-int it66121_probe(struct i2c_client *client)
-{
-	dev_info(&client->dev, "Probing IT66121 client");
-	return 0;
-}
-
-int it66121_remove(struct i2c_client *client)
-{
-	dev_info(&client->dev, "Removed IT66121 client");
-	return 0;
-}
-
 
 #ifdef CONFIG_OF
 static const struct of_device_id it66121_of_ids[] = {
