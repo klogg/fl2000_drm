@@ -27,15 +27,21 @@
 #define FL2000_I2C_ADDRESS_DSUB		0x50
 #define FL2000_I2C_ADDRESS_EEPROM	0x54
 
-int fl2000_reg_read(struct usb_device *usb_dev, void *data, u16 offset);
-int fl2000_reg_write(struct usb_device *usb_dev, void *data, u16 offset);
+/* Private data on USB device */
+int fl2000_reg_create(struct usb_device *usb_dev);
+void fl2000_reg_destroy(struct usb_device *usb_dev);
+int fl2000_reg_read(struct usb_device *usb_dev, u32 *data, u16 offset);
+int fl2000_reg_write(struct usb_device *usb_dev, u32 *data, u16 offset);
 
+/* Private data on USB AVControl interface */
 int fl2000_intr_create(struct usb_interface *interface);
 void fl2000_intr_destroy(struct usb_interface *interface);
 
-int fl2000_i2c_connect(struct usb_device *usb_dev);
-void fl2000_i2c_disconnect(struct usb_device *usb_dev);
+/* Private data on USB interrupt interface */
+int fl2000_i2c_create(struct usb_interface *interface);
+void fl2000_i2c_destroy(struct usb_interface *interface);
 
+/* Private data on USB streaming interface */
 int fl2000_drm_create(struct usb_interface *interface);
 void fl2000_drm_destroy(struct usb_interface *interface);
 
@@ -87,12 +93,14 @@ typedef union {
 		u32 data_status	:4; /* mask for failed bytes */
 #define FL2000_DATA_STATUS_PASS		0
 #define FL2000_DATA_STATUS_FAIL		1
-		u32 res_2	:3;
+		u32 flags	:3;
+#define FL2000_DETECT_MONITOR		(1<<0)
+#define FL2000_CONECTION_ENABLE		(1<<2)
 		u32 op_status	:1;
 #define FL2000_CTRL_OP_STATUS_PROGRESS	0
 #define FL2000_CTRL_OP_STATUS_DONE	1
 	} __attribute__ ((__packed__));
 	u32 w;
-} fl2000_i2c_control_reg;
+} fl2000_bus_control_reg;
 
 #endif /* __FL2000_DRM_H__ */

@@ -51,15 +51,19 @@ static int fl2000_probe(struct usb_interface *interface,
 
 		/* This is rather useless, AVControl is not properly implemented
 		 * on FL2000 chip - that is why all the "magic" needed */
-		ret = fl2000_i2c_connect(usb_dev);
+
+		ret = fl2000_reg_create(usb_dev);
+		if (ret != 0) goto error;
+
+		ret = fl2000_i2c_create(interface);
 		if (ret != 0) goto error;
 		break;
 
 	case FL2000_USBIF_STREAMING:
 		dev_info(&usb_dev->dev, "Probing Streaming interface (%u)",
 				iface_num);
-		ret =  fl2000_drm_create(interface);
-		if (ret != 0) goto error;
+		/* ret = fl2000_drm_create(interface);
+		if (ret != 0) goto error; */
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
@@ -95,7 +99,8 @@ static void fl2000_disconnect(struct usb_interface *interface)
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
-		fl2000_i2c_disconnect(usb_dev);
+		fl2000_i2c_destroy(interface);
+		fl2000_reg_destroy(usb_dev);
 		break;
 
 	case FL2000_USBIF_STREAMING:

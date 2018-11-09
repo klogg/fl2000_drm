@@ -13,13 +13,17 @@
 #include <linux/i2c.h>
 #include <linux/regmap.h>
 
-#define DEVICE_ADDRESS	0x4C
+/* Custom class for DRM bridge autodetection */
+#define I2C_CLASS_HDMI	(1<<9)
 
 #define VENDOR_ID	0x4954
 #define DEVICE_ID	0x612
 
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
+
+/* According to datasheet IT66121 addresses are 0x98, 0x9A */
+static const unsigned short it66121_addr[] = {0x4C, 0x4E, I2C_CLIENT_END};
 
 #if 0
 static const struct regmap_config it66121_regmap_config = {
@@ -35,50 +39,40 @@ static const struct regmap_config it66121_regmap_config = {
 };
 #endif
 
-static struct i2c_xchg_buf
-{
-	u8 offset;
-	u8 data[4];
-} i2c_xchg_buf;
-
 #define ADDR_MSG	0
 #define DATA_MSG	1
 
-static struct i2c_msg msg_xchg[] = {
-	{
-		.flags = I2C_M_RD,
-		.addr = DEVICE_ADDRESS,
-		.len = sizeof(i2c_xchg_buf.offset),
-		.buf = &i2c_xchg_buf.offset
-	},
-	{
-		.flags = I2C_M_RD,
-		.addr = DEVICE_ADDRESS,
-		.len = sizeof(i2c_xchg_buf.data),
-		.buf = i2c_xchg_buf.data
-	}
-};
-
-int it66121_probe(struct i2c_client *client, const struct i2c_device_id *id)
+int it66121_detect(struct i2c_client *client, struct i2c_board_info *info)
 {
-	int ret;
+	int i, ret, address = client->addr;
+	struct i2c_adapter *adapter = client->adapter;
 
-	dev_info(&client->dev, "Probing IT66121 on %s", client->adapter->name);
+	u8 buf[4];
 
-	i2c_xchg_buf.offset = 0;
+	dev_info(&adapter->dev, "Detecting IT66121 at address 0x%X on %s",
+			address, adapter->name);
 
-	ret = i2c_transfer(client->adapter, msg_xchg, ARRAY_SIZE(msg_xchg));
-	if (ret != ARRAY_SIZE(msg_xchg)) {
-		dev_err(&client->dev, "I2C transfer failed (%d)", ret);
-		return -1;
+	/* TODO: i2c_check_functionality()? */
+
+	for (i = 0; i < 4; i++) {
+		ret = i2c_smbus_read_byte_data(client, i);
+		if (ret < 0) {
+			dev_err(&adapter->dev, "I2C transfer failed (%d)", ret);
+			return -ENODEV;
+		}
+		buf[i] = ret;
 	}
 
-	dev_info(&client->dev, " --- %X %X %X %X",
-			i2c_xchg_buf.data[0],
-			i2c_xchg_buf.data[1],
-			i2c_xchg_buf.data[2],
-			i2c_xchg_buf.data[3]);
+	dev_info(&adapter->dev, " --- %X %X %X %X",
+			buf[0], buf[1], buf[2], buf[3]);
 
+	strlcpy(info->type, "it66121", I2C_NAME_SIZE);
+	return 0;
+}
+
+int it66121_probe(struct i2c_client *client)
+{
+	dev_info(&client->dev, "Probing IT66121 client");
 	return 0;
 }
 
@@ -104,13 +98,16 @@ static const struct i2c_device_id it66121_i2c_ids[] = {
 MODULE_DEVICE_TABLE(i2c, it66121_i2c_ids);
 
 static struct i2c_driver it66121_driver = {
+	.class = I2C_CLASS_HDMI,
 	.driver = {
 		.name = "it66121",
 		.of_match_table = of_match_ptr(it66121_of_ids),
 	},
 	.id_table = it66121_i2c_ids,
-	.probe = it66121_probe,
+	.probe_new = it66121_probe,
 	.remove = it66121_remove,
+	.detect = it66121_detect,
+	.address_list = it66121_addr,
 };
 
 module_i2c_driver(it66121_driver); /* @suppress("Unused static function")

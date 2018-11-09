@@ -8,85 +8,95 @@
 
 #include "fl2000.h"
 
+/* Custom class for DRM bridge autodetection */
+#define I2C_CLASS_HDMI	(1<<9)
+
 /* I2C controller require mandatory 8-bit (1 bite) sub-address provided for any
- * read/write operation. Each read or write operate with 32-bit (4-byte) data,
- * thus sub-address has to be aligned to 4-byte boundary with 0xFC mask. Every
- * exchange shall consist of 2 messages (sub-address + data) combined. */
+ * read/write operation. Each read or write operate with 8-bit (1-byte) data.
+ * Every exchange shall consist of 2 messages (sub-address + data) combined.
+ * USB xfer always bounds address to 4-byte boundary */
 #define I2C_CMESSAGES_NUM	2
 #define I2C_REG_ADDR_SIZE	(sizeof(u8))
-#define I2C_REG_DATA_SIZE	(sizeof(u32))
+#define I2C_REG_DATA_SIZE	(sizeof(u8))
+#define I2C_XFER_ADDR_MASK	(~0x3ul)
+#define I2C_XFER_SIZE		(sizeof(u32))
+
+/* I2C enable timeout */
+#define I2C_ENABLE_TIMEOUT	750
 
 /* Timeout in ms for I2C read/write operations */
 #define I2C_RDWR_TIMEOUT	5
-#define I2C_RDWR_RETRIES	10
+#define I2C_RDWR_RETRIES	20
 
 struct fl2000_i2c_bus {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	struct i2c_adapter adapter;
-	union {
-		u8 buf[I2C_REG_DATA_SIZE];
-		u32 buf_w;
-	};
 };
 
 static u32 fl2000_i2c_func(struct i2c_adapter *adap)
 {
-	return I2C_FUNC_I2C | I2C_FUNC_NOSTART;
+	return I2C_FUNC_I2C | I2C_FUNC_NOSTART | I2C_FUNC_SMBUS_READ_BYTE |
+			I2C_FUNC_SMBUS_BYTE_DATA;
 }
 
-#define fl2000_i2c_read_dword(i2c_bus, addr, offset) \
-		fl2000_i2c_xfer_buf(i2c_bus, true, addr, offset)
+#define fl2000_i2c_read_dword(i2c_bus, addr, offset, data) \
+		fl2000_i2c_xfer_dword(i2c_bus, true, addr, offset, data)
 
-#define fl2000_i2c_write_dword(i2c_bus, addr, offset) \
-		fl2000_i2c_xfer_buf(i2c_bus, false, addr, offset)
+#define fl2000_i2c_write_dword(i2c_bus, addr, offset, data) \
+		fl2000_i2c_xfer_dword(i2c_bus, false, addr, offset, data)
 
-static int fl2000_i2c_xfer_buf(struct fl2000_i2c_bus *i2c_bus, bool read,
-		u16 addr, u8 offset)
+static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
+		u16 addr, u8 offset, u32 *data)
 {
 	int i, ret;
-	fl2000_i2c_control_reg control = {.w = 0};
+	fl2000_bus_control_reg control;
 
 	if (!read) {
-		ret = fl2000_reg_write(i2c_bus->usb_dev, &i2c_bus->buf,
+		ret = fl2000_reg_write(i2c_bus->usb_dev, &control.w,
 				FL2000_REG_BUS_DATA_WR);
 		if (ret != 0) goto error;
 	}
 
-	/* TODO: Not quite sure if control register has to be just 0-ed. In the
-	 * original implementation its "reserved" fields are set with reading
-	 * actual register contents - useless? Also, bit 28 is always being set
-	 * to 1 nevertheless it always reads 0 */
+	ret = fl2000_reg_read(i2c_bus->usb_dev, &control.w,
+			FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
 
 	control.addr = addr;
 	control.cmd = read ? FL2000_CTRL_CMD_READ : FL2000_CTRL_CMD_WRITE;
 	control.offset = offset;
 	control.bus = FL2000_CTRL_BUS_I2C;
+	control.spi_erase = false;
+	control.op_status = FL2000_CTRL_OP_STATUS_PROGRESS;
+	control.flags |= FL2000_DETECT_MONITOR;
 
-	i2c_bus->buf_w = htons(control.w);
-
-	fl2000_reg_write(i2c_bus->usb_dev, &i2c_bus->buf, FL2000_REG_BUS_CTRL);
+	ret = fl2000_reg_write(i2c_bus->usb_dev, &control.w,
+			FL2000_REG_BUS_CTRL);
 	if (ret != 0) goto error;
 
 	for (i = 0; i < I2C_RDWR_RETRIES; i++) {
 		msleep(I2C_RDWR_TIMEOUT);
-		ret = fl2000_reg_read(i2c_bus->usb_dev, &i2c_bus->buf,
+		ret = fl2000_reg_read(i2c_bus->usb_dev, &control.w,
 				FL2000_REG_BUS_CTRL);
 		if (ret != 0) goto error;
-
-		control.w = ntohs(i2c_bus->buf_w);
 
 		if (control.op_status == FL2000_CTRL_OP_STATUS_DONE) break;
 	}
 
 	if (control.data_status != FL2000_DATA_STATUS_PASS ||
-			control.op_status != FL2000_CTRL_OP_STATUS_DONE)
+			control.op_status != FL2000_CTRL_OP_STATUS_DONE) {
+		dev_info(&i2c_bus->adapter.dev, "data status 0x%X operation "\
+				"status 0x%x", control.data_status,
+				control.op_status);
+		ret = -1;
 		goto error;
+	}
 
 	if (read) {
-		ret = fl2000_reg_read(i2c_bus->usb_dev, &i2c_bus->buf,
+		ret = fl2000_reg_read(i2c_bus->usb_dev, data,
 				FL2000_REG_BUS_DATA_RD);
 		if (ret != 0) goto error;
+		dev_info(&i2c_bus->adapter.dev, "data 0x%X", *data);
 	}
 
 	return 0;
@@ -98,40 +108,35 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		struct i2c_msg *msgs, int num)
 {
 	int ret;
-	struct i2c_msg *addr_msg, *data_msg;
+	struct i2c_msg *addr_msg = &msgs[0], *data_msg;
 	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
-	u8 offset;
+	u8 idx, offset = addr_msg->buf[0] & I2C_XFER_ADDR_MASK;
+	union {
+		u8 b[I2C_XFER_SIZE];
+		u32 w;
+	} data;
 
-#if DEBUG
-	/* xfer validation (actually i2c stack shall do it):
-	 *  - there is always only 2 messages for an xfer
-	 *  - 1st message size is 1 byte
-	 *  - 1st message is always "write"
-	 *  - both messages have same addresses
-	 *  - 2nd message size not more than I2C_REG_DATA_SIZE */
-	WARN_ON((num != I2C_CMESSAGES_NUM) ||
-		(msgs[0].len != I2C_REG_ADDR_SIZE) ||
-		(msgs[0].flags & I2C_M_RD) ||
-		(msgs[0].addr != msgs[1].addr) ||
-		(msgs[1].len > I2C_REG_DATA_SIZE));
-#endif
+	/* Emulate 1 byte read for detection procedure, poison buffer */
+	if (num == 1) {
+		msgs[0].buf[0] = 0xAA;
+		return num;
+	}
 
-	/* Set data only after checks */
-	addr_msg = &msgs[0];
 	data_msg = &msgs[1];
-	offset = addr_msg->buf[0];
 
-	/* TODO: Somehow the original FL2000 driver forces offset to be bound to
+	idx = addr_msg->buf[0] - offset;
+
+	/* Somehow the original FL2000 driver forces offset to be bound to
 	 * 4-byte margin. This is really strange because i2c operation shall not
 	 * depend on i2c margin, unless the HW design is completely crippled.
-	 * Our current implementation ignores that behavior of original driver,
-	 * so we need to do checks with addresses not bound to 4-byte margin. */
+	 * Oh, yes, it is crippled :( */
 
 	if (!!(data_msg->flags & I2C_M_RD)) {
-		ret = fl2000_i2c_read_dword(i2c_bus, addr_msg->addr, offset);
+		ret = fl2000_i2c_read_dword(i2c_bus, addr_msg->addr,
+				offset, &data.w);
 		if (ret != 0) goto error;
 
-		memcpy(data_msg->buf, i2c_bus->buf, data_msg->len);
+		data_msg->buf[0] = data.b[idx];
 	} else {
 		/* Since FL2000 i2c bus implementation always operates with
 		 * 4-byte messages, we need to read before write in order not to
@@ -139,17 +144,18 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		 * dword */
 		if (data_msg->len < I2C_REG_DATA_SIZE) {
 			ret = fl2000_i2c_read_dword(i2c_bus, addr_msg->addr,
-					offset);
+					offset, &data.w);
 			if (ret != 0) goto error;
 		}
 
-		memcpy(i2c_bus->buf, data_msg->buf, data_msg->len);
+		data.b[idx] = data_msg->buf[0];
 
-		ret = fl2000_i2c_write_dword(i2c_bus, addr_msg->addr, offset);
+		ret = fl2000_i2c_write_dword(i2c_bus, addr_msg->addr,
+				offset, &data.w);
 		if (ret != 0) goto error;
 	}
 
-	return data_msg->len;
+	return num;
 error:
 	dev_err(&i2c_bus->adapter.dev, "USB I2C operation failed (%d)", ret);
 	return ret;
@@ -171,10 +177,12 @@ static const struct i2c_algorithm fl2000_i2c_algorithm = {
 	.functionality  = fl2000_i2c_func,
 };
 
-int fl2000_i2c_connect(struct usb_device *usb_dev)
+int fl2000_i2c_create(struct usb_interface *interface)
 {
 	int ret = 0;
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_i2c_bus *i2c_bus;
+	fl2000_bus_control_reg control;
 
 	i2c_bus = kzalloc(sizeof(*i2c_bus), GFP_KERNEL);
 	if (IS_ERR(i2c_bus)) {
@@ -183,11 +191,13 @@ int fl2000_i2c_connect(struct usb_device *usb_dev)
 		goto error;
 	}
 
-	dev_set_drvdata(&usb_dev->dev, i2c_bus);
+	usb_set_intfdata(interface, i2c_bus);
+
 	i2c_bus->usb_dev = usb_dev;
+	i2c_bus->interface = interface;
 
 	i2c_bus->adapter.owner = THIS_MODULE;
-	i2c_bus->adapter.class = I2C_CLASS_DEPRECATED;
+	i2c_bus->adapter.class = I2C_CLASS_HDMI;
 	i2c_bus->adapter.algo = &fl2000_i2c_algorithm;
 	i2c_bus->adapter.quirks = &fl2000_i2c_quirks;
 	i2c_bus->adapter.algo_data = i2c_bus;
@@ -197,6 +207,21 @@ int fl2000_i2c_connect(struct usb_device *usb_dev)
 		 usb_dev->bus->busnum, usb_dev->devnum);
 
 	i2c_bus->adapter.dev.parent = &usb_dev->dev;
+
+	/* Enable I2C connection */
+	ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
+	control.flags |= FL2000_CONECTION_ENABLE;
+	ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
+	msleep(I2C_ENABLE_TIMEOUT);
+
+	/* Enable monitor detection (not sure if it is needed) */
+	ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
+	control.flags |= FL2000_DETECT_MONITOR;
+	ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
 
 	ret = i2c_add_adapter(&i2c_bus->adapter);
 	if (ret != 0) {
@@ -209,14 +234,15 @@ int fl2000_i2c_connect(struct usb_device *usb_dev)
 
 error:
 	/* Enforce cleanup in case of error */
-	fl2000_i2c_disconnect(usb_dev);
+	fl2000_i2c_destroy(interface);
 
 	return ret;
 }
 
-void fl2000_i2c_disconnect(struct usb_device *usb_dev)
+void fl2000_i2c_destroy(struct usb_interface *interface)
 {
-	struct fl2000_i2c_bus *i2c_bus = dev_get_drvdata(&usb_dev->dev);
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	struct fl2000_i2c_bus *i2c_bus = usb_get_intfdata(interface);
 
 	if (i2c_bus == NULL) return;
 
