@@ -178,7 +178,6 @@ int fl2000_i2c_create(struct usb_interface *interface)
 	int ret = 0;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_i2c_bus *i2c_bus;
-	fl2000_bus_control_reg control;
 
 	i2c_bus = kzalloc(sizeof(*i2c_bus), GFP_KERNEL);
 	if (IS_ERR(i2c_bus)) {
@@ -203,21 +202,6 @@ int fl2000_i2c_create(struct usb_interface *interface)
 		 usb_dev->bus->busnum, usb_dev->devnum);
 
 	i2c_bus->adapter.dev.parent = &usb_dev->dev;
-
-	/* Enable I2C connection */
-	ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
-	control.flags |= FL2000_CONECTION_ENABLE;
-	ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
-	msleep(I2C_ENABLE_TIMEOUT);
-
-	/* Enable monitor detection (not sure if it is needed) */
-	ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
-	control.flags |= FL2000_DETECT_MONITOR;
-	ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
 
 	ret = i2c_add_adapter(&i2c_bus->adapter);
 	if (ret != 0) {

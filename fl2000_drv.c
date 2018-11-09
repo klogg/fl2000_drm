@@ -30,6 +30,58 @@ static struct usb_device_id fl2000_id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
+#if 0
+
+u32 magic;
+fl2000_bus_control_reg control;
+
+/* Application reset & self cleanup */
+ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_8048);
+if (ret != 0) goto error;
+magic |= (1<<15);
+ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_8048);
+if (ret != 0) goto error;
+
+/* Turn off HW reset */
+ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_8088);
+if (ret != 0) goto error;
+magic |= (1<<10);
+ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_8088);
+if (ret != 0) goto error;
+
+/* TODO: sort out this U1/U2 magic from original driver. Could it be
+ * some sort of GPIO management? */
+ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_0070);
+if (ret != 0) goto error;
+magic |= (1<<20);
+ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_0070);
+if (ret != 0) goto error;
+
+ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_0070);
+if (ret != 0) goto error;
+magic |= (1<<19);
+ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_0070);
+if (ret != 0) goto error;
+
+/* Enable I2C connection */
+ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+if (ret != 0) goto error;
+control.flags |= FL2000_CONECTION_ENABLE;
+ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+if (ret != 0) goto error;
+msleep(I2C_ENABLE_TIMEOUT);
+
+/* Enable monitor detection (not sure if it is needed) */
+ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+if (ret != 0) goto error;
+control.flags |= FL2000_DETECT_MONITOR;
+ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+if (ret != 0) goto error;
+
+
+#endif
+
+
 static int fl2000_probe(struct usb_interface *interface,
 		const struct usb_device_id *usb_dev_id)
 {
