@@ -96,7 +96,6 @@ static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
 		ret = fl2000_reg_read(i2c_bus->usb_dev, data,
 				FL2000_REG_BUS_DATA_RD);
 		if (ret != 0) goto error;
-		dev_info(&i2c_bus->adapter.dev, "data 0x%X", *data);
 	}
 
 	return 0;
