@@ -85,9 +85,6 @@ static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
 
 	if (control.data_status != FL2000_DATA_STATUS_PASS ||
 			control.op_status != FL2000_CTRL_OP_STATUS_DONE) {
-		dev_info(&i2c_bus->adapter.dev, "data status 0x%X operation "\
-				"status 0x%x", control.data_status,
-				control.op_status);
 		ret = -1;
 		goto error;
 	}
