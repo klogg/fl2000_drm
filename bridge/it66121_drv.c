@@ -19,6 +19,7 @@
 #define VENDOR_ID	0x4954
 #define DEVICE_ID	0x0612
 #define REVISION_MASK	0xF000
+#define REVISION_SHIFT	12
 
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
@@ -73,13 +74,13 @@ int it66121_detect(struct i2c_client *client, struct i2c_board_info *info)
 
 	if ((id.vendor != VENDOR_ID) ||
 			((id.device & ~REVISION_MASK) != DEVICE_ID)) {
-		dev_err(&adapter->dev, " ...not found (0x%X-0x%X)",
+		dev_err(&adapter->dev, "IT66121 not found (0x%X-0x%X)",
 				id.vendor, id.device);
 		return -ENODEV;
 	}
 
-	dev_info(&client->dev, " ...found, revision %d",
-			id.device & REVISION_MASK);
+	dev_info(&adapter->dev, "IT66121 found, revision %d",
+			(id.device & REVISION_MASK) >> REVISION_SHIFT);
 
 	strlcpy(info->type, "it66121", I2C_NAME_SIZE);
 	return 0;
