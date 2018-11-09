@@ -85,7 +85,8 @@ int fl2000_reg_create(struct usb_device *usb_dev)
 
 	dev_set_drvdata(&usb_dev->dev, reg);
 
-	/* U1 U2 magic from original driver */
+	/* TODO: sort out this U1/U2 magic from original driver. Could it be
+	 * some sort of GPIO management? */
 	ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_0070);
 	if (ret != 0) goto error;
 	magic |= (1<<20);
@@ -97,7 +98,6 @@ int fl2000_reg_create(struct usb_device *usb_dev)
 	magic |= (1<<19);
 	ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_0070);
 	if (ret != 0) goto error;
-
 
 	return 0;
 error:
