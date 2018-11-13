@@ -19,8 +19,10 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_edid.h>
 
-/* Custom class for DRM bridge autodetection */
+/* Custom class for DRM bridge autodetection when there is no DT support */
+#ifndef CONFIG_OF
 #define I2C_CLASS_HDMI	(1<<9)
+#endif
 
 #define VENDOR_ID	0x4954
 #define DEVICE_ID	0x0612
@@ -159,6 +161,11 @@ static int it66121_probe(struct i2c_client *client)
 
 	i2c_set_clientdata(client, priv);
 
+	/* Special autodetection & registration case when there is no DT */
+	if (client->adapter->class & I2C_CLASS_HDMI) {
+		/* TODO: call exposed private function to register bridge */
+	}
+
 	return 0;
 
 error:
@@ -240,7 +247,11 @@ static const struct i2c_device_id it66121_i2c_ids[] = {
 MODULE_DEVICE_TABLE(i2c, it66121_i2c_ids);
 
 static struct i2c_driver it66121_driver = {
+#ifndef CONFIG_OF
 	.class = I2C_CLASS_HDMI,
+#else
+	.class = I2C_CLASS_DEPRECATED,
+#endif
 	.driver = {
 		.name = "it66121",
 		.of_match_table = of_match_ptr(it66121_of_ids),

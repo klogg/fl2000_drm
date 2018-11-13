@@ -8,8 +8,10 @@
 
 #include "fl2000.h"
 
-/* Custom class for DRM bridge autodetection */
+/* Custom class for DRM bridge autodetection when there is no DT support */
+#ifndef CONFIG_OF
 #define I2C_CLASS_HDMI	(1<<9)
+#endif
 
 /* I2C controller require mandatory 8-bit (1 bite) sub-address provided for any
  * read/write operation. Each read or write operate with 8-bit (1-byte) data.
@@ -219,7 +221,11 @@ int fl2000_i2c_create(struct usb_interface *interface)
 	i2c_bus->interface = interface;
 
 	i2c_bus->adapter.owner = THIS_MODULE;
+#ifndef CONFIG_OF
 	i2c_bus->adapter.class = I2C_CLASS_HDMI;
+#else
+	i2c_bus->adapter.class = I2C_CLASS_DEPRECATED;
+#endif
 	i2c_bus->adapter.algo = &fl2000_i2c_algorithm;
 	i2c_bus->adapter.lock_ops = &fl2000_i2c_lock_operations;
 	i2c_bus->adapter.quirks = &fl2000_i2c_quirks;
