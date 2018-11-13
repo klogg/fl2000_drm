@@ -230,10 +230,12 @@ void fl2000_drm_destroy(struct usb_interface *interface)
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 
-	drm = usb_get_intfdata(interface);
+	drm_if = usb_get_intfdata(interface);
 
-	if (drm == NULL)
+	if (drm_if == NULL)
 		return;
+
+	drm = drm_if->drm;
 
 	drm_dev_unregister(drm);
 
