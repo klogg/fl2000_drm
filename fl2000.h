@@ -23,6 +23,13 @@
 #include <linux/dma-buf.h>
 #include <drm/drmP.h>
 #include <drm/drm_gem.h>
+#include <drm/drm_fb_helper.h>
+#include <drm/drm_fb_cma_helper.h>
+#include <drm/drm_gem_framebuffer_helper.h>
+#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_atomic_helper.h>
+#include <drm/drm_simple_kms_helper.h>
+#include <drm/drm_crtc_helper.h>
 
 #define FL2000_I2C_ADDRESS_DSUB		0x50
 #define FL2000_I2C_ADDRESS_EEPROM	0x54
