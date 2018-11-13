@@ -162,9 +162,11 @@ static int it66121_probe(struct i2c_client *client)
 	i2c_set_clientdata(client, priv);
 
 	/* Special autodetection & registration case when there is no DT */
+#ifndef CONFIG_OF
 	if (client->adapter->class & I2C_CLASS_HDMI) {
 		/* TODO: call exposed private function to register bridge */
 	}
+#endif
 
 	return 0;
 
