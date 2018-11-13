@@ -186,7 +186,7 @@ int fl2000_drm_create(struct usb_interface *interface)
 	drm = drm_dev_alloc(&fl2000_drm_driver, &usb_dev->dev);
 	if (IS_ERR(drm)) {
 		dev_err(&interface->dev, "Cannot allocate DRM device");
-		return PTR_ERR(drm);
+		ret = PTR_ERR(drm);
 		goto error;
 	}
 
