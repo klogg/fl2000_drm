@@ -224,6 +224,7 @@ static int it66121_detect(struct i2c_client *client,
 	return 0;
 }
 
+/* TODO: Implement better support for DT */
 #ifdef CONFIG_OF
 static const struct of_device_id it66121_of_ids[] = {
 	{ .compatible = "ite,it66121", },

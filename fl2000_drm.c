@@ -159,6 +159,7 @@ static int fl2000_modeset_init(struct drm_device *dev)
 	}
 
 	/* TODO: attach bridge */
+	/* TODO: Implement better support for DT */
 
 	drm_mode_config_reset(dev);
 
