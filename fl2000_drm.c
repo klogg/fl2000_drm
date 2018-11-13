@@ -182,6 +182,14 @@ int fl2000_drm_create(struct usb_interface *interface)
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	u64 mask = dma_get_mask(&interface->dev);
+
+	ret = dma_coerce_mask_and_coherent(&interface->dev, mask);
+	if (ret != 0) {
+		dev_err(&interface->dev, "Cannot set USB streaming interface " \
+				"DMA mask");
+		goto error;
+	}
 
 	drm = drm_dev_alloc(&fl2000_drm_driver, &usb_dev->dev);
 	if (IS_ERR(drm)) {
