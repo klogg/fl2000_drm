@@ -32,13 +32,8 @@ struct fl2000_i2c_bus {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	struct i2c_adapter adapter;
+	struct mutex hw_mutex;
 };
-
-static u32 fl2000_i2c_func(struct i2c_adapter *adap)
-{
-	return I2C_FUNC_I2C | I2C_FUNC_NOSTART | I2C_FUNC_SMBUS_READ_BYTE |
-			I2C_FUNC_SMBUS_BYTE_DATA;
-}
 
 #define fl2000_i2c_read_dword(i2c_bus, addr, offset, data) \
 		fl2000_i2c_xfer_dword(i2c_bus, true, addr, offset, data)
@@ -157,6 +152,41 @@ error:
 	return ret;
 }
 
+static u32 fl2000_i2c_func(struct i2c_adapter *adap)
+{
+	return I2C_FUNC_I2C | I2C_FUNC_NOSTART | I2C_FUNC_SMBUS_READ_BYTE |
+			I2C_FUNC_SMBUS_BYTE_DATA;
+}
+
+static const struct i2c_algorithm fl2000_i2c_algorithm = {
+	.master_xfer    = fl2000_i2c_xfer,
+	.functionality  = fl2000_i2c_func,
+};
+
+static void fl2000_lock_bus(struct i2c_adapter *adapter, unsigned int flags)
+{
+	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
+	mutex_lock(&i2c_bus->hw_mutex);
+}
+
+static int fl2000_trylock_bus(struct i2c_adapter *adapter, unsigned int flags)
+{
+	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
+	return mutex_trylock(&i2c_bus->hw_mutex);
+}
+
+static void fl2000_unlock_bus(struct i2c_adapter *adapter, unsigned int flags)
+{
+	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
+	mutex_unlock(&i2c_bus->hw_mutex);
+}
+
+struct i2c_lock_operations fl2000_i2c_lock_operations = {
+	.lock_bus = fl2000_lock_bus,
+	.trylock_bus = fl2000_trylock_bus,
+	.unlock_bus = fl2000_unlock_bus,
+};
+
 static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.flags = I2C_AQ_COMB |		   /* enforce "combined" mode */
 		 I2C_AQ_COMB_WRITE_FIRST | /* address write goes first */
@@ -166,11 +196,6 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_read_len		= I2C_REG_DATA_SIZE,
 	.max_comb_1st_msg_len	= I2C_REG_ADDR_SIZE,
 	.max_comb_2nd_msg_len	= I2C_REG_DATA_SIZE,
-};
-
-static const struct i2c_algorithm fl2000_i2c_algorithm = {
-	.master_xfer    = fl2000_i2c_xfer,
-	.functionality  = fl2000_i2c_func,
 };
 
 int fl2000_i2c_create(struct usb_interface *interface)
@@ -188,12 +213,15 @@ int fl2000_i2c_create(struct usb_interface *interface)
 
 	usb_set_intfdata(interface, i2c_bus);
 
+	mutex_init(&i2c_bus->hw_mutex);
+
 	i2c_bus->usb_dev = usb_dev;
 	i2c_bus->interface = interface;
 
 	i2c_bus->adapter.owner = THIS_MODULE;
 	i2c_bus->adapter.class = I2C_CLASS_HDMI;
 	i2c_bus->adapter.algo = &fl2000_i2c_algorithm;
+	i2c_bus->adapter.lock_ops = &fl2000_i2c_lock_operations;
 	i2c_bus->adapter.quirks = &fl2000_i2c_quirks;
 	i2c_bus->adapter.algo_data = i2c_bus;
 
