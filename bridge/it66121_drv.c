@@ -39,7 +39,7 @@ struct it66121_priv {
 	enum drm_connector_status status;
 };
 
-int it66121_remove(struct i2c_client *client);
+static int it66121_remove(struct i2c_client *client);
 
 /* According to datasheet IT66121 addresses are 0x98 or 0x9A, but this is
  * including lsb which is responsible for r/w command - that's why shift */
@@ -60,7 +60,7 @@ static const struct regmap_config it66121_regmap_config = {
 };
 #endif
 
-int it66121_connector_get_modes(struct drm_connector *connector)
+static int it66121_connector_get_modes(struct drm_connector *connector)
 {
 	return 0;
 }
@@ -69,8 +69,8 @@ static struct drm_connector_helper_funcs it66121_connector_helper_funcs = {
 	.get_modes = it66121_connector_get_modes,
 };
 
-enum drm_connector_status it66121_connector_detect(struct drm_connector *connector,
-					    bool force)
+static enum drm_connector_status it66121_connector_detect(
+		struct drm_connector *connector, bool force)
 {
 	return connector_status_disconnected;
 }
@@ -84,7 +84,7 @@ static const struct drm_connector_funcs it66121_connector_funcs = {
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
 
-int it66121_bridge_attach(struct drm_bridge *bridge)
+static int it66121_bridge_attach(struct drm_bridge *bridge)
 {
 	int ret;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
@@ -108,19 +108,19 @@ int it66121_bridge_attach(struct drm_bridge *bridge)
 	return 0;
 }
 
-void it66121_bridge_detach(struct drm_bridge *bridge)
+static void it66121_bridge_detach(struct drm_bridge *bridge)
 {
 }
 
-void it66121_bridge_enable(struct drm_bridge *bridge)
+static void it66121_bridge_enable(struct drm_bridge *bridge)
 {
 }
 
-void it66121_bridge_disable(struct drm_bridge *bridge)
+static void it66121_bridge_disable(struct drm_bridge *bridge)
 {
 }
 
-void it66121_bridge_mode_set(struct drm_bridge *bridge,
+static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		struct drm_display_mode *mode,
 		struct drm_display_mode *adjusted_mode)
 {
@@ -134,7 +134,7 @@ static const struct drm_bridge_funcs it66121_bridge_funcs = {
 	.mode_set = it66121_bridge_mode_set,
 };
 
-int it66121_probe(struct i2c_client *client)
+static int it66121_probe(struct i2c_client *client)
 {
 	int ret;
 	struct it66121_priv *priv;
@@ -166,7 +166,7 @@ error:
 	return ret;
 }
 
-int it66121_remove(struct i2c_client *client)
+static int it66121_remove(struct i2c_client *client)
 {
 	struct it66121_priv *priv = i2c_get_clientdata(client);
 
@@ -183,7 +183,8 @@ int it66121_remove(struct i2c_client *client)
 	return 0;
 }
 
-int it66121_detect(struct i2c_client *client, struct i2c_board_info *info)
+static int it66121_detect(struct i2c_client *client,
+		struct i2c_board_info *info)
 {
 	int i, ret, address = client->addr;
 	struct i2c_adapter *adapter = client->adapter;
