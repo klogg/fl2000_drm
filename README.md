@@ -14,7 +14,6 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 ## Limitations
  * USB2.0 is not supported
  * Connecting more than one dongles to the same bus is not supported
- * Static configuration of bridge supporting only IT66121 HDMI transmitter
  * VGA (D-Sub) DAC output of FL2000DX is not supported
  * HDMI CEC is not supported
  * HDMI Audio is not supported
@@ -24,7 +23,8 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
  * 32-bit hosts are not supported
 
 ## Upstreaming
-This is not going to happen - both chips are poorly supported by their vendors, if at all
+This is not going to happen - both chips are poorly supported by their vendors in the Linux world, if at all.
+Also there are some hacks on HDMI transmitter autodetection ;)
 
 ## Sources
  * Original driver by FrescoLogic: https://github.com/FrescoLogic/FL2000
@@ -38,11 +38,11 @@ This is not going to happen - both chips are poorly supported by their vendors, 
  * FL2000DX outputs DPI interface (kind of "crtc" output, not "encoder")
  * IT66121 can be implemented as a DRM bridge
  * Register address for IT66121 can be done via regmap (see <linux/regmap.h>)
- * For registration of CEC I2C device of IT66121 i2c\_new\_dummy() function may be used
+ * For registration of sibling I2C devices of IT66121 (CEC, DDC, ...) i2c\_new\_dummy() function may be used
 
 ## Open questions
- * How the DDC node is attached to the DRM bridge?
  * Can FL2000DX support USB Bulk Streams?
  * How many planes are there in FL2000DX?
  * Any additional pixel formats for FL2000DX except ones in original drivers?
  * Any need in pixel format modifiers for FL2000DX?
+ * Any chance to use regmap for FL2000DX?
