@@ -255,13 +255,12 @@ error:
 
 void fl2000_i2c_destroy(struct usb_interface *interface)
 {
-	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_i2c_bus *i2c_bus = usb_get_intfdata(interface);
 
 	if (i2c_bus == NULL) return;
 
 	i2c_del_adapter(&i2c_bus->adapter);
 
-	dev_set_drvdata(&usb_dev->dev, NULL);
+	usb_set_intfdata(interface, NULL);
 	kfree(i2c_bus);
 }
