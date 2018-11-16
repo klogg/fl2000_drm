@@ -101,12 +101,6 @@ static int fl2000_probe(struct usb_interface *interface,
 		fl2000_init_state |= REGS_DONE;
 	}
 
-	/* TODO:
-	 * - register DRM device (NOTE: resolution etc is yet unknown)
-	 * - allocate control structure for USB
-	 * - allocate streaming structures
-	 * NOTE: HDMI interface shall sit on top of I2C (I guess) */
-
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
 		dev_info(&usb_dev->dev, "Probing AVControl interface (%u)",
@@ -115,6 +109,7 @@ static int fl2000_probe(struct usb_interface *interface,
 		/* This is rather useless, AVControl is not properly implemented
 		 * on FL2000 chip - that is why all the "magic" needed */
 
+		/* TODO: Move I2C initialization to DRM device */
 		ret = fl2000_i2c_create(interface);
 		if (ret != 0) goto error;
 		fl2000_init_state |= I2C_DONE;
