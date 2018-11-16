@@ -21,7 +21,6 @@
 #define FL2000_USBIF_AVCONTROL		0
 #define FL2000_USBIF_STREAMING		1
 #define FL2000_USBIF_INTERRUPT		2
-#define FL2000_USBIF_MASSSTORAGE	3
 
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
@@ -126,11 +125,6 @@ static int fl2000_probe(struct usb_interface *interface,
 		if (ret != 0) goto error;
 		break;
 
-	case FL2000_USBIF_MASSSTORAGE:
-		/* This is defined but not getting probed - do nothing */
-		dev_warn(&interface->dev, "Unexpectedly probed Mass Storage");
-		break;
-
 	default:
 		/* Device does not have any other interfaces */
 		dev_warn(&interface->dev, "What interface %d?",
@@ -161,9 +155,6 @@ static void fl2000_disconnect(struct usb_interface *interface)
 
 	case FL2000_USBIF_INTERRUPT:
 		fl2000_intr_destroy(interface);
-		break;
-
-	case FL2000_USBIF_MASSSTORAGE:
 		break;
 
 	default:
