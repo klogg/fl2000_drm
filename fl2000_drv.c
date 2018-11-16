@@ -129,6 +129,7 @@ static int fl2000_probe(struct usb_interface *interface,
 		/* Device does not have any other interfaces */
 		dev_warn(&interface->dev, "What interface %d?",
 				interface->cur_altsetting->desc.iInterface);
+		ret = -ENODEV;
 		break;
 	}
 
