@@ -22,6 +22,12 @@
 #define FL2000_USBIF_STREAMING		1
 #define FL2000_USBIF_INTERRUPT		2
 
+static unsigned long fl2000_init_state = 0;
+#define REGS_DONE			(1ul<<0)
+#define DRM_DONE			(1ul<<1)
+#define I2C_DONE			(1ul<<2)
+#define INTR_DONE			(1ul<<3)
+
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
 		USB_PRODUCT_ID_FL2000, USB_CLASS_AV) },
@@ -80,7 +86,6 @@ if (ret != 0) goto error;
 
 #endif
 
-
 static int fl2000_probe(struct usb_interface *interface,
 		const struct usb_device_id *usb_dev_id)
 {
@@ -88,6 +93,13 @@ static int fl2000_probe(struct usb_interface *interface,
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
 
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
+
+	/* Enable register access before first interface set */
+	if (fl2000_init_state == 0) {
+		ret = fl2000_reg_create(usb_dev);
+		if (ret != 0) goto error;
+		fl2000_init_state |= REGS_DONE;
+	}
 
 	/* TODO:
 	 * - register DRM device (NOTE: resolution etc is yet unknown)
@@ -103,11 +115,9 @@ static int fl2000_probe(struct usb_interface *interface,
 		/* This is rather useless, AVControl is not properly implemented
 		 * on FL2000 chip - that is why all the "magic" needed */
 
-		ret = fl2000_reg_create(usb_dev);
-		if (ret != 0) goto error;
-
 		ret = fl2000_i2c_create(interface);
 		if (ret != 0) goto error;
+		fl2000_init_state |= I2C_DONE;
 		break;
 
 	case FL2000_USBIF_STREAMING:
@@ -115,6 +125,7 @@ static int fl2000_probe(struct usb_interface *interface,
 				iface_num);
 		ret = fl2000_drm_create(interface);
 		if (ret != 0) goto error;
+		fl2000_init_state |= DRM_DONE;
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
@@ -123,7 +134,8 @@ static int fl2000_probe(struct usb_interface *interface,
 
 		ret = fl2000_intr_create(interface);
 		if (ret != 0) goto error;
-		break;
+		fl2000_init_state |= INTR_DONE;
+break;
 
 	default:
 		/* Device does not have any other interfaces */
@@ -147,21 +159,30 @@ static void fl2000_disconnect(struct usb_interface *interface)
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
 		fl2000_i2c_destroy(interface);
-		fl2000_reg_destroy(usb_dev);
+		fl2000_init_state &= ~I2C_DONE;
 		break;
 
 	case FL2000_USBIF_STREAMING:
 		fl2000_drm_destroy(interface);
+		fl2000_init_state &= ~DRM_DONE;
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
 		fl2000_intr_destroy(interface);
+		fl2000_init_state &= ~INTR_DONE;
 		break;
 
 	default:
 		/* Device does not have any other interfaces */
 		break;
 	}
+
+	/* Disable register access after last interface cleared */
+	if (fl2000_init_state == REGS_DONE){
+		fl2000_reg_destroy(usb_dev);
+		fl2000_init_state &= ~REGS_DONE;
+	}
+
 }
 
 static int fl2000_suspend(struct usb_interface *interface,
