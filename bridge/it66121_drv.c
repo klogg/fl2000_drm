@@ -155,7 +155,7 @@ static int it66121_probe(struct i2c_client *client)
 	priv->regmap = NULL;
 	priv->bridge.funcs = &it66121_bridge_funcs;
 
-	drm_bridge_add(&priv->bridge);
+	//drm_bridge_add(&priv->bridge);
 
 	i2c_set_clientdata(client, priv);
 
@@ -180,7 +180,7 @@ static int it66121_remove(struct i2c_client *client)
 	if (priv == NULL)
 		return 0;
 
-	drm_bridge_remove(&priv->bridge);
+	//drm_bridge_remove(&priv->bridge);
 
 	i2c_set_clientdata(client, NULL);
 	kfree(priv);
