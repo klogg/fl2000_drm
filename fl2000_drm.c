@@ -185,17 +185,16 @@ int fl2000_drm_create(struct usb_interface *interface)
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	u64 mask = dma_get_mask(&interface->dev);
 
-	ret = dma_coerce_mask_and_coherent(&interface->dev, mask);
-	if (ret != 0) {
-		dev_err(&interface->dev, "Cannot set USB streaming interface " \
-				"DMA mask");
-		goto error;
-	}
-
 	drm = drm_dev_alloc(&fl2000_drm_driver, &usb_dev->dev);
 	if (IS_ERR(drm)) {
 		dev_err(&interface->dev, "Cannot allocate DRM device");
 		ret = PTR_ERR(drm);
+		goto error;
+	}
+
+	ret = dma_set_coherent_mask(drm->dev, mask);
+	if (ret != 0) {
+		dev_err(&interface->dev, "Cannot set DRM device DMA mask");
 		goto error;
 	}
 
