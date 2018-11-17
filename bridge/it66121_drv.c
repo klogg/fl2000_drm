@@ -143,8 +143,6 @@ static int it66121_probe(struct i2c_client *client)
 
 	dev_info(&client->dev, "Probing IT66121 client");
 
-	i2c_lock_bus(client->adapter, I2C_LOCK_SEGMENT);
-
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
 	if (IS_ERR(priv)) {
 		dev_err(&client->dev, "Cannot allocate IT66121 client private" \
@@ -186,8 +184,6 @@ static int it66121_remove(struct i2c_client *client)
 
 	i2c_set_clientdata(client, NULL);
 	kfree(priv);
-
-	i2c_unlock_bus(client->adapter, I2C_LOCK_SEGMENT);
 
 	return 0;
 }
