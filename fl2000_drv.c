@@ -130,7 +130,7 @@ static int fl2000_probe(struct usb_interface *interface,
 		ret = fl2000_intr_create(interface);
 		if (ret != 0) goto error;
 		fl2000_init_state |= INTR_DONE;
-break;
+		break;
 
 	default:
 		/* Device does not have any other interfaces */
