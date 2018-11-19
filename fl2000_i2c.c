@@ -8,11 +8,6 @@
 
 #include "fl2000.h"
 
-/* Custom class for DRM bridge autodetection when there is no DT support */
-#ifndef CONFIG_OF
-#define I2C_CLASS_HDMI	(1<<9)
-#endif
-
 /* I2C controller require mandatory 8-bit (1 bite) sub-address provided for any
  * read/write operation. Each read or write operate with 8-bit (1-byte) data.
  * Every exchange shall consist of 2 messages (sub-address + data) combined.
@@ -30,11 +25,22 @@
 #define I2C_RDWR_TIMEOUT	5
 #define I2C_RDWR_RETRIES	20
 
+/* Custom code for DRM bridge autodetection since there is no DT support */
+#define I2C_CLASS_HDMI	(1<<9)
+#define CONNECTION_SIZE	64
+static inline int drm_i2c_bridge_connection_id(char *connection_id,
+		struct i2c_adapter *adapter)
+{
+	return snprintf(connection_id, CONNECTION_SIZE, "%s-bridge",
+			adapter->name);
+}
+
 struct fl2000_i2c_bus {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	struct i2c_adapter adapter;
 	struct mutex hw_mutex;
+	char connection_id[CONNECTION_SIZE];
 };
 
 #define fl2000_i2c_read_dword(i2c_bus, addr, offset, data) \
@@ -221,18 +227,14 @@ int fl2000_i2c_create(struct usb_interface *interface)
 	i2c_bus->interface = interface;
 
 	i2c_bus->adapter.owner = THIS_MODULE;
-#ifndef CONFIG_OF
 	i2c_bus->adapter.class = I2C_CLASS_HDMI;
-#else
-	i2c_bus->adapter.class = I2C_CLASS_DEPRECATED;
-#endif
 	i2c_bus->adapter.algo = &fl2000_i2c_algorithm;
 	i2c_bus->adapter.lock_ops = &fl2000_i2c_lock_operations;
 	i2c_bus->adapter.quirks = &fl2000_i2c_quirks;
 	i2c_bus->adapter.algo_data = i2c_bus;
 
 	snprintf(i2c_bus->adapter.name, sizeof(i2c_bus->adapter.name),
-		 "FL2000 I2C adapter at USB bus %03d device %03d",
+		 "FL2000@USB%03d:%03d",
 		 usb_dev->bus->busnum, usb_dev->devnum);
 
 	i2c_bus->adapter.dev.parent = &usb_dev->dev;
@@ -242,6 +244,9 @@ int fl2000_i2c_create(struct usb_interface *interface)
 		dev_err(&usb_dev->dev, "Out of memory");
 		goto error;
 	}
+
+	/* Calculate connection ID for I2C DRM bridge */
+	drm_i2c_bridge_connection_id(i2c_bus->connection_id, &i2c_bus->adapter);
 
 	dev_info(&i2c_bus->adapter.dev, "Connected I2C adapter");
 	return 0;
