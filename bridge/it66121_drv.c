@@ -19,11 +19,6 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_edid.h>
 
-/* Custom class for DRM bridge autodetection when there is no DT support */
-#ifndef CONFIG_OF
-#define I2C_CLASS_HDMI	(1<<9)
-#endif
-
 #define VENDOR_ID	0x4954
 #define DEVICE_ID	0x0612
 #define REVISION_MASK	0xF000
@@ -32,6 +27,18 @@
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
 
+static char it66121_name[] = "it66121";
+
+/* Custom code for DRM bridge autodetection since there is no DT support */
+#define I2C_CLASS_HDMI	(1<<9)
+#define CONNECTION_SIZE	64
+static inline int drm_i2c_bridge_connection_id(char *connection_id,
+		struct i2c_adapter *adapter)
+{
+	return snprintf(connection_id, CONNECTION_SIZE, "%s-bridge",
+			adapter->name);
+}
+
 struct it66121_priv {
 	struct i2c_client *client;
 	struct regmap *regmap;
@@ -39,6 +46,8 @@ struct it66121_priv {
 	struct drm_bridge bridge;
 	struct drm_connector connector;
 	enum drm_connector_status status;
+	char connection_id[CONNECTION_SIZE];
+	struct device_connection connection;
 };
 
 static int it66121_remove(struct i2c_client *client);
@@ -155,16 +164,20 @@ static int it66121_probe(struct i2c_client *client)
 	priv->regmap = NULL;
 	priv->bridge.funcs = &it66121_bridge_funcs;
 
-	//drm_bridge_add(&priv->bridge);
+	drm_bridge_add(&priv->bridge);
 
 	i2c_set_clientdata(client, priv);
 
-	/* Special autodetection & registration case when there is no DT */
-#ifndef CONFIG_OF
-	if (client->adapter->class & I2C_CLASS_HDMI) {
-		/* TODO: call exposed private function to register bridge */
-	}
-#endif
+	/* Set up connection between I2C endpoints of encoder and bridge
+	 * NOTE: only one DRM bridge on DPI, so only one device on I2C bus */
+	priv->connection.endpoint[0] = dev_name(&client->adapter->dev);
+	priv->connection.endpoint[1] = dev_name(&client->dev);
+	priv->connection.id = priv->connection_id;
+
+	/* Calculate connection ID for I2C DRM encoder */
+	drm_i2c_bridge_connection_id(priv->connection_id, client->adapter);
+
+	device_connection_add(&priv->connection);
 
 	return 0;
 
@@ -180,7 +193,9 @@ static int it66121_remove(struct i2c_client *client)
 	if (priv == NULL)
 		return 0;
 
-	//drm_bridge_remove(&priv->bridge);
+	device_connection_remove(&priv->connection);
+
+	drm_bridge_remove(&priv->bridge);
 
 	i2c_set_clientdata(client, NULL);
 	kfree(priv);
@@ -225,18 +240,9 @@ static int it66121_detect(struct i2c_client *client,
 	dev_info(&adapter->dev, "IT66121 found, revision %d",
 			(id.device & REVISION_MASK) >> REVISION_SHIFT);
 
-	strlcpy(info->type, "it66121", I2C_NAME_SIZE);
+	strlcpy(info->type, it66121_name, I2C_NAME_SIZE);
 	return 0;
 }
-
-/* TODO: Implement better support for DT */
-#ifdef CONFIG_OF
-static const struct of_device_id it66121_of_ids[] = {
-	{ .compatible = "ite,it66121", },
-	{ }
-};
-MODULE_DEVICE_TABLE(of, it66121_of_ids);
-#endif /* CONFIG_OF */
 
 static const struct i2c_device_id it66121_i2c_ids[] = {
 	{ "it66121", 0 },
@@ -245,13 +251,9 @@ static const struct i2c_device_id it66121_i2c_ids[] = {
 MODULE_DEVICE_TABLE(i2c, it66121_i2c_ids);
 
 static struct i2c_driver it66121_driver = {
-#ifndef CONFIG_OF
 	.class = I2C_CLASS_HDMI,
-#else
-	.class = I2C_CLASS_DEPRECATED,
-#endif
 	.driver = {
-		.name = "it66121",
+		.name = it66121_name,
 		.of_match_table = of_match_ptr(it66121_of_ids),
 	},
 	.id_table = it66121_i2c_ids,

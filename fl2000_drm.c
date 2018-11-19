@@ -103,7 +103,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	struct drm_framebuffer *fb = pstate->fb;
 
 	if (fb) {
-		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
+		//dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
 		int idx;
 
 		/* TODO: Do we really need this? What if it fails? */
@@ -259,3 +259,17 @@ void fl2000_drm_destroy(struct usb_interface *interface)
 
 	drm_dev_put(drm);
 }
+
+#if 0
+int fl2000_drm_bridge_detect()
+
+char connection_id[CONNECTION_SIZE];
+
+priv->master = device_connection_find(&client->dev,
+		priv->connection_id);
+
+if (IS_ERR_OR_NULL(priv->master))
+	return PTR_ERR(priv->master);
+
+dev_info(&client->dev, "Found bridge %s", dev_name(priv->master));
+#endif
