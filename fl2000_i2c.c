@@ -25,44 +25,26 @@
 #define I2C_RDWR_TIMEOUT	5
 #define I2C_RDWR_RETRIES	20
 
-/* Custom code for DRM bridge autodetection since there is no DT support */
-#define I2C_CLASS_HDMI	(1<<9)
-#define CONNECTION_SIZE	64
-static inline int drm_i2c_bridge_connection_id(char *connection_id,
-		struct i2c_adapter *adapter)
-{
-	return snprintf(connection_id, CONNECTION_SIZE, "%s-bridge",
-			adapter->name);
-}
+#define fl2000_i2c_read_dword(adapter, addr, offset, data) \
+		fl2000_i2c_xfer_dword(adapter, true, addr, offset, data)
 
-struct fl2000_i2c_bus {
-	struct usb_device *usb_dev;
-	struct usb_interface *interface;
-	struct i2c_adapter adapter;
-	struct mutex hw_mutex;
-	char connection_id[CONNECTION_SIZE];
-};
+#define fl2000_i2c_write_dword(adapter, addr, offset, data) \
+		fl2000_i2c_xfer_dword(adapter, false, addr, offset, data)
 
-#define fl2000_i2c_read_dword(i2c_bus, addr, offset, data) \
-		fl2000_i2c_xfer_dword(i2c_bus, true, addr, offset, data)
-
-#define fl2000_i2c_write_dword(i2c_bus, addr, offset, data) \
-		fl2000_i2c_xfer_dword(i2c_bus, false, addr, offset, data)
-
-static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
+static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		u16 addr, u8 offset, u32 *data)
 {
 	int i, ret;
+	struct usb_device *usb_dev = adapter->algo_data;
 	fl2000_bus_control_reg control;
 
 	if (!read) {
-		ret = fl2000_reg_write(i2c_bus->usb_dev, &control.w,
+		ret = fl2000_reg_write(usb_dev, &control.w,
 				FL2000_REG_BUS_DATA_WR);
 		if (ret != 0) goto error;
 	}
 
-	ret = fl2000_reg_read(i2c_bus->usb_dev, &control.w,
-			FL2000_REG_BUS_CTRL);
+	ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
 	if (ret != 0) goto error;
 
 	control.addr = addr;
@@ -73,14 +55,12 @@ static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
 	control.op_status = FL2000_CTRL_OP_STATUS_PROGRESS;
 	control.flags |= FL2000_DETECT_MONITOR;
 
-	ret = fl2000_reg_write(i2c_bus->usb_dev, &control.w,
-			FL2000_REG_BUS_CTRL);
+	ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
 	if (ret != 0) goto error;
 
 	for (i = 0; i < I2C_RDWR_RETRIES; i++) {
 		msleep(I2C_RDWR_TIMEOUT);
-		ret = fl2000_reg_read(i2c_bus->usb_dev, &control.w,
-				FL2000_REG_BUS_CTRL);
+		ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
 		if (ret != 0) goto error;
 
 		if (control.op_status == FL2000_CTRL_OP_STATUS_DONE) break;
@@ -93,8 +73,7 @@ static int fl2000_i2c_xfer_dword(struct fl2000_i2c_bus *i2c_bus, bool read,
 	}
 
 	if (read) {
-		ret = fl2000_reg_read(i2c_bus->usb_dev, data,
-				FL2000_REG_BUS_DATA_RD);
+		ret = fl2000_reg_read(usb_dev, data, FL2000_REG_BUS_DATA_RD);
 		if (ret != 0) goto error;
 	}
 
@@ -108,7 +87,6 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 {
 	int ret;
 	struct i2c_msg *addr_msg = &msgs[0], *data_msg;
-	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
 	u8 idx, offset = addr_msg->buf[0] & I2C_XFER_ADDR_MASK;
 	union {
 		u8 b[I2C_XFER_SIZE];
@@ -131,7 +109,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	 * Oh, yes, it is crippled :( */
 
 	if (!!(data_msg->flags & I2C_M_RD)) {
-		ret = fl2000_i2c_read_dword(i2c_bus, addr_msg->addr,
+		ret = fl2000_i2c_read_dword(adapter, addr_msg->addr,
 				offset, &data.w);
 		if (ret != 0) goto error;
 
@@ -142,21 +120,21 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		 * corrupt unrelated registers in case if we do not write whole
 		 * dword */
 		if (data_msg->len < I2C_REG_DATA_SIZE) {
-			ret = fl2000_i2c_read_dword(i2c_bus, addr_msg->addr,
+			ret = fl2000_i2c_read_dword(adapter, addr_msg->addr,
 					offset, &data.w);
 			if (ret != 0) goto error;
 		}
 
 		data.b[idx] = data_msg->buf[0];
 
-		ret = fl2000_i2c_write_dword(i2c_bus, addr_msg->addr,
+		ret = fl2000_i2c_write_dword(adapter, addr_msg->addr,
 				offset, &data.w);
 		if (ret != 0) goto error;
 	}
 
 	return num;
 error:
-	dev_err(&i2c_bus->adapter.dev, "USB I2C operation failed (%d)", ret);
+	dev_err(&adapter->dev, "USB I2C operation failed (%d)", ret);
 	return ret;
 }
 
@@ -171,30 +149,6 @@ static const struct i2c_algorithm fl2000_i2c_algorithm = {
 	.functionality  = fl2000_i2c_func,
 };
 
-static void fl2000_lock_bus(struct i2c_adapter *adapter, unsigned int flags)
-{
-	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
-	mutex_lock(&i2c_bus->hw_mutex);
-}
-
-static int fl2000_trylock_bus(struct i2c_adapter *adapter, unsigned int flags)
-{
-	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
-	return mutex_trylock(&i2c_bus->hw_mutex);
-}
-
-static void fl2000_unlock_bus(struct i2c_adapter *adapter, unsigned int flags)
-{
-	struct fl2000_i2c_bus *i2c_bus = adapter->algo_data;
-	mutex_unlock(&i2c_bus->hw_mutex);
-}
-
-struct i2c_lock_operations fl2000_i2c_lock_operations = {
-	.lock_bus = fl2000_lock_bus,
-	.trylock_bus = fl2000_trylock_bus,
-	.unlock_bus = fl2000_unlock_bus,
-};
-
 static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.flags = I2C_AQ_COMB |		   /* enforce "combined" mode */
 		 I2C_AQ_COMB_WRITE_FIRST | /* address write goes first */
@@ -206,66 +160,53 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_comb_2nd_msg_len	= I2C_REG_DATA_SIZE,
 };
 
-int fl2000_i2c_create(struct usb_interface *interface)
+struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev)
 {
-	int ret = 0;
-	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	struct fl2000_i2c_bus *i2c_bus;
+	int ret;
+	void *ret_ptr;
+	struct i2c_adapter *adapter;
 
-	i2c_bus = kzalloc(sizeof(*i2c_bus), GFP_KERNEL);
-	if (IS_ERR(i2c_bus)) {
+	adapter = kzalloc(sizeof(*adapter), GFP_KERNEL);
+	if (IS_ERR_OR_NULL(adapter)) {
 		dev_err(&usb_dev->dev, "Out of memory");
-		ret = PTR_ERR(i2c_bus);
+		ret_ptr = adapter;
 		goto error;
 	}
 
-	usb_set_intfdata(interface, i2c_bus);
+	adapter->algo_data = usb_dev;
+	adapter->owner = THIS_MODULE;
+	adapter->class = I2C_CLASS_HDMI;
+	adapter->algo = &fl2000_i2c_algorithm;
+	adapter->quirks = &fl2000_i2c_quirks;
 
-	mutex_init(&i2c_bus->hw_mutex);
-
-	i2c_bus->usb_dev = usb_dev;
-	i2c_bus->interface = interface;
-
-	i2c_bus->adapter.owner = THIS_MODULE;
-	i2c_bus->adapter.class = I2C_CLASS_HDMI;
-	i2c_bus->adapter.algo = &fl2000_i2c_algorithm;
-	i2c_bus->adapter.lock_ops = &fl2000_i2c_lock_operations;
-	i2c_bus->adapter.quirks = &fl2000_i2c_quirks;
-	i2c_bus->adapter.algo_data = i2c_bus;
-
-	snprintf(i2c_bus->adapter.name, sizeof(i2c_bus->adapter.name),
-		 "FL2000@USB%03d:%03d",
+	snprintf(adapter->name, sizeof(adapter->name), "FL2000@USB%03d:%03d",
 		 usb_dev->bus->busnum, usb_dev->devnum);
 
-	i2c_bus->adapter.dev.parent = &usb_dev->dev;
+	adapter->dev.parent = &usb_dev->dev;
 
-	ret = i2c_add_adapter(&i2c_bus->adapter);
+	ret = i2c_add_adapter(adapter);
 	if (ret != 0) {
 		dev_err(&usb_dev->dev, "Out of memory");
+		ret_ptr = ERR_PTR(ret);
 		goto error;
 	}
 
-	/* Calculate connection ID for I2C DRM bridge */
-	drm_i2c_bridge_connection_id(i2c_bus->connection_id, &i2c_bus->adapter);
-
-	dev_info(&i2c_bus->adapter.dev, "Connected I2C adapter");
-	return 0;
+	dev_info(&adapter->dev, "Connected I2C adapter");
+	return adapter;
 
 error:
 	/* Enforce cleanup in case of error */
-	fl2000_i2c_destroy(interface);
+	fl2000_i2c_destroy(adapter);
 
-	return ret;
+	return ret_ptr;
 }
 
-void fl2000_i2c_destroy(struct usb_interface *interface)
+void fl2000_i2c_destroy(struct i2c_adapter *adapter)
 {
-	struct fl2000_i2c_bus *i2c_bus = usb_get_intfdata(interface);
+	if (IS_ERR_OR_NULL(adapter))
+		return;
 
-	if (i2c_bus == NULL) return;
+	i2c_del_adapter(adapter);
 
-	i2c_del_adapter(&i2c_bus->adapter);
-
-	usb_set_intfdata(interface, NULL);
-	kfree(i2c_bus);
+	kfree(adapter);
 }
