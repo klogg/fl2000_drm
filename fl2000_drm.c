@@ -158,9 +158,6 @@ static int fl2000_modeset_init(struct drm_device *dev)
 		goto error;
 	}
 
-	/* TODO: attach bridge */
-	/* TODO: Implement better support for DT */
-
 	drm_mode_config_reset(dev);
 
 	ret = drm_fb_cma_fbdev_init(dev, BPP, MAX_CONN);
@@ -270,7 +267,7 @@ void fl2000_drm_destroy(struct usb_interface *interface)
 }
 
 #if 0
-
+/* TODO: bridge probing & connection to be moved to work queue */
 priv->master = device_connection_find(&client->dev,
 		priv->connection_id);
 
