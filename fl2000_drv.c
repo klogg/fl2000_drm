@@ -25,8 +25,7 @@
 static unsigned long fl2000_init_state = 0;
 #define REGS_DONE			(1ul<<0)
 #define DRM_DONE			(1ul<<1)
-#define I2C_DONE			(1ul<<2)
-#define INTR_DONE			(1ul<<3)
+#define INTR_DONE			(1ul<<2)
 
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
@@ -103,13 +102,8 @@ static int fl2000_probe(struct usb_interface *interface,
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
-		dev_info(&usb_dev->dev, "Probing AVControl interface (%u)",
-				iface_num);
-
 		/* This is rather useless, AVControl is not properly implemented
 		 * on FL2000 chip - that is why all the "magic" needed */
-
-		/* TODO: Move I2C initialization to DRM device */
 		break;
 
 	case FL2000_USBIF_STREAMING:
