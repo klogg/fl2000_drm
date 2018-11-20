@@ -153,7 +153,7 @@ static int it66121_probe(struct i2c_client *client)
 	dev_info(&client->dev, "Probing IT66121 client");
 
 	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (IS_ERR(priv)) {
+	if (IS_ERR_OR_NULL(priv)) {
 		dev_err(&client->dev, "Cannot allocate IT66121 client private" \
 				"structure");
 		ret = PTR_ERR(priv);

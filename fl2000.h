@@ -46,8 +46,8 @@ int fl2000_intr_create(struct usb_interface *interface);
 void fl2000_intr_destroy(struct usb_interface *interface);
 
 /* Private data on USB interrupt interface */
-int fl2000_i2c_create(struct usb_interface *interface);
-void fl2000_i2c_destroy(struct usb_interface *interface);
+struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev);
+void fl2000_i2c_destroy(struct i2c_adapter *adapter);
 
 /* Private data on USB streaming interface */
 int fl2000_drm_create(struct usb_interface *interface);
@@ -110,5 +110,15 @@ typedef union {
 	} __attribute__ ((__packed__));
 	u32 w;
 } fl2000_bus_control_reg;
+
+/* Custom code for DRM bridge autodetection since there is no DT support */
+#define I2C_CLASS_HDMI	(1<<9)
+#define CONNECTION_SIZE	64
+static inline int drm_i2c_bridge_connection_id(char *connection_id,
+		struct i2c_adapter *adapter)
+{
+	return snprintf(connection_id, CONNECTION_SIZE, "%s-bridge",
+			adapter->name);
+}
 
 #endif /* __FL2000_DRM_H__ */

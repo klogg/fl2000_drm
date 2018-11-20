@@ -110,9 +110,6 @@ static int fl2000_probe(struct usb_interface *interface,
 		 * on FL2000 chip - that is why all the "magic" needed */
 
 		/* TODO: Move I2C initialization to DRM device */
-		ret = fl2000_i2c_create(interface);
-		if (ret != 0) goto error;
-		fl2000_init_state |= I2C_DONE;
 		break;
 
 	case FL2000_USBIF_STREAMING:
@@ -153,8 +150,6 @@ static void fl2000_disconnect(struct usb_interface *interface)
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
-		fl2000_i2c_destroy(interface);
-		fl2000_init_state &= ~I2C_DONE;
 		break;
 
 	case FL2000_USBIF_STREAMING:

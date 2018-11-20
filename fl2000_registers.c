@@ -75,7 +75,7 @@ int fl2000_reg_create(struct usb_device *usb_dev)
 	struct fl2000_reg *reg;
 
 	reg = kzalloc(sizeof(*reg), GFP_KERNEL);
-	if (IS_ERR(reg)) {
+	if (IS_ERR_OR_NULL(reg)) {
 		dev_err(&usb_dev->dev, "Cannot allocate registers private" \
 				"structure");
 		ret = PTR_ERR(reg);

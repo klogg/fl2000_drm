@@ -36,6 +36,7 @@ static const u32 fl2000_pixel_formats[] = {
 struct fl2000_drm_if {
 	struct usb_device *usb_dev;
 	struct usb_interface *interface;
+	struct i2c_adapter *adapter;
 	struct drm_device *drm;
 	struct drm_simple_display_pipe pipe;
 };
@@ -186,7 +187,7 @@ int fl2000_drm_create(struct usb_interface *interface)
 	u64 mask = dma_get_mask(&interface->dev);
 
 	drm = drm_dev_alloc(&fl2000_drm_driver, &usb_dev->dev);
-	if (IS_ERR(drm)) {
+	if (IS_ERR_OR_NULL(drm)) {
 		dev_err(&interface->dev, "Cannot allocate DRM device");
 		ret = PTR_ERR(drm);
 		goto error;
@@ -199,7 +200,7 @@ int fl2000_drm_create(struct usb_interface *interface)
 	}
 
 	drm_if = kzalloc(sizeof(*drm_if), GFP_KERNEL);
-	if (IS_ERR(drm_if)) {
+	if (IS_ERR_OR_NULL(drm_if)) {
 		dev_err(&interface->dev, "Cannot allocate DRM private " \
 				"structure");
 		ret = PTR_ERR(drm_if);
@@ -224,6 +225,13 @@ int fl2000_drm_create(struct usb_interface *interface)
 		goto error;
 	}
 
+	drm_if->adapter = fl2000_i2c_create(usb_dev);
+	if (IS_ERR_OR_NULL(drm_if->adapter)) {
+		dev_err(&interface->dev, "Cannot register I2C adapter");
+		ret = PTR_ERR(drm_if->adapter);
+		goto error;
+	}
+
 	usb_set_intfdata(interface, drm_if);
 
 	return 0;
@@ -243,6 +251,8 @@ void fl2000_drm_destroy(struct usb_interface *interface)
 	if (drm_if == NULL)
 		return;
 
+	fl2000_i2c_destroy(drm_if->adapter);
+
 	drm = drm_if->drm;
 
 	drm_dev_unregister(drm);
@@ -261,7 +271,9 @@ void fl2000_drm_destroy(struct usb_interface *interface)
 }
 
 #if 0
-int fl2000_drm_bridge_detect()
+
+/* Calculate connection ID for I2C DRM bridge */
+drm_i2c_bridge_connection_id(i2c_bus->connection_id, &i2c_bus->adapter);
 
 char connection_id[CONNECTION_SIZE];
 
