@@ -35,10 +35,9 @@ static const u32 fl2000_pixel_formats[] = {
 
 struct fl2000_drm_if {
 	struct usb_device *usb_dev;
-	struct usb_interface *interface;
 	struct i2c_adapter *adapter;
-	struct drm_device *drm;
 	struct drm_simple_display_pipe pipe;
+	char connection_id[CONNECTION_SIZE];
 };
 
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
@@ -193,11 +192,7 @@ int fl2000_drm_create(struct usb_interface *interface)
 		goto error;
 	}
 
-	ret = dma_set_coherent_mask(drm->dev, mask);
-	if (ret != 0) {
-		dev_err(&interface->dev, "Cannot set DRM device DMA mask");
-		goto error;
-	}
+	usb_set_intfdata(interface, drm);
 
 	drm_if = kzalloc(sizeof(*drm_if), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(drm_if)) {
@@ -207,11 +202,15 @@ int fl2000_drm_create(struct usb_interface *interface)
 		goto error;
 	}
 
-	drm_if->interface = interface;
-	drm_if->usb_dev = usb_dev;
-	drm_if->drm = drm;
-
 	drm->dev_private = drm_if;
+
+	drm_if->usb_dev = usb_dev;
+
+	ret = dma_set_coherent_mask(drm->dev, mask);
+	if (ret != 0) {
+		dev_err(&interface->dev, "Cannot set DRM device DMA mask");
+		goto error;
+	}
 
 	ret = fl2000_modeset_init(drm);
 	if (ret < 0) {
@@ -232,7 +231,8 @@ int fl2000_drm_create(struct usb_interface *interface)
 		goto error;
 	}
 
-	usb_set_intfdata(interface, drm_if);
+	/* Calculate connection ID for I2C DRM bridge */
+	drm_i2c_bridge_connection_id(drm_if->connection_id, drm_if->adapter);
 
 	return 0;
 
@@ -246,14 +246,13 @@ void fl2000_drm_destroy(struct usb_interface *interface)
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 
-	drm_if = usb_get_intfdata(interface);
-
-	if (drm_if == NULL)
+	drm = usb_get_intfdata(interface);
+	if (drm == NULL)
 		return;
 
-	fl2000_i2c_destroy(drm_if->adapter);
-
-	drm = drm_if->drm;
+	drm_if = drm->dev_private;
+	if (drm_if == NULL)
+		return;
 
 	drm_dev_unregister(drm);
 
@@ -263,19 +262,14 @@ void fl2000_drm_destroy(struct usb_interface *interface)
 
 	drm_mode_config_cleanup(drm);
 
-	drm_if = drm->dev_private;
-	if (drm_if != NULL)
-		kfree(drm_if);
-
 	drm_dev_put(drm);
+
+	fl2000_i2c_destroy(drm_if->adapter);
+
+	kfree(drm_if);
 }
 
 #if 0
-
-/* Calculate connection ID for I2C DRM bridge */
-drm_i2c_bridge_connection_id(i2c_bus->connection_id, &i2c_bus->adapter);
-
-char connection_id[CONNECTION_SIZE];
 
 priv->master = device_connection_find(&client->dev,
 		priv->connection_id);
