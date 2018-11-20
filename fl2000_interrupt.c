@@ -189,26 +189,26 @@ void fl2000_intr_destroy(struct usb_interface *interface)
 {
 	struct fl2000_intr *intr = usb_get_intfdata(interface);
 
-	if (intr == NULL)
+	if (IS_ERR_OR_NULL(intr))
 		return;
 
 	atomic_set(&intr->state, STOP);
 
-	if (intr->urb != NULL)
+	if (!IS_ERR_OR_NULL(intr->urb))
 		usb_kill_urb(intr->urb);
 
-	if (intr->work_queue != NULL)
+	if (!IS_ERR_OR_NULL(intr->work_queue))
 		drain_workqueue(intr->work_queue);
 
-	if (intr->work_queue != NULL)
+	if (!IS_ERR_OR_NULL(intr->work_queue))
 		destroy_workqueue(intr->work_queue);
 
-	if (intr->urb != NULL)
+	if (!IS_ERR_OR_NULL(intr->urb))
 		usb_free_urb(intr->urb);
 
 	usb_set_intfdata(interface, NULL);
 
-	if (intr->buf != NULL)
+	if (!IS_ERR_OR_NULL(intr->buf))
 		kfree(intr->buf);
 
 	kfree(intr);
