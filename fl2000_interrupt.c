@@ -52,6 +52,8 @@ static void fl2000_intr_work(struct work_struct *work_item)
 
 	if (intr == NULL) return;
 
+	if (atomic_read(&intr->state) != RUN) return;
+
 	/* Read interrupt status register */
 	ret = fl2000_reg_read(intr->usb_dev, &intr->status, FL2000_REG_INT_STATUS);
 	if (ret != 0) {
@@ -62,8 +64,6 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	/* TODO: Process interrupt:
 	 * - maybe signal to HDMI subsystem so it will handle I2C registers?
 	 * - or check status I2C registers ourselves, and the? */
-
-	if (atomic_read(&intr->state) != RUN) return;
 
 	/* Restart urb */
 	ret = fl2000_intr_submit_urb(intr);
@@ -80,6 +80,8 @@ static void fl2000_intr_completion(struct urb *urb)
 
 	if (intr == NULL) return;
 
+	if (atomic_read(&intr->state) != RUN) return;
+
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 
 	if (queue_work(intr->work_queue, &intr->work))
@@ -87,8 +89,6 @@ static void fl2000_intr_completion(struct urb *urb)
 		return;
 
 	dev_err(&intr->interface->dev, "Cannot queue URB processing work");
-
-	if (atomic_read(&intr->state) != RUN) return;
 
 	/* Restart urb in case of work queuing failure */
 	ret = fl2000_intr_submit_urb(intr);
