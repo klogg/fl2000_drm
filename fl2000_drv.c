@@ -22,10 +22,13 @@
 #define FL2000_USBIF_STREAMING		1
 #define FL2000_USBIF_INTERRUPT		2
 
-static unsigned long fl2000_init_state = 0;
-#define REGS_DONE			(1ul<<0)
-#define DRM_DONE			(1ul<<1)
-#define INTR_DONE			(1ul<<2)
+/* Private data on USB interrupt interface */
+int fl2000_intr_create(struct usb_interface *interface);
+void fl2000_intr_destroy(struct usb_interface *interface);
+
+/* Private data on USB streaming interface */
+int fl2000_drm_create(struct usb_interface *interface);
+void fl2000_drm_destroy(struct usb_interface *interface);
 
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
@@ -34,56 +37,62 @@ static struct usb_device_id fl2000_id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
-#if 0
+void __reset(struct usb_device *usb_dev)
+{
+	int ret;
+	u32 *magic = kmalloc(sizeof(*magic), GFP_KERNEL);
 
-u32 magic;
-fl2000_bus_control_reg control;
+	if (IS_ERR_OR_NULL(magic)) return;
 
-/* Application reset & self cleanup */
-ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_8048);
-if (ret != 0) goto error;
-magic |= (1<<15);
-ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_8048);
-if (ret != 0) goto error;
+	/* Application reset & self cleanup */
+	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_8048);
+	if (ret != 0) goto error;
+	*magic |= (1<<15);
+	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_8048);
+	if (ret != 0) goto error;
 
-/* Turn off HW reset */
-ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_8088);
-if (ret != 0) goto error;
-magic |= (1<<10);
-ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_8088);
-if (ret != 0) goto error;
+	/* Turn off HW reset */
+	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_8088);
+	if (ret != 0) goto error;
+	*magic |= (1<<10);
+	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_8088);
+	if (ret != 0) goto error;
 
-/* TODO: sort out this U1/U2 magic from original driver. Could it be
- * some sort of GPIO management? */
-ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_0070);
-if (ret != 0) goto error;
-magic |= (1<<20);
-ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_0070);
-if (ret != 0) goto error;
+	/* TODO: sort out this U1/U2 magic from original driver. Could it be
+	 * some sort of GPIO management? */
+	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_0070);
+	if (ret != 0) goto error;
+	*magic |= (1<<20);
+	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_0070);
+	if (ret != 0) goto error;
 
-ret = fl2000_reg_read(usb_dev, &magic, FL2000_REG_0070);
-if (ret != 0) goto error;
-magic |= (1<<19);
-ret = fl2000_reg_write(usb_dev, &magic, FL2000_REG_0070);
-if (ret != 0) goto error;
+	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_0070);
+	if (ret != 0) goto error;
+	*magic |= (1<<19);
+	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_0070);
+	if (ret != 0) goto error;
 
-/* Enable I2C connection */
-ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
-if (ret != 0) goto error;
-control.flags |= FL2000_CONECTION_ENABLE;
-ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
-if (ret != 0) goto error;
-msleep(I2C_ENABLE_TIMEOUT);
+	/* Enable I2C connection */
+	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
+	*magic |= (1<<30);
+	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
 
-/* Enable monitor detection (not sure if it is needed) */
-ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
-if (ret != 0) goto error;
-control.flags |= FL2000_DETECT_MONITOR;
-ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
-if (ret != 0) goto error;
+	msleep(750);
 
+	/* Enable monitor detection (not sure if it is needed) */
+	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
+	*magic |= (1<<28);
+	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_BUS_CTRL);
+	if (ret != 0) goto error;
 
-#endif
+error:
+	if (ret != 0) dev_err(&usb_dev->dev, "Reset failed");
+
+	kfree(magic);
+}
 
 static int fl2000_probe(struct usb_interface *interface,
 		const struct usb_device_id *usb_dev_id)
@@ -93,17 +102,12 @@ static int fl2000_probe(struct usb_interface *interface,
 
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
-	/* Enable register access before first interface set */
-	if (fl2000_init_state == 0) {
-		ret = fl2000_reg_create(usb_dev);
-		if (ret != 0) goto error;
-		fl2000_init_state |= REGS_DONE;
-	}
-
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
 		/* This is rather useless, AVControl is not properly implemented
 		 * on FL2000 chip - that is why all the "magic" needed */
+		__reset(usb_dev);
+
 		break;
 
 	case FL2000_USBIF_STREAMING:
@@ -111,7 +115,6 @@ static int fl2000_probe(struct usb_interface *interface,
 				iface_num);
 		ret = fl2000_drm_create(interface);
 		if (ret != 0) goto error;
-		fl2000_init_state |= DRM_DONE;
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
@@ -120,7 +123,7 @@ static int fl2000_probe(struct usb_interface *interface,
 
 		ret = fl2000_intr_create(interface);
 		if (ret != 0) goto error;
-		fl2000_init_state |= INTR_DONE;
+
 		break;
 
 	default:
@@ -148,25 +151,16 @@ static void fl2000_disconnect(struct usb_interface *interface)
 
 	case FL2000_USBIF_STREAMING:
 		fl2000_drm_destroy(interface);
-		fl2000_init_state &= ~DRM_DONE;
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
 		fl2000_intr_destroy(interface);
-		fl2000_init_state &= ~INTR_DONE;
 		break;
 
 	default:
 		/* Device does not have any other interfaces */
 		break;
 	}
-
-	/* Disable register access after last interface cleared */
-	if (fl2000_init_state == REGS_DONE){
-		fl2000_reg_destroy(usb_dev);
-		fl2000_init_state &= ~REGS_DONE;
-	}
-
 }
 
 static int fl2000_suspend(struct usb_interface *interface,

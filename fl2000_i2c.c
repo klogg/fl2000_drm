@@ -16,7 +16,6 @@
 #define I2C_REG_ADDR_SIZE	(sizeof(u8))
 #define I2C_REG_DATA_SIZE	(sizeof(u8))
 #define I2C_XFER_ADDR_MASK	(~0x3ul)
-#define I2C_XFER_SIZE		(sizeof(u32))
 
 /* I2C enable timeout */
 #define I2C_ENABLE_TIMEOUT	750
@@ -24,6 +23,11 @@
 /* Timeout in ms for I2C read/write operations */
 #define I2C_RDWR_TIMEOUT	5
 #define I2C_RDWR_RETRIES	20
+
+struct fl2000_i2c_algo_data {
+	fl2000_bus_control_reg control;
+	fl2000_data_reg data;
+};
 
 #define fl2000_i2c_read_dword(adapter, addr, offset, data) \
 		fl2000_i2c_xfer_dword(adapter, true, addr, offset, data)
@@ -35,39 +39,41 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		u16 addr, u8 offset, u32 *data)
 {
 	int i, ret;
-	struct usb_device *usb_dev = adapter->algo_data;
-	fl2000_bus_control_reg control;
+	struct usb_device *usb_dev = container_of(adapter->dev.parent,
+			struct usb_device, dev);
+	struct fl2000_i2c_algo_data *algo_data = adapter->algo_data;
+	fl2000_bus_control_reg *control = &algo_data->control;
 
 	if (!read) {
-		ret = fl2000_reg_write(usb_dev, &control.w,
+		ret = fl2000_reg_write(usb_dev, &control->w,
 				FL2000_REG_BUS_DATA_WR);
 		if (ret != 0) goto error;
 	}
 
-	ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+	ret = fl2000_reg_read(usb_dev, &control->w, FL2000_REG_BUS_CTRL);
 	if (ret != 0) goto error;
 
-	control.addr = addr;
-	control.cmd = read ? FL2000_CTRL_CMD_READ : FL2000_CTRL_CMD_WRITE;
-	control.offset = offset;
-	control.bus = FL2000_CTRL_BUS_I2C;
-	control.spi_erase = false;
-	control.op_status = FL2000_CTRL_OP_STATUS_PROGRESS;
-	control.flags |= FL2000_DETECT_MONITOR;
+	control->addr = addr;
+	control->cmd = read ? FL2000_CTRL_CMD_READ : FL2000_CTRL_CMD_WRITE;
+	control->offset = offset;
+	control->bus = FL2000_CTRL_BUS_I2C;
+	control->spi_erase = false;
+	control->op_status = FL2000_CTRL_OP_STATUS_PROGRESS;
+	control->flags |= FL2000_DETECT_MONITOR;
 
-	ret = fl2000_reg_write(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+	ret = fl2000_reg_write(usb_dev, &control->w, FL2000_REG_BUS_CTRL);
 	if (ret != 0) goto error;
 
 	for (i = 0; i < I2C_RDWR_RETRIES; i++) {
 		msleep(I2C_RDWR_TIMEOUT);
-		ret = fl2000_reg_read(usb_dev, &control.w, FL2000_REG_BUS_CTRL);
+		ret = fl2000_reg_read(usb_dev, &control->w, FL2000_REG_BUS_CTRL);
 		if (ret != 0) goto error;
 
-		if (control.op_status == FL2000_CTRL_OP_STATUS_DONE) break;
+		if (control->op_status == FL2000_CTRL_OP_STATUS_DONE) break;
 	}
 
-	if (control.data_status != FL2000_DATA_STATUS_PASS ||
-			control.op_status != FL2000_CTRL_OP_STATUS_DONE) {
+	if (control->data_status != FL2000_DATA_STATUS_PASS ||
+			control->op_status != FL2000_CTRL_OP_STATUS_DONE) {
 		ret = -1;
 		goto error;
 	}
@@ -88,10 +94,8 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	int ret;
 	struct i2c_msg *addr_msg = &msgs[0], *data_msg;
 	u8 idx, offset = addr_msg->buf[0] & I2C_XFER_ADDR_MASK;
-	union {
-		u8 b[I2C_XFER_SIZE];
-		u32 w;
-	} data;
+	struct fl2000_i2c_algo_data *algo_data = adapter->algo_data;
+	fl2000_data_reg *data = &algo_data->data;
 
 	/* Emulate 1 byte read for detection procedure, poison buffer */
 	if (num == 1) {
@@ -110,25 +114,25 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 
 	if (!!(data_msg->flags & I2C_M_RD)) {
 		ret = fl2000_i2c_read_dword(adapter, addr_msg->addr,
-				offset, &data.w);
+				offset, &data->w);
 		if (ret != 0) goto error;
 
-		data_msg->buf[0] = data.b[idx];
+		data_msg->buf[0] = data->b[idx];
 	} else {
 		/* Since FL2000 i2c bus implementation always operates with
 		 * 4-byte messages, we need to read before write in order not to
 		 * corrupt unrelated registers in case if we do not write whole
 		 * dword */
-		if (data_msg->len < I2C_REG_DATA_SIZE) {
+		if (data_msg->len < sizeof(data)) {
 			ret = fl2000_i2c_read_dword(adapter, addr_msg->addr,
-					offset, &data.w);
+					offset, &data->w);
 			if (ret != 0) goto error;
 		}
 
-		data.b[idx] = data_msg->buf[0];
+		data->b[idx] = data_msg->buf[0];
 
 		ret = fl2000_i2c_write_dword(adapter, addr_msg->addr,
-				offset, &data.w);
+				offset, &data->w);
 		if (ret != 0) goto error;
 	}
 
@@ -160,6 +164,8 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_comb_2nd_msg_len	= I2C_REG_DATA_SIZE,
 };
 
+void fl2000_i2c_destroy(struct i2c_adapter *adapter);
+
 struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev)
 {
 	int ret;
@@ -173,7 +179,14 @@ struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev)
 		goto error;
 	}
 
-	adapter->algo_data = usb_dev;
+	adapter->algo_data = kzalloc(sizeof(fl2000_bus_control_reg),
+			GFP_KERNEL);
+	if (IS_ERR_OR_NULL(adapter->algo_data)) {
+		dev_err(&usb_dev->dev, "Out of memory");
+		ret_ptr = adapter->algo_data;
+		goto error;
+	}
+
 	adapter->owner = THIS_MODULE;
 	adapter->class = I2C_CLASS_HDMI;
 	adapter->algo = &fl2000_i2c_algorithm;
@@ -205,6 +218,9 @@ void fl2000_i2c_destroy(struct i2c_adapter *adapter)
 {
 	if (IS_ERR_OR_NULL(adapter))
 		return;
+
+	if (!IS_ERR_OR_NULL(adapter->algo_data))
+		kfree(adapter->algo_data);
 
 	i2c_del_adapter(adapter);
 

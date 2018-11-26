@@ -13,8 +13,9 @@
 
 #define INTR_BUFSIZE	4
 
+void fl2000_process_event(struct usb_device *usb_dev);
+
 struct fl2000_intr {
-	struct usb_device *usb_dev;
 	struct usb_interface *interface;
 	unsigned int pipe;
 	int interval;
@@ -22,7 +23,6 @@ struct fl2000_intr {
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
 	u8 *buf;
-	u32 status;
 	atomic_t state;
 };
 
@@ -30,10 +30,12 @@ static void fl2000_intr_completion(struct urb *urb);
 
 static inline int fl2000_intr_submit_urb(struct fl2000_intr *intr)
 {
+	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
+
 	/* NOTE: always submit data, never set/process it, why? */
 	usb_fill_int_urb(
 		intr->urb,
-		intr->usb_dev,
+		usb_dev,
 		intr->pipe,
 		intr->buf,
 		INTR_BUFSIZE,
@@ -49,21 +51,14 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	int ret;
 	struct fl2000_intr *intr = container_of(work_item,
 			struct fl2000_intr, work);
+	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
 
 	if (intr == NULL) return;
 
 	if (atomic_read(&intr->state) != RUN) return;
 
-	/* Read interrupt status register */
-	ret = fl2000_reg_read(intr->usb_dev, &intr->status, FL2000_REG_INT_STATUS);
-	if (ret != 0) {
-		dev_err(&intr->interface->dev, "Cannot read interrupt" \
-				"register (%d)", ret);
-	}
-
-	/* TODO: Process interrupt:
-	 * - maybe signal to HDMI subsystem so it will handle I2C registers?
-	 * - or check status I2C registers ourselves, and the? */
+	/* Process interrupt */
+	fl2000_process_event(usb_dev);
 
 	/* Restart urb */
 	ret = fl2000_intr_submit_urb(intr);
@@ -97,6 +92,8 @@ static void fl2000_intr_completion(struct urb *urb)
 		dev_err(&intr->interface->dev, "URB submission failed failed");
 	}
 }
+
+void fl2000_intr_destroy(struct usb_interface *interface);
 
 int fl2000_intr_create(struct usb_interface *interface)
 {
@@ -164,7 +161,6 @@ int fl2000_intr_create(struct usb_interface *interface)
 		ret = PTR_ERR(intr->work_queue);
 		goto error;
 	}
-	intr->usb_dev = usb_dev;
 	intr->interface = interface;
 	intr->pipe = usb_rcvintpipe(usb_dev, usb_endpoint_num(desc));
 	intr->interval = desc->bInterval;
