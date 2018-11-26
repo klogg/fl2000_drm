@@ -11,6 +11,7 @@
 
 #include <linux/hdmi.h>
 #include <linux/i2c.h>
+#include <linux/component.h>
 #include <linux/regmap.h>
 
 #include <drm/drmP.h>
@@ -31,13 +32,6 @@ static char it66121_name[] = "it66121";
 
 /* Custom code for DRM bridge autodetection since there is no DT support */
 #define I2C_CLASS_HDMI	(1<<9)
-#define CONNECTION_SIZE	64
-static inline int drm_i2c_bridge_connection_id(char *connection_id,
-		struct i2c_adapter *adapter)
-{
-	return snprintf(connection_id, CONNECTION_SIZE, "%s-bridge",
-			adapter->name);
-}
 
 struct it66121_priv {
 	struct regmap *regmap;
@@ -45,8 +39,6 @@ struct it66121_priv {
 	struct drm_bridge bridge;
 	struct drm_connector connector;
 	enum drm_connector_status status;
-	char connection_id[CONNECTION_SIZE];
-	struct device_connection connection;
 };
 
 static int it66121_remove(struct i2c_client *client);
@@ -92,6 +84,23 @@ static const struct drm_connector_funcs it66121_connector_funcs = {
 	.reset = drm_atomic_helper_connector_reset,
 	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+};
+
+
+static int it66121_bind(struct device *comp, struct device *master,
+	    void *master_data)
+{
+	return 0;
+}
+
+static void it66121_unbind(struct device *comp, struct device *master,
+		void *master_data)
+{
+}
+
+static struct component_ops it66121_component_ops = {
+	.bind = it66121_bind,
+	.unbind = it66121_unbind,
 };
 
 static int it66121_bridge_attach(struct drm_bridge *bridge)
@@ -169,16 +178,11 @@ static int it66121_probe(struct i2c_client *client)
 	 * using connection's peer device name, but this is not supported yet */
 	i2c_set_clientdata(client, &priv->bridge);
 
-	/* Connection between I2C adapter of encoder and I2C client of bridge
-	 * NOTE: only one DRM bridge on DPI, so only one device on I2C bus */
-	priv->connection.endpoint[0] = dev_name(&client->adapter->dev);
-	priv->connection.endpoint[1] = dev_name(&client->dev);
-	priv->connection.id = priv->connection_id;
-
-	/* Calculate connection ID for I2C DRM encoder */
-	drm_i2c_bridge_connection_id(priv->connection_id, client->adapter);
-
-	device_connection_add(&priv->connection);
+	ret = component_add(&client->dev, &it66121_component_ops);
+	if (ret != 0) {
+		dev_err(&client->dev, "Cannot register IT66121 component");
+		goto error;
+	}
 
 	return 0;
 
@@ -200,7 +204,7 @@ static int it66121_remove(struct i2c_client *client)
 	if (IS_ERR_OR_NULL(priv))
 		return 0;
 
-	device_connection_remove(&priv->connection);
+	component_del(&client->dev, &it66121_component_ops);
 
 	drm_bridge_remove(bridge);
 
