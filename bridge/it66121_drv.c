@@ -40,7 +40,6 @@ static inline int drm_i2c_bridge_connection_id(char *connection_id,
 }
 
 struct it66121_priv {
-	struct i2c_client *client;
 	struct regmap *regmap;
 	struct drm_display_mode curr_mode;
 	struct drm_bridge bridge;
@@ -160,15 +159,17 @@ static int it66121_probe(struct i2c_client *client)
 		goto error;
 	}
 
-	priv->client = client;
 	priv->regmap = NULL;
 	priv->bridge.funcs = &it66121_bridge_funcs;
 
 	drm_bridge_add(&priv->bridge);
 
-	i2c_set_clientdata(client, priv);
+	/* Important and somewhat unsafe - bridge pointer is in device structure
+	 * Ideally, after detecting connection encoder would need to find bridge
+	 * using connection's peer device name, but this is not supported yet */
+	i2c_set_clientdata(client, &priv->bridge);
 
-	/* Set up connection between I2C endpoints of encoder and bridge
+	/* Connection between I2C adapter of encoder and I2C client of bridge
 	 * NOTE: only one DRM bridge on DPI, so only one device on I2C bus */
 	priv->connection.endpoint[0] = dev_name(&client->adapter->dev);
 	priv->connection.endpoint[1] = dev_name(&client->dev);
@@ -188,14 +189,20 @@ error:
 
 static int it66121_remove(struct i2c_client *client)
 {
-	struct it66121_priv *priv = i2c_get_clientdata(client);
+	struct drm_bridge *bridge = i2c_get_clientdata(client);
+	struct it66121_priv *priv;
 
-	if (priv == NULL)
+	if (IS_ERR_OR_NULL(bridge))
+		return 0;
+
+	priv = container_of(bridge, struct it66121_priv, bridge);
+
+	if (IS_ERR_OR_NULL(priv))
 		return 0;
 
 	device_connection_remove(&priv->connection);
 
-	drm_bridge_remove(&priv->bridge);
+	drm_bridge_remove(bridge);
 
 	i2c_set_clientdata(client, NULL);
 	kfree(priv);

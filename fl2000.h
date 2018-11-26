@@ -35,23 +35,9 @@
 #define FL2000_I2C_ADDRESS_DSUB		0x50
 #define FL2000_I2C_ADDRESS_EEPROM	0x54
 
-/* Private data on USB device */
-int fl2000_reg_create(struct usb_device *usb_dev);
-void fl2000_reg_destroy(struct usb_device *usb_dev);
+/* Registers are available from everywhere */
 int fl2000_reg_read(struct usb_device *usb_dev, u32 *data, u16 offset);
 int fl2000_reg_write(struct usb_device *usb_dev, u32 *data, u16 offset);
-
-/* Private data on USB AVControl interface */
-int fl2000_intr_create(struct usb_interface *interface);
-void fl2000_intr_destroy(struct usb_interface *interface);
-
-/* Private data on USB interrupt interface */
-struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev);
-void fl2000_i2c_destroy(struct i2c_adapter *adapter);
-
-/* Private data on USB streaming interface */
-int fl2000_drm_create(struct usb_interface *interface);
-void fl2000_drm_destroy(struct usb_interface *interface);
 
 #define FL2000_REG_INT_STATUS	0x8000 /* Interrupt status ? */
 #define FL2000_REG_FORMAT	0x8004 /* Picture format / Color mode ? */
@@ -110,6 +96,11 @@ typedef union {
 	} __attribute__ ((__packed__));
 	u32 w;
 } fl2000_bus_control_reg;
+
+typedef union {
+	u8 b[sizeof(u32)];
+	u32 w;
+} fl2000_data_reg;
 
 /* Custom code for DRM bridge autodetection since there is no DT support */
 #define I2C_CLASS_HDMI	(1<<9)
