@@ -19,6 +19,7 @@
 #include <linux/init.h>
 #include <linux/usb.h>
 #include <linux/i2c.h>
+#include <linux/component.h>
 #include <linux/shmem_fs.h>
 #include <linux/dma-buf.h>
 #include <linux/dma-mapping.h>
@@ -104,12 +105,5 @@ typedef union {
 
 /* Custom code for DRM bridge autodetection since there is no DT support */
 #define I2C_CLASS_HDMI	(1<<9)
-#define CONNECTION_SIZE	64
-static inline int drm_i2c_bridge_connection_id(char *connection_id,
-		struct i2c_adapter *adapter)
-{
-	return snprintf(connection_id, CONNECTION_SIZE, "%s-bridge",
-			adapter->name);
-}
 
 #endif /* __FL2000_DRM_H__ */

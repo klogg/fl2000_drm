@@ -21,6 +21,12 @@
 #define BPP		32
 #define MAX_CONN	1
 
+/* List all supported bridges */
+static const char *fl2000_bridges[] = {
+	"it66121",		/* IT66121 driver name*/
+	"",			/* Empty string as end of list indicator */
+};
+
 /* I2C adapter belong to DRM */
 struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev);
 void fl2000_i2c_destroy(struct i2c_adapter *adapter);
@@ -38,11 +44,10 @@ static const u32 fl2000_pixel_formats[] = {
 };
 
 struct fl2000_drm_if {
-	struct usb_device *usb_dev;
 	struct i2c_adapter *adapter;
 	struct drm_device *drm;
 	struct drm_simple_display_pipe pipe;
-	char connection_id[CONNECTION_SIZE];
+	struct component_match *match;
 };
 
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
@@ -141,21 +146,24 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
 
-static int fl2000_modeset_init(struct fl2000_drm_if *drm_if)
+static int fl2000_bind(struct device *master)
 {
 	int ret = 0;
-	struct usb_device *usb_dev = drm_if->usb_dev;
+	struct usb_interface *interface = container_of(master,
+			struct usb_interface, dev);
+	struct fl2000_drm_if *drm_if = usb_get_intfdata(interface);
 	struct drm_device *drm;
 	struct drm_mode_config *mode_config;
 	u64 mask;
 
-	drm = drm_dev_alloc(&fl2000_drm_driver, &usb_dev->dev);
-	if (IS_ERR_OR_NULL(drm_if->drm)) {
-		dev_err(&usb_dev->dev, "Cannot allocate DRM device");
+	drm = drm_dev_alloc(&fl2000_drm_driver, master);
+	if (IS_ERR_OR_NULL(drm)) {
+		dev_err(master, "Cannot allocate DRM device");
 		ret = PTR_ERR(drm_if->drm);
 		goto error;
 	}
 	drm->dev_private = drm_if;
+	drm_if->drm = drm;
 
 	mask = dma_get_mask(drm->dev);
 
@@ -183,6 +191,13 @@ static int fl2000_modeset_init(struct fl2000_drm_if *drm_if)
 
 	drm_mode_config_reset(drm);
 
+	/* Attach bridge */
+	ret = component_bind_all(master, drm);
+	if (ret != 0) {
+		dev_err(drm->dev, "Cannot attach bridge");
+		goto error;
+	}
+
 	ret = drm_fb_cma_fbdev_init(drm, BPP, MAX_CONN);
 	if (ret != 0) {
 		dev_err(drm->dev, "Cannot initialize CMA framebuffer");
@@ -203,6 +218,41 @@ error:
 	return ret;
 }
 
+static void fl2000_unbind(struct device *master)
+{
+	struct usb_interface *interface = container_of(master,
+			struct usb_interface, dev);
+	struct fl2000_drm_if *drm_if = usb_get_intfdata(interface);
+	struct drm_device *drm;
+
+	if (IS_ERR_OR_NULL(drm_if)) return;
+
+	drm = drm_if->drm;
+
+	if (IS_ERR_OR_NULL(drm)) return;
+
+	drm_dev_unregister(drm);
+
+	drm_fb_cma_fbdev_fini(drm);
+
+	/* Detach bridge */
+	component_unbind_all(master, drm);
+
+	drm_mode_config_cleanup(drm);
+
+	drm_dev_put(drm);
+}
+
+static struct component_master_ops fl2000_drm_master_ops = {
+	.bind = fl2000_bind,
+	.unbind = fl2000_unbind,
+};
+
+static int fl2000_compare(struct device *dev, void *data)
+{
+	return 0;
+}
+
 void fl2000_drm_destroy(struct usb_interface *interface);
 
 int fl2000_drm_create(struct usb_interface *interface)
@@ -220,17 +270,24 @@ int fl2000_drm_create(struct usb_interface *interface)
 	}
 	usb_set_intfdata(interface, drm_if);
 
-	drm_if->usb_dev = usb_dev;
+	/* Make USB interface master */
+	component_match_add(&interface->dev, &drm_if->match, fl2000_compare,
+			fl2000_bridges);
 
+	ret = component_master_add_with_match(&interface->dev,
+			&fl2000_drm_master_ops, drm_if->match);
+	if (ret != 0) {
+		dev_err(&interface->dev, "Cannot register component master");
+		goto error;
+	}
+
+	/* Create I2C adapter */
 	drm_if->adapter = fl2000_i2c_create(usb_dev);
 	if (IS_ERR_OR_NULL(drm_if->adapter)) {
 		dev_err(&interface->dev, "Cannot register I2C adapter");
 		ret = PTR_ERR(drm_if->adapter);
 		goto error;
 	}
-
-	/* Calculate connection ID for I2C DRM bridge */
-	drm_i2c_bridge_connection_id(drm_if->connection_id, drm_if->adapter);
 
 	return 0;
 
@@ -242,27 +299,14 @@ error:
 void fl2000_drm_destroy(struct usb_interface *interface)
 {
 	struct fl2000_drm_if *drm_if;
-	struct drm_device *drm;
 
 	drm_if = usb_get_intfdata(interface);
 	if (drm_if == NULL)
 		return;
 
-	drm = drm_if->drm;
-	if (!IS_ERR_OR_NULL(drm)) {
-
-		drm_dev_unregister(drm);
-
-		drm_fb_cma_fbdev_fini(drm);
-
-		/* TODO: detach bridge */
-
-		drm_mode_config_cleanup(drm);
-
-		drm_dev_put(drm);
-	}
-
 	fl2000_i2c_destroy(drm_if->adapter);
+
+	component_master_del(&interface->dev, &fl2000_drm_master_ops);
 
 	kfree(drm_if);
 }
@@ -284,24 +328,3 @@ void fl2000_process_event(struct usb_device *usb_dev)
 
 	kfree(status);
 }
-
-
-#if 0
-/* TODO: bridge probing & connection to be moved to work queue */
-priv->master = device_connection_find(&client->dev,
-		priv->connection_id);
-
-if (IS_ERR_OR_NULL(priv->master))
-	return PTR_ERR(priv->master);
-
-dev_info(&client->dev, "Found bridge %s", dev_name(priv->master));
-
-
-ret = fl2000_modeset_init(drm);
-if (ret < 0) {
-	dev_err(&interface->dev, "DRM modeset failed");
-	goto error;
-}
-
-
-#endif
