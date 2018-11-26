@@ -90,6 +90,14 @@ static const struct drm_connector_funcs it66121_connector_funcs = {
 static int it66121_bind(struct device *comp, struct device *master,
 	    void *master_data)
 {
+	/* TODO: Do some checks? */
+	struct drm_bridge **bridge = master_data;
+	struct it66121_priv *priv = dev_get_drvdata(comp);
+
+	if (IS_ERR_OR_NULL(bridge) || IS_ERR_OR_NULL(*bridge))
+		return -ENOMEM;
+
+	*bridge = &priv->bridge;
 	return 0;
 }
 
