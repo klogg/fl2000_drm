@@ -192,8 +192,7 @@ struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev)
 	adapter->algo = &fl2000_i2c_algorithm;
 	adapter->quirks = &fl2000_i2c_quirks;
 
-	snprintf(adapter->name, sizeof(adapter->name), "FL2000@USB%03d:%03d",
-		 usb_dev->bus->busnum, usb_dev->devnum);
+	usb_make_path(usb_dev, adapter->name, sizeof(adapter->name));
 
 	adapter->dev.parent = &usb_dev->dev;
 

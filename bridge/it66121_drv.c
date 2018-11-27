@@ -18,6 +18,7 @@
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
+#include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_edid.h>
 
 #define VENDOR_ID	0x4954
@@ -27,8 +28,6 @@
 
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
-
-static char it66121_name[] = "it66121";
 
 /* Custom code for DRM bridge autodetection since there is no DT support */
 #define I2C_CLASS_HDMI	(1<<9)
@@ -90,20 +89,26 @@ static const struct drm_connector_funcs it66121_connector_funcs = {
 static int it66121_bind(struct device *comp, struct device *master,
 	    void *master_data)
 {
+	int ret;
+	struct drm_bridge *bridge = dev_get_drvdata(comp);
+	struct drm_simple_display_pipe *pipe = master_data;
+
+	dev_info(comp, "Binding IT66121 component");
+
 	/* TODO: Do some checks? */
-	struct drm_bridge **bridge = master_data;
-	struct it66121_priv *priv = dev_get_drvdata(comp);
 
-	if (IS_ERR_OR_NULL(bridge) || IS_ERR_OR_NULL(*bridge))
-		return -ENOMEM;
+	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
+	if (ret != 0)
+		dev_err(comp, "Cannot attach IT66121 bridge");
 
-	*bridge = &priv->bridge;
-	return 0;
+	return ret;
 }
 
 static void it66121_unbind(struct device *comp, struct device *master,
 		void *master_data)
 {
+	/* TODO: Detach? */
+	dev_info(comp, "Unbinding IT66121 component");
 }
 
 static struct component_ops it66121_component_ops = {
@@ -259,7 +264,7 @@ static int it66121_detect(struct i2c_client *client,
 	dev_info(&adapter->dev, "IT66121 found, revision %d",
 			(id.device & REVISION_MASK) >> REVISION_SHIFT);
 
-	strlcpy(info->type, it66121_name, I2C_NAME_SIZE);
+	strlcpy(info->type, "it66121", I2C_NAME_SIZE);
 	return 0;
 }
 
@@ -272,7 +277,7 @@ MODULE_DEVICE_TABLE(i2c, it66121_i2c_ids);
 static struct i2c_driver it66121_driver = {
 	.class = I2C_CLASS_HDMI,
 	.driver = {
-		.name = it66121_name,
+		.name = "it66121",
 		.of_match_table = of_match_ptr(it66121_of_ids),
 	},
 	.id_table = it66121_i2c_ids,
