@@ -22,9 +22,8 @@
 #define MAX_CONN	1
 
 /* List all supported bridges */
-static const char *fl2000_bridges[] = {
+static const char *fl2000_supported_bridges[] = {
 	"it66121",		/* IT66121 driver name*/
-	"",			/* Empty string as end of list indicator */
 };
 
 /* I2C adapter belong to DRM */
@@ -156,6 +155,8 @@ static int fl2000_bind(struct device *master)
 	struct drm_mode_config *mode_config;
 	u64 mask;
 
+	dev_info(master, "Binding FL2000 master component");
+
 	drm = drm_dev_alloc(&fl2000_drm_driver, master);
 	if (IS_ERR_OR_NULL(drm)) {
 		dev_err(master, "Cannot allocate DRM device");
@@ -189,14 +190,14 @@ static int fl2000_bind(struct device *master)
 		goto error;
 	}
 
-	drm_mode_config_reset(drm);
-
 	/* Attach bridge */
-	ret = component_bind_all(master, drm);
+	ret = component_bind_all(master, &drm_if->pipe);
 	if (ret != 0) {
 		dev_err(drm->dev, "Cannot attach bridge");
 		goto error;
 	}
+
+	drm_mode_config_reset(drm);
 
 	ret = drm_fb_cma_fbdev_init(drm, BPP, MAX_CONN);
 	if (ret != 0) {
@@ -225,6 +226,8 @@ static void fl2000_unbind(struct device *master)
 	struct fl2000_drm_if *drm_if = usb_get_intfdata(interface);
 	struct drm_device *drm;
 
+	dev_info(master, "Unbinding FL2000 master component");
+
 	if (IS_ERR_OR_NULL(drm_if)) return;
 
 	drm = drm_if->drm;
@@ -250,6 +253,20 @@ static struct component_master_ops fl2000_drm_master_ops = {
 
 static int fl2000_compare(struct device *dev, void *data)
 {
+	int i;
+	struct device *master_dev = data;
+
+	/* Check component's parent (must be I2C adapter) */
+	if (dev->parent != master_dev)
+		return 0;
+
+	/* Check this is a supported DRM bridge */
+	for (i = 0; i < ARRAY_SIZE(fl2000_supported_bridges); i++)
+		if (!strcmp(fl2000_supported_bridges[i], dev->driver->name)) {
+			dev_info(dev, "Found bridge %s", dev->driver->name);
+			return (i + 1); /* Must be not 0 for success */
+		}
+
 	return 0;
 }
 
@@ -258,6 +275,7 @@ void fl2000_drm_destroy(struct usb_interface *interface);
 int fl2000_drm_create(struct usb_interface *interface)
 {
 	int ret = 0;
+	struct i2c_adapter *adapter;
 	struct fl2000_drm_if *drm_if;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
@@ -270,22 +288,23 @@ int fl2000_drm_create(struct usb_interface *interface)
 	}
 	usb_set_intfdata(interface, drm_if);
 
+	/* Create I2C adapter */
+	adapter = fl2000_i2c_create(usb_dev);
+	if (IS_ERR_OR_NULL(adapter)) {
+		dev_err(&interface->dev, "Cannot register I2C adapter");
+		ret = PTR_ERR(adapter);
+		goto error;
+	}
+	drm_if->adapter = adapter;
+
 	/* Make USB interface master */
 	component_match_add(&interface->dev, &drm_if->match, fl2000_compare,
-			fl2000_bridges);
+			&adapter->dev);
 
 	ret = component_master_add_with_match(&interface->dev,
 			&fl2000_drm_master_ops, drm_if->match);
 	if (ret != 0) {
 		dev_err(&interface->dev, "Cannot register component master");
-		goto error;
-	}
-
-	/* Create I2C adapter */
-	drm_if->adapter = fl2000_i2c_create(usb_dev);
-	if (IS_ERR_OR_NULL(drm_if->adapter)) {
-		dev_err(&interface->dev, "Cannot register I2C adapter");
-		ret = PTR_ERR(drm_if->adapter);
 		goto error;
 	}
 
