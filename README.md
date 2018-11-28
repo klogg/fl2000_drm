@@ -12,14 +12,14 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 ![Diagram](fl2000.svg)
 
 ## Limitations
- * USB2.0 is not supported
- * Connecting more than one dongle to the same bus is not supported
  * HDMI CEC is not supported
  * HDMI Audio is not supported
  * HDCP is not supported
- * Internal SPI flash access is not supported
- * Only big-endian hosts are supported
- * 32-bit hosts are not supported
+ * USB2.0 is not supported
+ * Dongle onboard SPI EEPROM access via USB Mass Storage not implemented
+ * Connecting more than one dongle to the same USB bus may not work
+ * Non big-endian hosts (e.g. little endian) may not work
+ * 32-bit hosts may not work
 
 ## Upstreaming
 Considering, no firm decision yet
@@ -34,13 +34,11 @@ Considering, no firm decision yet
 ## Notes
  * We can use simple DRM display pipeline (only prime plane -> crtc -> only one encoder)
  * FL2000DX outputs DPI interface (kind of "crtc" output, not "encoder")
- * IT66121 can be implemented as a DRM bridge
  * VGA (D-Sub) DAC output of FL2000DX can be implemented as a DRM bridge (dumb_vga_dac)
  * Register access for both FL2000DX and IT66121 can be done via regmap (see <linux/regmap.h>)
  * For registration of sibling I2C devices of IT66121 (CEC, DDC, ...) i2c\_new\_dummy() function may be used
  * USB Bulk Streams are not supported by FL2000DX
 
 ## Open questions
- * How many planes are there in FL2000DX?
- * Any additional pixel formats for FL2000DX except ones in original drivers?
- * Any need in pixel format modifiers for FL2000DX?
+ * How to simultaneously support HDMI bridge and D-Sub bridge? Config option?
+ * I2C autodetection require non-empty class. Is it safe to introduce custom one? Need to ask community
