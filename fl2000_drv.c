@@ -22,13 +22,18 @@
 #define FL2000_USBIF_STREAMING		1
 #define FL2000_USBIF_INTERRUPT		2
 
+/* I2C adapter interface creation */
+int fl2000_i2c_create(struct usb_device *usb_dev);
+
+/* Register map creation */
+int fl2000_regmap_create(struct usb_device *usb_dev);
+
+/* DRM device creation */
+int fl2000_drm_create(struct usb_device *usb_dev);
+
 /* Private data on USB interrupt interface */
 int fl2000_intr_create(struct usb_interface *interface);
 void fl2000_intr_destroy(struct usb_interface *interface);
-
-/* Private data on USB streaming interface */
-int fl2000_drm_create(struct usb_interface *interface);
-void fl2000_drm_destroy(struct usb_interface *interface);
 
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
@@ -37,92 +42,64 @@ static struct usb_device_id fl2000_id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
-void __reset(struct usb_device *usb_dev)
+static int fl2000_init(struct usb_device *usb_dev)
 {
 	int ret;
-	u32 *magic = kmalloc(sizeof(*magic), GFP_KERNEL);
+	/* Create I2C adapter */
+	ret = fl2000_i2c_create(usb_dev);
+	if (ret != 0) {
+		dev_err(&usb_dev->dev, "Cannot create I2C adapter (%d)", ret);
+		return ret;
+	}
 
-	if (IS_ERR_OR_NULL(magic)) return;
+	/* Create registers map */
+	ret = fl2000_regmap_create(usb_dev);
+	if (ret != 0) {
+		dev_err(&usb_dev->dev, "Cannot create registers map (%d)", ret);
+		return ret;
+	}
 
-	/* Application reset & self cleanup */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_8048);
-	if (ret != 0) goto error;
-	*magic |= (1<<15);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_8048);
-	if (ret != 0) goto error;
+	/* Create DRM device */
+	ret = fl2000_drm_create(usb_dev);
+	if (ret != 0) {
+		dev_err(&usb_dev->dev, "Cannot create DRM interface (%d)", ret);
+		return ret;
+	}
 
-	/* Turn off HW reset */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_8088);
-	if (ret != 0) goto error;
-	*magic |= (1<<10);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_8088);
-	if (ret != 0) goto error;
-
-	/* TODO: sort out this U1/U2 magic from original driver. Could it be
-	 * some sort of GPIO management? */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_0070);
-	if (ret != 0) goto error;
-	*magic |= (1<<20);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_0070);
-	if (ret != 0) goto error;
-
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_0070);
-	if (ret != 0) goto error;
-	*magic |= (1<<19);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_0070);
-	if (ret != 0) goto error;
-
-	/* Enable I2C connection */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
-	*magic |= (1<<30);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
-
-	msleep(750);
-
-	/* Enable monitor detection (not sure if it is needed) */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
-	*magic |= (1<<28);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
-
-error:
-	if (ret != 0) dev_err(&usb_dev->dev, "Reset failed");
-
-	kfree(magic);
+	return 0;
 }
 
 static int fl2000_probe(struct usb_interface *interface,
 		const struct usb_device_id *usb_dev_id)
 {
-	int ret = 0;
+	int ret;
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
-
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
 		/* This is rather useless, AVControl is not properly implemented
 		 * on FL2000 chip - that is why all the "magic" needed */
-		__reset(usb_dev);
+
+		ret = fl2000_init(usb_dev);
 
 		break;
 
 	case FL2000_USBIF_STREAMING:
 		dev_info(&usb_dev->dev, "Probing Streaming interface (%u)",
 				iface_num);
-		ret = fl2000_drm_create(interface);
-		if (ret != 0) goto error;
+
+		/* TODO: create streaming structures */
+		ret = 0;
+
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
 		dev_info(&usb_dev->dev, "Probing Interrupt interface (%u)",
 				iface_num);
 
+		/* Initialize interrupt endpoint processing */
 		ret = fl2000_intr_create(interface);
-		if (ret != 0) goto error;
 
 		break;
 
@@ -131,10 +108,9 @@ static int fl2000_probe(struct usb_interface *interface,
 		dev_warn(&interface->dev, "What interface %d?",
 				interface->cur_altsetting->desc.iInterface);
 		ret = -ENODEV;
+
 		break;
 	}
-
-error:
 	return ret;
 }
 
@@ -150,7 +126,6 @@ static void fl2000_disconnect(struct usb_interface *interface)
 		break;
 
 	case FL2000_USBIF_STREAMING:
-		fl2000_drm_destroy(interface);
 		break;
 
 	case FL2000_USBIF_INTERRUPT:

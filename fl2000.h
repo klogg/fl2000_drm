@@ -20,6 +20,7 @@
 #include <linux/usb.h>
 #include <linux/i2c.h>
 #include <linux/component.h>
+#include <linux/regmap.h>
 #include <linux/shmem_fs.h>
 #include <linux/dma-buf.h>
 #include <linux/dma-mapping.h>
@@ -33,77 +34,67 @@
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_crtc_helper.h>
 
-#define FL2000_I2C_ADDRESS_DSUB		0x50
-#define FL2000_I2C_ADDRESS_EEPROM	0x54
-
-/* Registers are available from everywhere */
-int fl2000_reg_read(struct usb_device *usb_dev, u32 *data, u16 offset);
-int fl2000_reg_write(struct usb_device *usb_dev, u32 *data, u16 offset);
-
-#define FL2000_REG_INT_STATUS	0x8000 /* Interrupt status ? */
-#define FL2000_REG_FORMAT	0x8004 /* Picture format / Color mode ? */
-#define FL2000_REG_H_SYNC1	0x8008 /* h_sync_reg_1 */
-#define FL2000_REG_H_SYNC2	0x800C /* h_sync_reg_2 */
-#define FL2000_REG_V_SYNC1	0x8010 /* v_sync_reg_1 */
-#define FL2000_REG_V_SYNC2	0x8014 /* v_sync_reg_2 */
-#define FL2000_REG_8018		0x8018 /* unknown */
-#define FL2000_REG_ISO_CTRL	0x801C /* ISO 14 bit value ? */
-#define FL2000_REG_BUS_CTRL	0x8020 /* I2C/SPI control */
-#define FL2000_REG_BUS_DATA_RD	0x8024 /* I2C/SPI read data, 32 bit wide */
-#define FL2000_REG_BUS_DATA_WR	0x8028 /* I2C/SPI write data, 32 bit wide */
-#define FL2000_REG_PLL		0x802C /* PLL control  */
-#define FL2000_REG_8030		0x8030 /* unknown */
-#define FL2000_REG_8034		0x8034 /* unknown */
-#define FL2000_REG_8038		0x8038 /* unknown */
-#define FL2000_REG_INT_CTRL	0x803C /* Interrupt control */
-#define FL2000_REG_8040		0x8040 /* unknown */
-#define FL2000_REG_8044		0x8044 /* unknown */
-#define FL2000_REG_8048		0x8048 /* Application reset */
-#define FL2000_REG_804C		0x804C /* unknown */
-#define FL2000_REG_8050		0x8050 /* unknown */
-#define FL2000_REG_8054		0x8054 /* unknown */
-#define FL2000_REG_8058		0x8058 /* unknown */
-#define FL2000_REG_805C		0x805C /* unknown */
-#define FL2000_REG_8064		0x8064 /* unknown */
-#define FL2000_REG_8070		0x8070 /* unknown */
-#define FL2000_REG_8074		0x8074 /* unknown */
-#define FL2000_REG_8078		0x8078 /* unknown */
-#define FL2000_REG_807C		0x807C /* unknown */
-#define FL2000_REG_8088		0x8088 /* unknown */
-#define FL2000_REG_0070		0x0070 /* unknown */
-#define FL2000_REG_0078		0x0078 /* unknown */
-
-typedef union {
-	struct {
-		u32 addr	:7; /* I2C address */
-		u32 cmd		:1;
-#define FL2000_CTRL_CMD_WRITE		0
-#define FL2000_CTRL_CMD_READ		1
-		u32 offset	:8; /* I2C offset, only valid for I2C */
-		u32 bus		:1;
-#define FL2000_CTRL_BUS_I2C		0
-#define FL2000_CTRL_BUS_SPI		1
-		u32 spi_erase	:1; /* only valid for SPI */
-		u32 res_1	:6;
-		u32 data_status	:4; /* mask for failed bytes */
-#define FL2000_DATA_STATUS_PASS		0
-#define FL2000_DATA_STATUS_FAIL		1
-		u32 flags	:3;
-#define FL2000_DETECT_MONITOR		(1<<0)
-#define FL2000_CONECTION_ENABLE		(1<<2)
-		u32 op_status	:1;
-#define FL2000_CTRL_OP_STATUS_PROGRESS	0
-#define FL2000_CTRL_OP_STATUS_DONE	1
-	} __attribute__ ((__packed__));
-	u32 w;
-} fl2000_bus_control_reg;
-
-typedef union {
-	u8 b[sizeof(u32)];
-	u32 w;
-} fl2000_data_reg;
-
 /* Custom code for DRM bridge autodetection since there is no DT support */
 #define I2C_CLASS_HDMI	(1<<9)
+
+/* #### U1/U2 Control Registers Bank #### */
+static const char * const fl2000_u1u2_control_regs = "u1u2_control";
+
+#define FL2000_U1U2_CONTROL_OFFSET	0x0000
+
+#define FL2000_REG_0070			(FL2000_U1U2_CONTROL_OFFSET + 0x70)
+#define FL2000_REG_0078			(FL2000_U1U2_CONTROL_OFFSET + 0x78)
+
+/* #### VGA Control Registers Bank #### */
+static const char * const fl2000_vga_control_regs = "vga_control";
+
+#define FL2000_VGA_CONTROL_OFFSET	0x8000
+
+#define FL2000_VGA_STATUS_REG		(FL2000_VGA_CONTROL_OFFSET + 0x00) /* precious, volatile */
+static const struct reg_field FL2000_VGA_STATUS_REG_i2c_addr = REG_FIELD(FL2000_VGA_STATUS_REG, 0, 6);
+static const struct reg_field FL2000_VGA_STATUS_REG_i2c_cmd = REG_FIELD(FL2000_VGA_STATUS_REG, 7, 7);
+static const struct reg_field FL2000_VGA_STATUS_REG_i2c_offset = REG_FIELD(FL2000_VGA_STATUS_REG, 8, 15);
+static const struct reg_field FL2000_VGA_STATUS_REG_vga_status = REG_FIELD(FL2000_VGA_STATUS_REG, 16, 23); /* readonly */
+static const struct reg_field FL2000_VGA_STATUS_REG_i2c_status = REG_FIELD(FL2000_VGA_STATUS_REG, 24, 27);
+static const struct reg_field FL2000_VGA_STATUS_REG_monitor_detect = REG_FIELD(FL2000_VGA_STATUS_REG, 28, 28);
+static const struct reg_field FL2000_VGA_STATUS_REG_i2c_ready = REG_FIELD(FL2000_VGA_STATUS_REG, 29, 29); /* readonly */
+static const struct reg_field FL2000_VGA_STATUS_REG_edid_detect = REG_FIELD(FL2000_VGA_STATUS_REG, 30, 30);
+static const struct reg_field FL2000_VGA_STATUS_REG_i2c_done = REG_FIELD(FL2000_VGA_STATUS_REG, 31, 31);
+
+#define FL2000_VGA_CTRL_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x04) /* volatile */
+#define FL2000_VGA_HSYNC_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x08)
+#define FL2000_VGA_HSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x0C)
+#define FL2000_VGA_VSYNC_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x10)
+#define FL2000_VGA_VSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x14)
+#define FL2000_VGA_TEST_REG		(FL2000_VGA_CONTROL_OFFSET + 0x18)
+#define FL2000_VGA_ISOCH_REG		(FL2000_VGA_CONTROL_OFFSET + 0x1C) /* volatile */
+#define FL2000_VGA_I2C_SC_REG		(FL2000_VGA_CONTROL_OFFSET + 0x20) /* volatile */
+#define FL2000_VGA_I2C_RD_REG		(FL2000_VGA_CONTROL_OFFSET + 0x24) /* volatile */
+#define FL2000_VGA_I2C_WR_REG		(FL2000_VGA_CONTROL_OFFSET + 0x28)
+#define FL2000_VGA_PLL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x2C)
+#define FL2000_VGA_LBUF_REG		(FL2000_VGA_CONTROL_OFFSET + 0x30)
+#define FL2000_VGA_HI_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x34)
+#define FL2000_VGA_LO_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x38)
+#define FL2000_VGA_CTRL_REG_ACLK	(FL2000_VGA_CONTROL_OFFSET + 0x3C)
+#define FL2000_VGA_PXCLK_CNT_REG	(FL2000_VGA_CONTROL_OFFSET + 0x40) /* volatile */
+#define FL2000_VGA_VCNT_REG		(FL2000_VGA_CONTROL_OFFSET + 0x44) /* volatile */
+#define FL2000_RST_CTRL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x48) /* volatile */
+#define FL2000_BIAC_CTRL1_REG		(FL2000_VGA_CONTROL_OFFSET + 0x4C)
+#define FL2000_BIAC_CTRL2_REG		(FL2000_VGA_CONTROL_OFFSET + 0x50)
+#define FL2000_BIAC_STATUS_REG		(FL2000_VGA_CONTROL_OFFSET + 0x54) /* volatile */
+/* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x58) */
+#define FL2000_VGA_PLT_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x5C)
+#define FL2000_VGA_PLT_RADDR_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x60)
+#define FL2000_VGA_CTRL2_REG_ACLK	(FL2000_VGA_CONTROL_OFFSET + 0x64)
+/* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x68) */
+/* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x6C) */
+#define FL2000_TEST_CNTL_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x70) /* volatile */
+#define FL2000_TEST_CNTL_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x74) /* volatile */
+#define FL2000_TEST_CNTL_REG3		(FL2000_VGA_CONTROL_OFFSET + 0x78)
+#define FL2000_TEST_STAT1		(FL2000_VGA_CONTROL_OFFSET + 0x7C) /* volatile */
+#define FL2000_TEST_STAT2		(FL2000_VGA_CONTROL_OFFSET + 0x80) /* volatile */
+#define FL2000_TEST_STAT3		(FL2000_VGA_CONTROL_OFFSET + 0x84) /* volatile */
+#define FL2000_VGA_CTRL_REG_3		(FL2000_VGA_CONTROL_OFFSET + 0x88)
+/* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x8C) */
 
 #endif /* __FL2000_DRM_H__ */

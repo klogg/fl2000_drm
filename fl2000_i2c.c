@@ -20,13 +20,20 @@
 /* I2C enable timeout */
 #define I2C_ENABLE_TIMEOUT	750
 
-/* Timeout in ms for I2C read/write operations */
-#define I2C_RDWR_TIMEOUT	5
-#define I2C_RDWR_RETRIES	20
+/* Timeout in us for I2C read/write operations */
+#define I2C_RDWR_INTERVAL	(5 * 1000)
+#define I2C_RDWR_TIMEOUT	(20 * I2C_RDWR_INTERVAL)
 
 struct fl2000_i2c_algo_data {
-	fl2000_bus_control_reg control;
-	fl2000_data_reg data;
+	struct i2c_adapter *adapter;
+	struct usb_device *usb_dev;
+	struct regmap *regmap;
+	struct regmap_field *i2c_addr;
+	struct regmap_field *i2c_cmd;
+	struct regmap_field *i2c_offset;
+	struct regmap_field *i2c_status;
+	struct regmap_field *i2c_ready;
+	struct regmap_field *i2c_done;
 };
 
 #define fl2000_i2c_read_dword(adapter, addr, offset, data) \
@@ -38,54 +45,47 @@ struct fl2000_i2c_algo_data {
 static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		u16 addr, u8 offset, u32 *data)
 {
-	int i, ret;
-	struct usb_device *usb_dev = container_of(adapter->dev.parent,
-			struct usb_device, dev);
-	struct fl2000_i2c_algo_data *algo_data = adapter->algo_data;
-	fl2000_bus_control_reg *control = &algo_data->control;
+	int ret;
+	unsigned int val;
+	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
+	struct regmap *regmap = i2c_algo_data->regmap;
 
 	if (!read) {
-		ret = fl2000_reg_write(usb_dev, &control->w,
-				FL2000_REG_BUS_DATA_WR);
-		if (ret != 0) goto error;
+		ret = regmap_write(regmap, FL2000_VGA_I2C_WR_REG, *data);
+		if (ret != 0) return -EIO;
 	}
 
-	ret = fl2000_reg_read(usb_dev, &control->w, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
+	ret = regmap_field_write(i2c_algo_data->i2c_status, 0);
+	if (ret != 0) return -EIO;
+	ret = regmap_field_write(i2c_algo_data->i2c_addr, addr);
+	if (ret != 0) return -EIO;
+	ret = regmap_field_write(i2c_algo_data->i2c_cmd, read);
+	if (ret != 0) return -EIO;
+	ret = regmap_field_write(i2c_algo_data->i2c_offset, offset);
+	if (ret != 0) return -EIO;
+	ret = regmap_field_write(i2c_algo_data->i2c_done, false);
+	if (ret != 0) return -EIO;
 
-	control->addr = addr;
-	control->cmd = read ? FL2000_CTRL_CMD_READ : FL2000_CTRL_CMD_WRITE;
-	control->offset = offset;
-	control->bus = FL2000_CTRL_BUS_I2C;
-	control->spi_erase = false;
-	control->op_status = FL2000_CTRL_OP_STATUS_PROGRESS;
-	control->flags |= FL2000_DETECT_MONITOR;
+	/* TODO: force update register? */
 
-	ret = fl2000_reg_write(usb_dev, &control->w, FL2000_REG_BUS_CTRL);
-	if (ret != 0) goto error;
+	ret = regmap_field_read_poll_timeout(i2c_algo_data->i2c_done, val,
+			(val == true), I2C_RDWR_INTERVAL, I2C_RDWR_TIMEOUT);
+	if (ret != 0) return ret;
 
-	for (i = 0; i < I2C_RDWR_RETRIES; i++) {
-		msleep(I2C_RDWR_TIMEOUT);
-		ret = fl2000_reg_read(usb_dev, &control->w, FL2000_REG_BUS_CTRL);
-		if (ret != 0) goto error;
+	ret = regmap_field_read(i2c_algo_data->i2c_status, &val);
+	if (ret != 0) return ret;
 
-		if (control->op_status == FL2000_CTRL_OP_STATUS_DONE) break;
-	}
-
-	if (control->data_status != FL2000_DATA_STATUS_PASS ||
-			control->op_status != FL2000_CTRL_OP_STATUS_DONE) {
-		ret = -1;
-		goto error;
+	if (val != 0) {
+		ret = -EIO;
+		return ret;
 	}
 
 	if (read) {
-		ret = fl2000_reg_read(usb_dev, data, FL2000_REG_BUS_DATA_RD);
-		if (ret != 0) goto error;
+		ret = regmap_read(regmap, FL2000_VGA_I2C_RD_REG, data);
+		if (ret != 0) return -EIO;
 	}
 
 	return 0;
-error:
-	return ret;
 }
 
 static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
@@ -94,8 +94,10 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	int ret;
 	struct i2c_msg *addr_msg = &msgs[0], *data_msg;
 	u8 idx, offset = addr_msg->buf[0] & I2C_XFER_ADDR_MASK;
-	struct fl2000_i2c_algo_data *algo_data = adapter->algo_data;
-	fl2000_data_reg *data = &algo_data->data;
+	union {
+		u32 w;
+		u8 b[4];
+	} data;
 
 	/* Emulate 1 byte read for detection procedure, poison buffer */
 	if (num == 1) {
@@ -114,10 +116,10 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 
 	if (!!(data_msg->flags & I2C_M_RD)) {
 		ret = fl2000_i2c_read_dword(adapter, addr_msg->addr,
-				offset, &data->w);
+				offset, &data.w);
 		if (ret != 0) goto error;
 
-		data_msg->buf[0] = data->b[idx];
+		data_msg->buf[0] = data.b[idx];
 	} else {
 		/* Since FL2000 i2c bus implementation always operates with
 		 * 4-byte messages, we need to read before write in order not to
@@ -125,14 +127,14 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		 * dword */
 		if (data_msg->len < sizeof(data)) {
 			ret = fl2000_i2c_read_dword(adapter, addr_msg->addr,
-					offset, &data->w);
+					offset, &data.w);
 			if (ret != 0) goto error;
 		}
 
-		data->b[idx] = data_msg->buf[0];
+		data.b[idx] = data_msg->buf[0];
 
 		ret = fl2000_i2c_write_dword(adapter, addr_msg->addr,
-				offset, &data->w);
+				offset, &data.w);
 		if (ret != 0) goto error;
 	}
 
@@ -164,64 +166,89 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_comb_2nd_msg_len	= I2C_REG_DATA_SIZE,
 };
 
-void fl2000_i2c_destroy(struct i2c_adapter *adapter);
+static void fl2000_i2c_algo_data_release(struct device *dev, void *res)
+{
+	i2c_del_adapter(res);
+}
 
-struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev)
+struct i2c_adapter *fl2000_get_i2c_adapter(struct usb_device *usb_dev)
+{
+	return devres_find(&usb_dev->dev, &fl2000_i2c_algo_data_release, NULL, NULL);
+}
+
+struct regmap *fl2000_get_regmap(struct usb_device *usb_dev);
+
+int fl2000_i2c_create(struct usb_device *usb_dev)
 {
 	int ret;
-	void *ret_ptr;
 	struct i2c_adapter *adapter;
+	struct fl2000_i2c_algo_data *i2c_algo_data;
+	struct regmap *regmap;
 
-	adapter = kzalloc(sizeof(*adapter), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(adapter)) {
-		dev_err(&usb_dev->dev, "Out of memory");
-		ret_ptr = adapter;
-		goto error;
-	}
-
-	adapter->algo_data = kzalloc(sizeof(fl2000_bus_control_reg),
+	/* Adapter must be allocated before anything else */
+	adapter = devres_alloc(fl2000_i2c_algo_data_release, sizeof(*adapter),
 			GFP_KERNEL);
-	if (IS_ERR_OR_NULL(adapter->algo_data)) {
-		dev_err(&usb_dev->dev, "Out of memory");
-		ret_ptr = adapter->algo_data;
-		goto error;
-	}
+	if (IS_ERR_OR_NULL(adapter))
+		return IS_ERR(adapter) ? PTR_ERR(adapter) : -ENOMEM;
+	devres_add(&usb_dev->dev, adapter);
+
+	/* On de-initialization of algo_data i2c adapter will be unregistered */
+	i2c_algo_data = devm_kzalloc(&usb_dev->dev, sizeof(*i2c_algo_data),
+			GFP_KERNEL);
+	if (IS_ERR_OR_NULL(i2c_algo_data))
+		return IS_ERR(i2c_algo_data) ? PTR_ERR(i2c_algo_data) : -ENOMEM;
+
+	/* Regmap must exist on i2c initialization */
+	regmap = fl2000_get_regmap(usb_dev);
+	if (IS_ERR_OR_NULL(regmap))
+		return IS_ERR(regmap) ? PTR_ERR(regmap) : -ENOMEM;
+
+	i2c_algo_data->usb_dev = usb_dev;
+	i2c_algo_data->regmap = regmap;
+
+	i2c_algo_data->i2c_addr = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_VGA_STATUS_REG_i2c_addr);
+	if (IS_ERR_OR_NULL(regmap))
+		return IS_ERR(regmap) ? PTR_ERR(regmap) : -ENOMEM;
+
+	i2c_algo_data->i2c_cmd = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_VGA_STATUS_REG_i2c_cmd);
+	if (IS_ERR_OR_NULL(regmap))
+		return IS_ERR(regmap) ? PTR_ERR(regmap) : -ENOMEM;
+
+	i2c_algo_data->i2c_offset = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_VGA_STATUS_REG_i2c_offset);
+	if (IS_ERR_OR_NULL(regmap))
+		return IS_ERR(regmap) ? PTR_ERR(regmap) : -ENOMEM;
+
+	i2c_algo_data->i2c_done = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_VGA_STATUS_REG_i2c_done);
+	if (IS_ERR_OR_NULL(regmap))
+		return IS_ERR(regmap) ? PTR_ERR(regmap) : -ENOMEM;
+
+	i2c_algo_data->i2c_status = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_VGA_STATUS_REG_i2c_status);
+	if (IS_ERR_OR_NULL(regmap))
+		return IS_ERR(regmap) ? PTR_ERR(regmap) : -ENOMEM;
 
 	adapter->owner = THIS_MODULE;
 	adapter->class = I2C_CLASS_HDMI;
 	adapter->algo = &fl2000_i2c_algorithm;
 	adapter->quirks = &fl2000_i2c_quirks;
 
-	usb_make_path(usb_dev, adapter->name, sizeof(adapter->name));
+	adapter->algo_data = i2c_algo_data;
 
 	adapter->dev.parent = &usb_dev->dev;
 
+	usb_make_path(usb_dev, adapter->name, sizeof(adapter->name));
+
 	ret = i2c_add_adapter(adapter);
-	if (ret != 0) {
-		dev_err(&usb_dev->dev, "Out of memory");
-		ret_ptr = ERR_PTR(ret);
-		goto error;
-	}
+	if (ret != 0) return ret;
 
-	dev_info(&adapter->dev, "Connected I2C adapter");
-	return adapter;
+	/* Set adapter to algo data only on successful addition so that release
+	 * function will not fail trying to remove it */
+	i2c_algo_data->adapter = adapter;
 
-error:
-	/* Enforce cleanup in case of error */
-	fl2000_i2c_destroy(adapter);
-
-	return ret_ptr;
-}
-
-void fl2000_i2c_destroy(struct i2c_adapter *adapter)
-{
-	if (IS_ERR_OR_NULL(adapter))
-		return;
-
-	if (!IS_ERR_OR_NULL(adapter->algo_data))
-		kfree(adapter->algo_data);
-
-	i2c_del_adapter(adapter);
-
-	kfree(adapter);
+	dev_info(&adapter->dev, "Connected FL2000 I2C adapter");
+	return 0;
 }
