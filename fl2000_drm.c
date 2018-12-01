@@ -26,10 +26,6 @@ static const char *fl2000_supported_bridges[] = {
 	"it66121",		/* IT66121 driver name*/
 };
 
-/* I2C adapter belong to DRM */
-struct i2c_adapter *fl2000_i2c_create(struct usb_device *usb_dev);
-void fl2000_i2c_destroy(struct i2c_adapter *adapter);
-
 static const u32 fl2000_pixel_formats[] = {
 	/* 24-bit RGB le */
 	DRM_FORMAT_RGB888,
@@ -43,10 +39,8 @@ static const u32 fl2000_pixel_formats[] = {
 };
 
 struct fl2000_drm_if {
-	struct i2c_adapter *adapter;
-	struct drm_device *drm;
+	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
-	struct component_match *match;
 };
 
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
@@ -145,26 +139,34 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
 
+static void fl2000_drm_release(struct device *dev, void *res)
+{
+	/* Noop */
+}
+
 static int fl2000_bind(struct device *master)
 {
 	int ret = 0;
-	struct usb_interface *interface = container_of(master,
-			struct usb_interface, dev);
-	struct fl2000_drm_if *drm_if = usb_get_intfdata(interface);
+	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct drm_mode_config *mode_config;
 	u64 mask;
 
 	dev_info(master, "Binding FL2000 master component");
 
-	drm = drm_dev_alloc(&fl2000_drm_driver, master);
-	if (IS_ERR_OR_NULL(drm)) {
-		dev_err(master, "Cannot allocate DRM device");
-		ret = PTR_ERR(drm_if->drm);
-		goto error;
+	drm_if = devres_find(master, fl2000_drm_release, NULL, NULL);
+	if (drm_if == NULL) {
+		dev_err(master, "Cannot find DRM private structure");
+		return -ENODEV;
 	}
-	drm->dev_private = drm_if;
-	drm_if->drm = drm;
+
+	drm = &drm_if->drm;
+
+	ret = drm_dev_init(drm, &fl2000_drm_driver, master);
+	if (ret != 0) {
+		dev_err(master, "Cannot initialize DRM device (%d)", ret);
+		return ret;
+	}
 
 	mask = dma_get_mask(drm->dev);
 
@@ -178,61 +180,56 @@ static int fl2000_bind(struct device *master)
 
 	ret = dma_set_coherent_mask(drm->dev, mask);
 	if (ret != 0) {
-		dev_err(drm->dev, "Cannot set DRM device DMA mask");
-		goto error;
+		dev_err(drm->dev, "Cannot set DRM device DMA mask (%d)", ret);
+		return ret;
 	}
 
 	ret = drm_simple_display_pipe_init(drm, &drm_if->pipe,
 			&fl2000_display_funcs, fl2000_pixel_formats,
 			ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
 	if (ret != 0) {
-		dev_err(drm->dev, "Cannot configure simple display pipe");
-		goto error;
+		dev_err(drm->dev, "Cannot configure simple display pipe (%d)", ret);
+		return ret;
 	}
 
 	/* Attach bridge */
 	ret = component_bind_all(master, &drm_if->pipe);
 	if (ret != 0) {
-		dev_err(drm->dev, "Cannot attach bridge");
-		goto error;
+		dev_err(drm->dev, "Cannot attach bridge (%d)", ret);
+		return ret;
 	}
 
 	drm_mode_config_reset(drm);
 
 	ret = drm_fb_cma_fbdev_init(drm, BPP, MAX_CONN);
 	if (ret != 0) {
-		dev_err(drm->dev, "Cannot initialize CMA framebuffer");
-		goto error;
+		dev_err(drm->dev, "Cannot initialize CMA framebuffer (%d)", ret);
+		return ret;
 	}
 
 	drm_kms_helper_poll_init(drm);
 
 	ret = drm_dev_register(drm, 0);
 	if (ret < 0) {
-		dev_err(drm->dev, "Cannot register DRM device");
-		goto error;
+		dev_err(drm->dev, "Cannot register DRM device (%d)", ret);
+		return ret;
 	}
 
 	return 0;
-
-error:
-	return ret;
 }
 
 static void fl2000_unbind(struct device *master)
 {
-	struct usb_interface *interface = container_of(master,
-			struct usb_interface, dev);
-	struct fl2000_drm_if *drm_if = usb_get_intfdata(interface);
+	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 
 	dev_info(master, "Unbinding FL2000 master component");
 
-	if (IS_ERR_OR_NULL(drm_if)) return;
+	drm_if = devres_find(master, fl2000_drm_release, NULL, NULL);
+	if (drm_if == NULL) return;
 
-	drm = drm_if->drm;
-
-	if (IS_ERR_OR_NULL(drm)) return;
+	drm = &drm_if->drm;
+	if (drm == NULL) return;
 
 	drm_dev_unregister(drm);
 
@@ -251,13 +248,18 @@ static struct component_master_ops fl2000_drm_master_ops = {
 	.unbind = fl2000_unbind,
 };
 
+static void fl2000_match_release(struct device *dev, void *data)
+{
+	component_master_del(dev, &fl2000_drm_master_ops);
+}
+
 static int fl2000_compare(struct device *dev, void *data)
 {
 	int i;
-	struct device *master_dev = data;
+	struct i2c_adapter *adapter = data;
 
 	/* Check component's parent (must be I2C adapter) */
-	if (dev->parent != master_dev)
+	if (dev->parent != &adapter->dev)
 		return 0;
 
 	/* Check this is a supported DRM bridge */
@@ -270,66 +272,38 @@ static int fl2000_compare(struct device *dev, void *data)
 	return 0;
 }
 
-void fl2000_drm_destroy(struct usb_interface *interface);
+struct i2c_adapter *fl2000_get_i2c_adapter(struct usb_device *usb_dev);
 
-int fl2000_drm_create(struct usb_interface *interface)
+int fl2000_drm_create(struct usb_device *usb_dev)
 {
 	int ret = 0;
-	struct i2c_adapter *adapter;
+	struct component_match *match;
 	struct fl2000_drm_if *drm_if;
-	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
-	drm_if = kzalloc(sizeof(*drm_if), GFP_KERNEL);
+	drm_if = devres_alloc(&fl2000_drm_release, sizeof(*drm_if), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(drm_if)) {
-		dev_err(&interface->dev, "Cannot allocate DRM private " \
-				"structure");
-		ret = PTR_ERR(drm_if);
-		goto error;
+		ret = IS_ERR(drm_if) ? PTR_ERR(drm_if) : -ENOMEM;
+		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure (%d)", ret);
+		return ret;
 	}
-	usb_set_intfdata(interface, drm_if);
-
-	/* Create I2C adapter */
-	adapter = fl2000_i2c_create(usb_dev);
-	if (IS_ERR_OR_NULL(adapter)) {
-		dev_err(&interface->dev, "Cannot register I2C adapter");
-		ret = PTR_ERR(adapter);
-		goto error;
-	}
-	drm_if->adapter = adapter;
+	devres_add(&usb_dev->dev, drm_if);
 
 	/* Make USB interface master */
-	component_match_add(&interface->dev, &drm_if->match, fl2000_compare,
-			&adapter->dev);
+	component_match_add_release(&usb_dev->dev, &match,
+			fl2000_match_release, fl2000_compare,
+			fl2000_get_i2c_adapter(usb_dev));
 
-	ret = component_master_add_with_match(&interface->dev,
-			&fl2000_drm_master_ops, drm_if->match);
+	ret = component_master_add_with_match(&usb_dev->dev,
+			&fl2000_drm_master_ops, match);
 	if (ret != 0) {
-		dev_err(&interface->dev, "Cannot register component master");
-		goto error;
+		dev_err(&usb_dev->dev, "Cannot register component master (%d)", ret);
+		return ret;
 	}
 
 	return 0;
-
-error:
-	fl2000_drm_destroy(interface);
-	return ret;
 }
 
-void fl2000_drm_destroy(struct usb_interface *interface)
-{
-	struct fl2000_drm_if *drm_if;
-
-	drm_if = usb_get_intfdata(interface);
-	if (drm_if == NULL)
-		return;
-
-	fl2000_i2c_destroy(drm_if->adapter);
-
-	component_master_del(&interface->dev, &fl2000_drm_master_ops);
-
-	kfree(drm_if);
-}
-
+#if 0
 void fl2000_process_event(struct usb_device *usb_dev)
 {
 	int ret;
@@ -337,7 +311,7 @@ void fl2000_process_event(struct usb_device *usb_dev)
 
 	if (IS_ERR_OR_NULL(status)) return;
 
-	ret = fl2000_reg_read(usb_dev, status, FL2000_REG_INT_STATUS);
+	ret = fl2000_reg_read(usb_dev, status, FL2000_VGA_STATUS_REG);
 	if (ret != 0) {
 		dev_err(&usb_dev->dev, "Cannot read interrupt" \
 				"register (%d)", ret);
@@ -347,3 +321,4 @@ void fl2000_process_event(struct usb_device *usb_dev)
 
 	kfree(status);
 }
+#endif
