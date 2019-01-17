@@ -21,6 +21,8 @@
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_edid.h>
 
+#include "it66121.h"
+
 #define VENDOR_ID	0x4954
 #define DEVICE_ID	0x0612
 #define REVISION_MASK	0xF000
@@ -44,22 +46,27 @@ static int it66121_remove(struct i2c_client *client);
 
 /* According to datasheet IT66121 addresses are 0x98 or 0x9A, but this is
  * including lsb which is responsible for r/w command - that's why shift */
-static const unsigned short it66121_addr[] = {(0x98 >> 1), (0x9A >> 1),
-		I2C_CLIENT_END};
+static const unsigned short it66121_addr[] = {(0x98 >> 1), I2C_CLIENT_END};
 
-#if 0
 static const struct regmap_config it66121_regmap_config = {
-	.reg_bits = OFFSET_BITS,
-	.val_bits = VALUE_BITS,
-
+	.val_bits = 8, /* 8-bit register size */
+	.reg_bits = 8, /* 8-bit register address space */
+	.reg_stride = 1,
 	.max_register = 0xFF,
-	.cache_type = REGCACHE_RBTREE,
-	.reg_defaults_raw = adv7511_register_defaults,
-	.num_reg_defaults_raw = ARRAY_SIZE(adv7511_register_defaults),
 
-	.volatile_reg = adv7511_register_volatile,
+	.cache_type = REGCACHE_NONE,
+
+	//.precious_reg = it66121_precious_reg,
+	//.volatile_reg = it66121_volatile_reg,
+
+	//.reg_defaults = it66121_reg_defaults,
+	//.num_reg_defaults = ARRAY_SIZE(it66121_reg_defaults),
+
+	.reg_format_endian = REGMAP_ENDIAN_BIG,
+	.val_format_endian = REGMAP_ENDIAN_BIG,
+
+	.use_single_rw = true,
 };
-#endif
 
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
@@ -92,10 +99,40 @@ static int it66121_bind(struct device *comp, struct device *master,
 	int ret;
 	struct drm_bridge *bridge = dev_get_drvdata(comp);
 	struct drm_simple_display_pipe *pipe = master_data;
+	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
+			bridge);
 
 	dev_info(comp, "Binding IT66121 component");
 
 	/* TODO: Do some checks? */
+
+	/* Reset according to IT66121 manual */
+	regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
+	regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (0<<5));
+
+	/* Power up according to IT66121 manual */
+	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL_2, (1<<6), (0<<6));
+	regmap_write_bits(priv->regmap, IT66121_INT_CONTROL, (1<<0), (0<<0));
+	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<5), (0<<5));
+	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<2)|(1<<6), (0<<2)|(0<<6));
+	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<6), (0<<6));
+	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<4), (0<<4));
+	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<3), (1<<3));
+	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<2), (1<<2));
+
+	regmap_write(priv->regmap, IT66121_INT_MASK_1, 0);
+	regmap_write(priv->regmap, IT66121_INT_MASK_2, 0);
+	regmap_write(priv->regmap, IT66121_INT_MASK_3, 0);
+
+	/* IT66121_AFE_XP_TEST: 0x30 --> 0x70
+	 * whole register is defined as XP_TEST, values are undisclosed */
+
+	/* IT66121_AFE_DRV_HS: 0x00 --> 0x1F
+	 * lower 5 bits are undisclosed in manual */
+
+	/* IT66121_AFE_IP_CONTROL_2: 0x18 --> 0x38
+	 * DRV_ISW[5:3] value '011' is a default output current level swing,
+	 * with change to '111' we set output current level swing to maximum */
 
 	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
 	if (ret != 0)
@@ -181,7 +218,12 @@ static int it66121_probe(struct i2c_client *client)
 		goto error;
 	}
 
-	priv->regmap = NULL;
+	priv->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
+	if (IS_ERR(priv->regmap)) {
+		ret = PTR_ERR(priv);
+		goto error;
+	}
+
 	priv->bridge.funcs = &it66121_bridge_funcs;
 
 	drm_bridge_add(&priv->bridge);
@@ -244,7 +286,7 @@ static int it66121_detect(struct i2c_client *client,
 
 	/* TODO: i2c_check_functionality()? */
 
-	/* TODO: change to register map */
+	/* No regmap here yet: we will allocate it if detection succeeds */
 	for (i = 0; i < 4; i++) {
 		ret = i2c_smbus_read_byte_data(client, i);
 		if (ret < 0) {

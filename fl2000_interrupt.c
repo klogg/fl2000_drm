@@ -13,8 +13,6 @@
 
 #define INTR_BUFSIZE	4
 
-void fl2000_process_event(struct usb_device *usb_dev);
-
 struct fl2000_intr {
 	struct usb_interface *interface;
 	unsigned int pipe;
@@ -52,26 +50,36 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	struct fl2000_intr *intr = container_of(work_item,
 			struct fl2000_intr, work);
 	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
-
-	if (intr == NULL) return;
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	u32 status;
 
 	if (atomic_read(&intr->state) != RUN) return;
 
 	/* Process interrupt */
-	fl2000_process_event(usb_dev);
+	if (regmap) {
+		ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
+		if (ret != 0) {
+			dev_err(&usb_dev->dev, "Cannot read interrupt" \
+					"register (%d)", ret);
+		} else {
+			dev_info(&usb_dev->dev, " *** 0x%08X", status);
+		}
+	}
 
 	/* Restart urb */
 	ret = fl2000_intr_submit_urb(intr);
 	if (ret != 0) {
 		atomic_set(&intr->state, STOP);
-		dev_err(&intr->interface->dev, "URB submission failed failed");
+		dev_err(&intr->interface->dev, "URB submission failed");
 	}
 }
 
 static void fl2000_intr_completion(struct urb *urb)
 {
-	int ret;
 	struct fl2000_intr *intr = urb->context;
+	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
+
+	dev_info(&usb_dev->dev, " Interrupt!!!");
 
 	if (intr == NULL) return;
 
@@ -79,18 +87,7 @@ static void fl2000_intr_completion(struct urb *urb)
 
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 
-	if (queue_work(intr->work_queue, &intr->work))
-		/* Exit on success */
-		return;
-
-	dev_err(&intr->interface->dev, "Cannot queue URB processing work");
-
-	/* Restart urb in case of work queuing failure */
-	ret = fl2000_intr_submit_urb(intr);
-	if (ret != 0) {
-		atomic_set(&intr->state, STOP);
-		dev_err(&intr->interface->dev, "URB submission failed failed");
-	}
+	queue_work(intr->work_queue, &intr->work);
 }
 
 void fl2000_intr_destroy(struct usb_interface *interface);
@@ -168,11 +165,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 
 	usb_set_intfdata(interface, intr);
 
-	ret = fl2000_intr_submit_urb(intr);
-	if (ret != 0) {
-		dev_err(&interface->dev, "URB submission failed failed");
-		goto error;
-	}
+	fl2000_intr_work(&intr->work);
 
 	return 0;
 error:

@@ -15,61 +15,49 @@
 /* Timeout in ms for USB Control Message (transport for I2C bus)  */
 #define CONTROL_XFER_TIMEOUT	2000
 
-#define regmap_reg_default(addr, val) {.reg = addr, .def = val}
-
 static const struct reg_default fl2000_reg_defaults[] = {
-	regmap_reg_default(FL2000_VGA_STATUS_REG, 0x00000000),
-	regmap_reg_default(FL2000_VGA_CTRL_REG_PXCLK, 0x0010119C),
-	regmap_reg_default(FL2000_VGA_HSYNC_REG1, 0x02800320),
-	regmap_reg_default(FL2000_VGA_HSYNC_REG2, 0x00600089),
-	regmap_reg_default(FL2000_VGA_VSYNC_REG1, 0x01E0020D),
-	regmap_reg_default(FL2000_VGA_VSYNC_REG2, 0x0002001C),
-	regmap_reg_default(FL2000_VGA_TEST_REG, 0x00000006),
-	regmap_reg_default(FL2000_VGA_ISOCH_REG, 0x00850000),
-	regmap_reg_default(FL2000_VGA_I2C_SC_REG, 0x80000000),
-	regmap_reg_default(FL2000_VGA_I2C_RD_REG, 0x00000000),
-	regmap_reg_default(FL2000_VGA_I2C_WR_REG, 0x00000000),
-	regmap_reg_default(FL2000_VGA_PLL_REG, 0x003F6119),
-	regmap_reg_default(FL2000_VGA_LBUF_REG, 0x23300001),
-	regmap_reg_default(FL2000_VGA_HI_MARK, 0x00000000),
-	regmap_reg_default(FL2000_VGA_LO_MARK, 0x00000000),
-	regmap_reg_default(FL2000_VGA_CTRL_REG_ACLK, 0x00000000),
-	regmap_reg_default(FL2000_VGA_PXCLK_CNT_REG, 0x00000000),
-	regmap_reg_default(FL2000_VGA_VCNT_REG, 0x00000000),
-	regmap_reg_default(FL2000_RST_CTRL_REG, 0x00000100),
-	regmap_reg_default(FL2000_BIAC_CTRL1_REG, 0x00A00120),
-	regmap_reg_default(FL2000_BIAC_CTRL2_REG, 0x00000000),
-	regmap_reg_default(FL2000_BIAC_STATUS_REG, 0x00000000),
-	regmap_reg_default(FL2000_VGA_PLT_REG_PXCLK, 0x00000000),
-	regmap_reg_default(FL2000_VGA_PLT_RADDR_REG_PXCLK, 0x00000000),
-	regmap_reg_default(FL2000_VGA_CTRL2_REG_ACLK, 0x00000000),
-	regmap_reg_default(FL2000_TEST_CNTL_REG1, 0xC0003C20),
-	regmap_reg_default(FL2000_TEST_CNTL_REG1, 0x00000C04),
-	regmap_reg_default(FL2000_TEST_CNTL_REG3, 0x00000000),
-	regmap_reg_default(FL2000_TEST_STAT1, 0x00000000),
-	regmap_reg_default(FL2000_TEST_STAT2, 0x00000000),
-	regmap_reg_default(FL2000_TEST_STAT3, 0x00000000),
-	regmap_reg_default(FL2000_VGA_CTRL_REG_3, 0x00000488),
+	regmap_reg_default(FL2000_VGA_STATUS_REG,		0x00000000),
+	regmap_reg_default(FL2000_VGA_CTRL_REG_PXCLK,		0x0010119C),
+	regmap_reg_default(FL2000_VGA_HSYNC_REG1,		0x02800320),
+	regmap_reg_default(FL2000_VGA_HSYNC_REG2,		0x00600089),
+	regmap_reg_default(FL2000_VGA_VSYNC_REG1,		0x01E0020D),
+	regmap_reg_default(FL2000_VGA_VSYNC_REG2,		0x0002001C),
+	regmap_reg_default(FL2000_VGA_TEST_REG,			0x00000006),
+	regmap_reg_default(FL2000_VGA_ISOCH_REG,		0x00850000),
+	regmap_reg_default(FL2000_VGA_I2C_SC_REG,		0x80000000),
+	regmap_reg_default(FL2000_VGA_I2C_RD_REG,		0x00000000),
+	regmap_reg_default(FL2000_VGA_I2C_WR_REG,		0x00000000),
+	regmap_reg_default(FL2000_VGA_PLL_REG,			0x003F6119),
+	regmap_reg_default(FL2000_VGA_LBUF_REG,			0x23300001),
+	regmap_reg_default(FL2000_VGA_HI_MARK,			0x00000000),
+	regmap_reg_default(FL2000_VGA_LO_MARK,			0x00000000),
+	regmap_reg_default(FL2000_VGA_CTRL_REG_ACLK,		0x00000000),
+	regmap_reg_default(FL2000_VGA_PXCLK_CNT_REG,		0x00000000),
+	regmap_reg_default(FL2000_VGA_VCNT_REG,			0x00000000),
+	regmap_reg_default(FL2000_RST_CTRL_REG,			0x00000100),
+	regmap_reg_default(FL2000_BIAC_CTRL1_REG,		0x00A00120),
+	regmap_reg_default(FL2000_BIAC_CTRL2_REG,		0x00000000),
+	regmap_reg_default(FL2000_BIAC_STATUS_REG,		0x00000000),
+	regmap_reg_default(FL2000_VGA_PLT_REG_PXCLK,		0x00000000),
+	regmap_reg_default(FL2000_VGA_PLT_RADDR_REG_PXCLK,	0x00000000),
+	regmap_reg_default(FL2000_VGA_CTRL2_REG_ACLK,		0x00000000),
+	regmap_reg_default(FL2000_TEST_CNTL_REG1,		0xC0003C20),
+	regmap_reg_default(FL2000_TEST_CNTL_REG1,		0x00000C04),
+	regmap_reg_default(FL2000_TEST_CNTL_REG3,		0x00000000),
+	regmap_reg_default(FL2000_TEST_STAT1,			0x00000000),
+	regmap_reg_default(FL2000_TEST_STAT2,			0x00000000),
+	regmap_reg_default(FL2000_TEST_STAT3,			0x00000000),
+	regmap_reg_default(FL2000_VGA_CTRL_REG_3,		0x00000488),
 };
 
-static bool fl2000_precious_reg(struct device *dev, unsigned int reg)
+static bool fl2000_reg_precious(struct device *dev, unsigned int reg)
 {
-	switch (reg) {
-	case FL2000_VGA_STATUS_REG:
-		return true;
-	default:
-		return false;
-	}
+	return FL2000_REG_PRECIOUS(reg);
 }
 
-static bool fl2000_volatile_reg(struct device *dev, unsigned int reg)
+static bool fl2000_reg_volatile(struct device *dev, unsigned int reg)
 {
-	switch (reg) {
-	case FL2000_VGA_STATUS_REG:
-		return true;
-	default:
-		return false;
-	}
+	return FL2000_REG_VOLATILE(reg);
 }
 
 static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
@@ -133,17 +121,15 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 }
 
 static const struct regmap_config fl2000_regmap_config = {
-	.name = fl2000_vga_control_regs,
-
-	.val_bits = 32, /* 32-bit register size */
-	.reg_bits = 16, /* 16-bit register address space */
+	.val_bits = 32,
+	.reg_bits = 16,
 	.reg_stride = 4,
 	.max_register = 0xFFFF,
 
 	.cache_type = REGCACHE_RBTREE,
 
-	.precious_reg = fl2000_precious_reg,
-	.volatile_reg = fl2000_volatile_reg,
+	.precious_reg = fl2000_reg_precious,
+	.volatile_reg = fl2000_reg_volatile,
 
 	.reg_defaults = fl2000_reg_defaults,
 	.num_reg_defaults = ARRAY_SIZE(fl2000_reg_defaults),
@@ -157,11 +143,6 @@ static const struct regmap_config fl2000_regmap_config = {
 	.use_single_rw = true,
 };
 
-struct regmap *fl2000_get_regmap(struct usb_device *usb_dev)
-{
-	return dev_get_regmap(&usb_dev->dev, fl2000_vga_control_regs);
-}
-
 int fl2000_regmap_create(struct usb_device *usb_dev)
 {
 	struct regmap *regmap;
@@ -173,63 +154,3 @@ int fl2000_regmap_create(struct usb_device *usb_dev)
 
 	return 0;
 }
-
-#if 0
-void __reset(struct usb_device *usb_dev)
-{
-	int ret;
-	u32 *magic = kmalloc(sizeof(*magic), GFP_KERNEL);
-
-	if (IS_ERR_OR_NULL(magic)) return;
-
-	/* Application reset & self cleanup */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_8048);
-	if (ret != 0) goto error;
-	*magic |= (1<<15);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_8048);
-	if (ret != 0) goto error;
-
-	/* Turn off HW reset */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_8088);
-	if (ret != 0) goto error;
-	*magic |= (1<<10);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_8088);
-	if (ret != 0) goto error;
-
-	/* TODO: sort out this U1/U2 magic from original driver. Could it be
-	 * some sort of GPIO management? */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_0070);
-	if (ret != 0) goto error;
-	*magic |= (1<<20);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_0070);
-	if (ret != 0) goto error;
-
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_REG_0070);
-	if (ret != 0) goto error;
-	*magic |= (1<<19);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_REG_0070);
-	if (ret != 0) goto error;
-
-	/* Enable I2C connection */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_VGA_I2C_SC_REG);
-	if (ret != 0) goto error;
-	*magic |= (1<<30);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_VGA_I2C_SC_REG);
-	if (ret != 0) goto error;
-
-	msleep(750);
-
-	/* Enable monitor detection (not sure if it is needed) */
-	ret = fl2000_reg_read(usb_dev, magic, FL2000_VGA_I2C_SC_REG);
-	if (ret != 0) goto error;
-	*magic |= (1<<28);
-	ret = fl2000_reg_write(usb_dev, magic, FL2000_VGA_I2C_SC_REG);
-	if (ret != 0) goto error;
-
-error:
-	if (ret != 0) dev_err(&usb_dev->dev, "Reset failed");
-
-	kfree(magic);
-}
-#endif
-
