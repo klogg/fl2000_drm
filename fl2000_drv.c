@@ -42,20 +42,70 @@ static struct usb_device_id fl2000_id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
+struct usb_dev_data {
+	struct regmap_field *app_reset;
+	struct regmap_field *wakeup_clear_en;
+};
+
+static void fl2000_usb_dev_data_release(struct device *dev, void *res)
+{
+}
+
 static int fl2000_init(struct usb_device *usb_dev)
 {
 	int ret;
-	/* Create I2C adapter */
-	ret = fl2000_i2c_create(usb_dev);
-	if (ret != 0) {
-		dev_err(&usb_dev->dev, "Cannot create I2C adapter (%d)", ret);
-		return ret;
+	struct usb_dev_data *usb_dev_data;
+	struct regmap *regmap;
+
+	/* Create local data structure */
+	usb_dev_data = devres_alloc(fl2000_usb_dev_data_release,
+			sizeof(*usb_dev_data), GFP_KERNEL);
+	if (!usb_dev_data) {
+		dev_err(&usb_dev->dev, "USB data allocation failed");
+		return -ENOMEM;
 	}
+	devres_add(&usb_dev->dev, usb_dev_data);
 
 	/* Create registers map */
 	ret = fl2000_regmap_create(usb_dev);
 	if (ret != 0) {
 		dev_err(&usb_dev->dev, "Cannot create registers map (%d)", ret);
+		return ret;
+	}
+
+	/* Regmap must exist on initialization */
+	regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	if (!regmap) {
+		dev_err(&usb_dev->dev, "Regmap capture failed");
+		return -ENOMEM;
+	}
+
+	regmap_write_bits(regmap, FL2000_USB_LPM, (3<<19), (3<<19));
+	regmap_write_bits(regmap, FL2000_USB_LPM, (3<<20), (3<<20));
+
+	/* Create control fields */
+	usb_dev_data->app_reset = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_RST_CTRL_REG_app_reset);
+	if (IS_ERR(usb_dev_data->app_reset))
+		return PTR_ERR(usb_dev_data->app_reset);
+
+	usb_dev_data->wakeup_clear_en = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_VGA_CTRL_REG_3_wakeup_clear_en);
+	if (IS_ERR(usb_dev_data->wakeup_clear_en))
+		return PTR_ERR(usb_dev_data->wakeup_clear_en);
+
+	ret = regmap_field_write(usb_dev_data->app_reset, true);
+	if (ret != 0) return -EIO;
+
+	ret = regmap_field_write(usb_dev_data->wakeup_clear_en, false);
+	if (ret != 0) return -EIO;
+
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, 0x1F, 0x1C);
+
+	/* Create I2C adapter */
+	ret = fl2000_i2c_create(usb_dev);
+	if (ret != 0) {
+		dev_err(&usb_dev->dev, "Cannot create I2C adapter (%d)", ret);
 		return ret;
 	}
 

@@ -21,9 +21,11 @@
 #define BPP		32
 #define MAX_CONN	1
 
+int fl2000_debugfs_init(struct drm_minor *minor);
+
 /* List all supported bridges */
 static const char *fl2000_supported_bridges[] = {
-	"it66121",		/* IT66121 driver name*/
+	"it66121", /* IT66121 driver name*/
 };
 
 static const u32 fl2000_pixel_formats[] = {
@@ -68,6 +70,10 @@ static struct drm_driver fl2000_drm_driver = {
 	.major = DRM_DRIVER_MAJOR,
 	.minor = DRM_DRIVER_MINOR,
 	.patchlevel = DRM_DRIVER_PATCHLEVEL,
+
+#if defined(CONFIG_DEBUG_FS)
+	.debugfs_init = fl2000_debugfs_init,
+#endif
 };
 
 static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
@@ -80,6 +86,9 @@ static enum drm_mode_status fl2000_mode_valid(struct drm_crtc *crtc,
 		const struct drm_display_mode *mode)
 {
 	/* TODO: check mode against USB bulk endpoint bandwidth */
+
+	dev_info(crtc->dev->dev, "fl2000_mode_valid");
+
 	return MODE_OK;
 }
 
@@ -88,11 +97,29 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		struct drm_plane_state *plane_state)
 {
 	/* TODO: all FL2000DX HW configuration stuff here */
+
+	dev_info(pipe->crtc.dev->dev, "fl2000_display_enable");
+
+	/* Reject USB U1/U2 transitions */
+	//regmap_write_bits(regmap, FL2000_USB_LPM, (3<<19), (3<<19));
+	//regmap_write_bits(regmap, FL2000_USB_LPM, (3<<20), (3<<20));
+
+	/* Enable wakeup auto reset */
+	//regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_3, (1<<10), (1<<10));
 }
 
 void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 {
 	/* TODO: disable HW */
+
+	dev_info(pipe->crtc.dev->dev, "fl2000_display_disable");
+
+	/* Accept USB U1/U2 transitions */
+	//regmap_write_bits(regmap, FL2000_USB_LPM, (3<<19), ~(3<<19));
+	//regmap_write_bits(regmap, FL2000_USB_LPM, (3<<20), ~(3<<20));
+
+	/* Disable wakeup auto reset */
+	//regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_3, (1<<10), ~(1<<10));
 }
 
 static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
@@ -104,6 +131,8 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	struct drm_plane *plane = &pipe->plane;
 	struct drm_plane_state *pstate = plane->state;
 	struct drm_framebuffer *fb = pstate->fb;
+
+	dev_info(pipe->crtc.dev->dev, "fl2000_display_update");
 
 	if (fb) {
 		//dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
@@ -250,7 +279,7 @@ static struct component_master_ops fl2000_drm_master_ops = {
 
 static void fl2000_match_release(struct device *dev, void *data)
 {
-	component_master_del(dev, &fl2000_drm_master_ops);
+	//component_master_del(dev, &fl2000_drm_master_ops);
 }
 
 static int fl2000_compare(struct device *dev, void *data)
@@ -277,8 +306,15 @@ struct i2c_adapter *fl2000_get_i2c_adapter(struct usb_device *usb_dev);
 int fl2000_drm_create(struct usb_device *usb_dev)
 {
 	int ret = 0;
-	struct component_match *match;
+	struct component_match *match = NULL;
 	struct fl2000_drm_if *drm_if;
+	struct i2c_adapter *adapter;
+
+	adapter = fl2000_get_i2c_adapter(usb_dev);
+	if (!adapter) {
+		dev_err(&usb_dev->dev, "Cannot find I2C adapter");
+		return -ENODEV;
+	}
 
 	drm_if = devres_alloc(&fl2000_drm_release, sizeof(*drm_if), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(drm_if)) {
@@ -290,8 +326,7 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 
 	/* Make USB interface master */
 	component_match_add_release(&usb_dev->dev, &match,
-			fl2000_match_release, fl2000_compare,
-			fl2000_get_i2c_adapter(usb_dev));
+			fl2000_match_release, fl2000_compare, adapter);
 
 	ret = component_master_add_with_match(&usb_dev->dev,
 			&fl2000_drm_master_ops, match);
@@ -302,23 +337,3 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 
 	return 0;
 }
-
-#if 0
-void fl2000_process_event(struct usb_device *usb_dev)
-{
-	int ret;
-	u32 *status = kmalloc(sizeof(*status), GFP_KERNEL);
-
-	if (IS_ERR_OR_NULL(status)) return;
-
-	ret = fl2000_reg_read(usb_dev, status, FL2000_VGA_STATUS_REG);
-	if (ret != 0) {
-		dev_err(&usb_dev->dev, "Cannot read interrupt" \
-				"register (%d)", ret);
-	} else {
-		dev_info(&usb_dev->dev, " *** 0x%4X", *status);
-	}
-
-	kfree(status);
-}
-#endif
