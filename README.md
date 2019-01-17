@@ -22,28 +22,25 @@ In order to implement debugging, following must be implemented in the driver:
 1. Implementing debugfs entries
 #### Debugfs entries
 *Register programming*
-- address: specify register address to work with
-- value: read causes read from register, write causes write to register
+- reg_address: specify register address to work with
+- reg_data: read causes read from register, write causes write to register
 
 *I2C access*
-- address: i2c device address to operate with
-- offset: specify device register address to work with
-- value: read causes i2c read, write causes i2c write
+- i2c_address: i2c device address to operate with
+- i2c_offset: specify device register address to work with
+- i2c_value: read causes i2c read, write causes i2c write
 
 *Interrupt handling*
 - status: array of values of interrupt statuses since last reading
 
 *Entries structure*<br>
 :open_file_folder: fl2000_drm<br>
-&nbsp;&nbsp;:open_file_folder: register<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up: address<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up: value<br>
-&nbsp;&nbsp;:open_file_folder:i2c<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:address<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:offset<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:value<br>
-&nbsp;&nbsp;:open_file_folder:interrupt<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:status<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:reg_address<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:reg_data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_address<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_offset<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:irq_status<br>
 
 ## Limitations
  * HDMI CEC is not supported
