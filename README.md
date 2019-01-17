@@ -11,6 +11,40 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 ## Implementation
 ![Diagram](fl2000.svg)
 
+### Debug scenario
+Most probably, in order to implement flexibility of register programming we will use scripts (Python or shell) during development phase when there is lots of unknowns. Later – when programming flow will be clear and development is done – register programming flow will have to be implemented in the driver’s modules. Same is applied for I2C communication with respect to EDID parsing or IT66121 client programming or whatever else.
+NOTE: there are 2 exceptions: interrupts status register is still processed in the driver, IT66121 client detection will still happen on I2C automatically
+
+### Debugging implementation
+In order to implement debugging, following must be implemented in the driver:
+1. No register programming for fl2000 or it66121
+1. Storing of interrupt status values in a ringbufffer for further reading through debugfs
+1. Implementing debugfs entries
+#### Debugfs entries
+*Register programming*
+- address: specify register address to work with
+- value: read causes read from register, write causes write to register
+
+*I2C access*
+- address: i2c device address to operate with
+- offset: specify device register address to work with
+- value: read causes i2c read, write causes i2c write
+
+*Interrupt handling*
+- status: array of values of interrupt statuses since last reading
+
+*Entries structure*<br>
+:open_file_folder: fl2000_drm<br>
+&nbsp;&nbsp;:open_file_folder: register<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up: address<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up: value<br>
+&nbsp;&nbsp;:open_file_folder:i2c<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:address<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:offset<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:value<br>
+&nbsp;&nbsp;:open_file_folder:interrupt<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:status<br>
+
 ## Limitations
  * HDMI CEC is not supported
  * HDMI Audio is not supported
