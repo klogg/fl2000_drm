@@ -21,8 +21,6 @@
 #define BPP		32
 #define MAX_CONN	1
 
-int fl2000_debugfs_init(struct drm_minor *minor);
-
 /* List all supported bridges */
 static const char *fl2000_supported_bridges[] = {
 	"it66121", /* IT66121 driver name*/
@@ -71,7 +69,7 @@ static struct drm_driver fl2000_drm_driver = {
 	.minor = DRM_DRIVER_MINOR,
 	.patchlevel = DRM_DRIVER_PATCHLEVEL,
 
-#if defined(CONFIG_DEBUG_FS)
+#if defined(_DISABLED_CONFIG_DEBUG_FS)
 	.debugfs_init = fl2000_debugfs_init,
 #endif
 };
