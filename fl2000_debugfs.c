@@ -31,7 +31,7 @@ static int i2c_value_write(void *data, u64 value)
 			value);
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, i2c_value_read, i2c_value_write, "%x\n");
+DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, i2c_value_read, i2c_value_write, "%llx\n");
 
 static u32 reg_address;
 
