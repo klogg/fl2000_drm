@@ -147,7 +147,7 @@ static const struct reg_default fl2000_reg_defaults[] = {
  * List of registers that shall not be read automatically (e.g. for cache update
  * due to presence of self-clear bits
  * */
-static inline FL2000_REG_PRECIOUS(u32 reg)
+static inline bool FL2000_REG_PRECIOUS(u32 reg)
 {
 	switch (reg) {
 	case FL2000_VGA_STATUS_REG:
@@ -160,7 +160,7 @@ static inline FL2000_REG_PRECIOUS(u32 reg)
 /*
  * List of volatile registers that shall not be cached
  * */
-static inline FL2000_REG_VOLATILE(u32 reg)
+static inline bool FL2000_REG_VOLATILE(u32 reg)
 {
 	switch (reg) {
 	case FL2000_VGA_STATUS_REG:
