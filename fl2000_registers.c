@@ -15,41 +15,6 @@
 /* Timeout in ms for USB Control Message (transport for I2C bus)  */
 #define CONTROL_XFER_TIMEOUT	2000
 
-static const struct reg_default fl2000_reg_defaults[] = {
-	regmap_reg_default(FL2000_VGA_STATUS_REG,		0x00000000),
-	regmap_reg_default(FL2000_VGA_CTRL_REG_PXCLK,		0x0010119C),
-	regmap_reg_default(FL2000_VGA_HSYNC_REG1,		0x02800320),
-	regmap_reg_default(FL2000_VGA_HSYNC_REG2,		0x00600089),
-	regmap_reg_default(FL2000_VGA_VSYNC_REG1,		0x01E0020D),
-	regmap_reg_default(FL2000_VGA_VSYNC_REG2,		0x0002001C),
-	regmap_reg_default(FL2000_VGA_TEST_REG,			0x00000006),
-	regmap_reg_default(FL2000_VGA_ISOCH_REG,		0x00850000),
-	regmap_reg_default(FL2000_VGA_I2C_SC_REG,		0x80000000),
-	regmap_reg_default(FL2000_VGA_I2C_RD_REG,		0x00000000),
-	regmap_reg_default(FL2000_VGA_I2C_WR_REG,		0x00000000),
-	regmap_reg_default(FL2000_VGA_PLL_REG,			0x003F6119),
-	regmap_reg_default(FL2000_VGA_LBUF_REG,			0x23300001),
-	regmap_reg_default(FL2000_VGA_HI_MARK,			0x00000000),
-	regmap_reg_default(FL2000_VGA_LO_MARK,			0x00000000),
-	regmap_reg_default(FL2000_VGA_CTRL_REG_ACLK,		0x00000000),
-	regmap_reg_default(FL2000_VGA_PXCLK_CNT_REG,		0x00000000),
-	regmap_reg_default(FL2000_VGA_VCNT_REG,			0x00000000),
-	regmap_reg_default(FL2000_RST_CTRL_REG,			0x00000100),
-	regmap_reg_default(FL2000_BIAC_CTRL1_REG,		0x00A00120),
-	regmap_reg_default(FL2000_BIAC_CTRL2_REG,		0x00000000),
-	regmap_reg_default(FL2000_BIAC_STATUS_REG,		0x00000000),
-	regmap_reg_default(FL2000_VGA_PLT_REG_PXCLK,		0x00000000),
-	regmap_reg_default(FL2000_VGA_PLT_RADDR_REG_PXCLK,	0x00000000),
-	regmap_reg_default(FL2000_VGA_CTRL2_REG_ACLK,		0x00000000),
-	regmap_reg_default(FL2000_TEST_CNTL_REG1,		0xC0003C20),
-	regmap_reg_default(FL2000_TEST_CNTL_REG1,		0x00000C04),
-	regmap_reg_default(FL2000_TEST_CNTL_REG3,		0x00000000),
-	regmap_reg_default(FL2000_TEST_STAT1,			0x00000000),
-	regmap_reg_default(FL2000_TEST_STAT2,			0x00000000),
-	regmap_reg_default(FL2000_TEST_STAT3,			0x00000000),
-	regmap_reg_default(FL2000_VGA_CTRL_REG_3,		0x00000488),
-};
-
 static bool fl2000_reg_precious(struct device *dev, unsigned int reg)
 {
 	return FL2000_REG_PRECIOUS(reg);
