@@ -10,6 +10,7 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 
 ## Implementation
 ![Diagram](fl2000.svg)
+All registers (both FL2000 and IT66121) access is implemented via regmaps. It is assumed that FL2000DX outputs DPI interface (kind of "crtc" output, not "encoder") that is connected to HDMI or other transciever. USB Bulk Streams are not supported by FL2000DX, so implementation will simly use Bulk endpoint.
 
 ### Debug scenario
 Most probably, in order to implement flexibility of register programming we will use scripts (Python or shell) during development phase when there is lots of unknowns. Later – when programming flow will be clear and development is done – register programming flow will have to be implemented in the driver’s modules. Same is applied for I2C communication with respect to EDID parsing or IT66121 client programming or whatever else.
@@ -22,28 +23,25 @@ In order to implement debugging, following must be implemented in the driver:
 1. Implementing debugfs entries
 #### Debugfs entries
 *Register programming*
-- address: specify register address to work with
-- value: read causes read from register, write causes write to register
+- reg_address: specify register address to work with
+- reg_data: read causes read from register, write causes write to register
 
 *I2C access*
-- address: i2c device address to operate with
-- offset: specify device register address to work with
-- value: read causes i2c read, write causes i2c write
+- i2c_address: i2c device address to operate with
+- i2c_offset: specify device register address to work with
+- i2c_value: read causes i2c read, write causes i2c write
 
 *Interrupt handling*
 - status: array of values of interrupt statuses since last reading
 
 *Entries structure*<br>
 :open_file_folder: fl2000_drm<br>
-&nbsp;&nbsp;:open_file_folder: register<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up: address<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up: value<br>
-&nbsp;&nbsp;:open_file_folder:i2c<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:address<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:offset<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:value<br>
-&nbsp;&nbsp;:open_file_folder:interrupt<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:status<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:reg_address<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:reg_data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_address<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_offset<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_data<br>
+&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:irq_status<br>
 
 ## Limitations
  * HDMI CEC is not supported
@@ -66,12 +64,8 @@ Considering, no firm decision yet
  * Reference simple DRM implementation of PL111 driver (see drivers/gpu/drm/pl111)
 
 ## Notes
- * We can use simple DRM display pipeline (only prime plane -> crtc -> only one encoder)
- * FL2000DX outputs DPI interface (kind of "crtc" output, not "encoder")
  * VGA (D-Sub) DAC output of FL2000DX can be implemented as a DRM bridge (dumb_vga_dac)
- * Register access for both FL2000DX and IT66121 can be done via regmap (see <linux/regmap.h>)
  * For registration of sibling I2C devices of IT66121 (CEC, DDC, ...) i2c\_new\_dummy() function may be used
- * USB Bulk Streams are not supported by FL2000DX
 
 ## Open questions
  * How to simultaneously support HDMI bridge and D-Sub bridge? Config option?
