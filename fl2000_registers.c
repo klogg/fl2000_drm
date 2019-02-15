@@ -108,6 +108,44 @@ static const struct regmap_config fl2000_regmap_config = {
 	.use_single_rw = true,
 };
 
+#if defined(CONFIG_DEBUG_FS)
+
+static u32 reg_debug_address;
+
+static int fl2000_debugfs_reg_read(void *data, u64 *value)
+{
+	struct usb_device *usb_dev = data;
+	u32 dword;
+	return fl2000_reg_read(usb_dev, reg_debug_address, &dword);
+	*value = dword;
+}
+
+static int fl2000_debugfs_reg_write(void *data, u64 value)
+{
+	struct usb_device *usb_dev = data;
+	return fl2000_reg_write(usb_dev, reg_debug_address, (u32)value);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(reg_ops, fl2000_debugfs_reg_read,
+		fl2000_debugfs_reg_write, "%llx\n");
+
+static void fl2000_debugfs_reg_init(struct usb_device *usb_dev)
+{
+	struct dentry *root_dir;
+	struct dentry *reg_address_file, *reg_data_file;
+
+	root_dir = debugfs_create_dir("fl2000_regs", NULL);
+
+	reg_address_file = debugfs_create_x32("reg_address", fl2000_debug_umode,
+			root_dir, &reg_debug_address);
+
+	reg_data_file = debugfs_create_file("reg_data", fl2000_debug_umode,
+			root_dir, usb_dev, &reg_ops);
+}
+#else /* CONFIG_DEBUG_FS */
+#define fl2000_debugfs_reg_init(usb_dev)
+#endif /* CONFIG_DEBUG_FS */
+
 int fl2000_regmap_create(struct usb_device *usb_dev)
 {
 	struct regmap *regmap;
@@ -117,5 +155,8 @@ int fl2000_regmap_create(struct usb_device *usb_dev)
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
 
+	fl2000_debugfs_reg_init(usb_dev);
+
+	dev_info(&usb_dev->dev, "Configured FL2000 registers");
 	return 0;
 }

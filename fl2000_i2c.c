@@ -28,11 +28,70 @@ struct fl2000_i2c_algo_data {
 	struct usb_device *usb_dev;
 };
 
-#define fl2000_i2c_read_dword(adapter, addr, offset, data) \
-		fl2000_i2c_xfer_dword(adapter, true, addr, offset, data)
+/* TODO: maybe change to static inline functions? */
+static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
+		u16 addr, u8 offset, u32 *data);
 
-#define fl2000_i2c_write_dword(adapter, addr, offset, data) \
-		fl2000_i2c_xfer_dword(adapter, false, addr, offset, &data)
+static inline int fl2000_i2c_read_dword(struct i2c_adapter *adapter,
+		u16 addr, u8 offset, u32 *data)
+{
+	return fl2000_i2c_xfer_dword(adapter, true, addr, offset, data);
+}
+
+static inline int fl2000_i2c_write_dword(struct i2c_adapter *adapter,
+		u16 addr, u8 offset, u32 *data)
+{
+	return fl2000_i2c_xfer_dword(adapter, false, addr, offset, data);
+}
+
+#if defined(CONFIG_DEBUG_FS)
+
+static u8 i2c_debug_address;	/* I2C bus address that we will talk to */
+static u8 i2c_debug_offset;	/* Offset of the register within I2C address */
+
+static int fl2000_debugfs_i2c_read(void *data, u64 *value)
+{
+	struct i2c_adapter *i2c_adapter = data;
+	static u32 dword;
+	return fl2000_i2c_read_dword(i2c_adapter, i2c_debug_address,
+			i2c_debug_offset, &dword);
+	*value = dword;
+}
+
+static int fl2000_debugfs_i2c_write(void *data, u64 value)
+{
+	struct i2c_adapter *i2c_adapter = data;
+	static u32 dword;
+	dword = (u32)value;
+	return fl2000_i2c_write_dword(i2c_adapter, i2c_debug_address,
+			i2c_debug_offset, &dword);
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read,
+		fl2000_debugfs_i2c_write, "%llx\n");
+
+static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
+{
+	struct dentry *root_dir;
+	struct dentry *i2c_address_file, *i2c_offset_file, *i2c_data_file;
+
+	root_dir = debugfs_create_dir("fl2000_i2c", NULL);
+
+	i2c_address_file = debugfs_create_x8("i2c_address", fl2000_debug_umode,
+			root_dir, &i2c_debug_address);
+
+	i2c_offset_file = debugfs_create_x8("i2c_offset", fl2000_debug_umode,
+			root_dir, &i2c_debug_offset);
+
+	i2c_data_file = debugfs_create_file("i2c_data", fl2000_debug_umode,
+			root_dir, adapter, &i2c_ops);
+
+	return 0;
+}
+#else /* CONFIG_DEBUG_FS */
+#define fl2000_debugfs_i2c_init(adapter)
+#endif /* CONFIG_DEBUG_FS */
+
 
 static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		u16 addr, u8 offset, u32 *data)
@@ -144,7 +203,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		data.b[idx] = data_msg->buf[0];
 
 		ret = fl2000_i2c_write_dword(adapter, addr_msg->addr,
-				offset, data.w);
+				offset, &data.w);
 		if (ret != 0) goto error;
 	}
 
@@ -224,6 +283,8 @@ int fl2000_i2c_create(struct usb_device *usb_dev)
 
 	ret = i2c_add_adapter(adapter);
 	if (ret != 0) return ret;
+
+	fl2000_debugfs_i2c_init(adapter);
 
 	dev_info(&adapter->dev, "Connected FL2000 I2C adapter");
 	return 0;
