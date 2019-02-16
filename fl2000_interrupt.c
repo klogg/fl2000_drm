@@ -24,6 +24,32 @@ struct fl2000_intr {
 	atomic_t state;
 };
 
+#if defined(CONFIG_DEBUG_FS)
+
+static u32 intr_status;
+
+static void fl2000_debugfs_intr_status(u32 status)
+{
+	intr_status = status;
+}
+
+static int fl2000_debugfs_intr_init(void)
+{
+	struct dentry *root_dir;
+	struct dentry *interrupt_file;
+
+	root_dir = debugfs_create_dir("fl2000_interrupt", NULL);
+
+	interrupt_file = debugfs_create_x32("intr_status", fl2000_debug_umode,
+			root_dir, &intr_status);
+
+	return 0;
+}
+#else /* CONFIG_DEBUG_FS */
+#define fl2000_debugfs_intr_init()
+#define fl2000_debugfs_intr_status()
+#endif /* CONFIG_DEBUG_FS */
+
 static void fl2000_intr_completion(struct urb *urb);
 
 static inline int fl2000_intr_submit_urb(struct fl2000_intr *intr)
@@ -62,7 +88,7 @@ static void fl2000_intr_work(struct work_struct *work_item)
 			dev_err(&usb_dev->dev, "Cannot read interrupt" \
 					"register (%d)", ret);
 		} else {
-			dev_info(&usb_dev->dev, " *** 0x%08X", status);
+			fl2000_debugfs_intr_status(status);
 		}
 	}
 
@@ -166,6 +192,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 	usb_set_intfdata(interface, intr);
 
 	fl2000_intr_work(&intr->work);
+
+	fl2000_debugfs_intr_init();
 
 	return 0;
 error:
