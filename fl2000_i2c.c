@@ -28,7 +28,6 @@ struct fl2000_i2c_algo_data {
 	struct usb_device *usb_dev;
 };
 
-/* TODO: maybe change to static inline functions? */
 static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		u16 addr, u8 offset, u32 *data);
 
