@@ -80,9 +80,6 @@ static int fl2000_init(struct usb_device *usb_dev)
 		return -ENOMEM;
 	}
 
-	regmap_write_bits(regmap, FL2000_USB_LPM, (3<<19), (3<<19));
-	regmap_write_bits(regmap, FL2000_USB_LPM, (3<<20), (3<<20));
-
 	/* Create control fields */
 	usb_dev_data->app_reset = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_RST_CTRL_REG_app_reset);
@@ -99,8 +96,6 @@ static int fl2000_init(struct usb_device *usb_dev)
 
 	ret = regmap_field_write(usb_dev_data->wakeup_clear_en, false);
 	if (ret != 0) return -EIO;
-
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, 0x1F, 0x1C);
 
 	/* Create I2C adapter */
 	ret = fl2000_i2c_create(usb_dev);
