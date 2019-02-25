@@ -45,25 +45,27 @@ static inline int fl2000_i2c_write_dword(struct i2c_adapter *adapter,
 
 #if defined(CONFIG_DEBUG_FS)
 
+/* TODO: This shall not be static, allocate per usb_device instead */
 static u8 i2c_debug_address;	/* I2C bus address that we will talk to */
 static u8 i2c_debug_offset;	/* Offset of the register within I2C address */
 
 static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 {
+	int res;
+	u32 u32_value;
 	struct i2c_adapter *i2c_adapter = data;
-	static u32 dword;
-	return fl2000_i2c_read_dword(i2c_adapter, i2c_debug_address,
-			i2c_debug_offset, &dword);
-	*value = dword;
+	res = fl2000_i2c_read_dword(i2c_adapter, i2c_debug_address,
+			i2c_debug_offset, &u32_value);
+	*value = u32_value;
+	return res;
 }
 
 static int fl2000_debugfs_i2c_write(void *data, u64 value)
 {
+	u32 u32_value = value;
 	struct i2c_adapter *i2c_adapter = data;
-	static u32 dword;
-	dword = (u32)value;
 	return fl2000_i2c_write_dword(i2c_adapter, i2c_debug_address,
-			i2c_debug_offset, &dword);
+			i2c_debug_offset, &u32_value);
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read,
