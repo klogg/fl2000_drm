@@ -26,6 +26,9 @@ struct fl2000_intr {
 
 #if defined(CONFIG_DEBUG_FS)
 
+/* TODO: This shall not be static, and TBH the whole design of checking
+ * in debugfs here is completely wrong. This part shall be rewritten considering
+ * interrupts happening all the time and statuses read and stored somewhere */
 static u32 intr_status;
 
 static void fl2000_debugfs_intr_status(u32 status)
