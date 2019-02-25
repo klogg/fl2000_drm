@@ -110,20 +110,23 @@ static const struct regmap_config fl2000_regmap_config = {
 
 #if defined(CONFIG_DEBUG_FS)
 
-static u32 reg_debug_address;
+/* TODO: This shall not be static, allocate per usb_device instead */
+static unsigned int reg_debug_address;
 
 static int fl2000_debugfs_reg_read(void *data, u64 *value)
 {
+	int res;
+	unsigned int int_value;
 	struct usb_device *usb_dev = data;
-	u32 dword;
-	return fl2000_reg_read(usb_dev, reg_debug_address, &dword);
-	*value = dword;
+	res = fl2000_reg_read(usb_dev, reg_debug_address, &int_value);
+	*value = int_value;
+	return res;
 }
 
 static int fl2000_debugfs_reg_write(void *data, u64 value)
 {
 	struct usb_device *usb_dev = data;
-	return fl2000_reg_write(usb_dev, reg_debug_address, (u32)value);
+	return fl2000_reg_write(usb_dev, reg_debug_address, value);
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(reg_ops, fl2000_debugfs_reg_read,
