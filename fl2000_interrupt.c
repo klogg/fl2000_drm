@@ -47,7 +47,7 @@ static int fl2000_debugfs_intr_init(void)
 }
 #else /* CONFIG_DEBUG_FS */
 #define fl2000_debugfs_intr_init()
-#define fl2000_debugfs_intr_status()
+#define fl2000_debugfs_intr_status(status)
 #endif /* CONFIG_DEBUG_FS */
 
 static void fl2000_intr_completion(struct urb *urb);
