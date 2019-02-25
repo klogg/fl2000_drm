@@ -69,7 +69,7 @@ static int fl2000_debugfs_i2c_write(void *data, u64 value)
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read,
-		fl2000_debugfs_i2c_write, "%llx\n");
+		fl2000_debugfs_i2c_write, "%08llx\n");
 
 static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 {

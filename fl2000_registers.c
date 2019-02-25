@@ -130,7 +130,7 @@ static int fl2000_debugfs_reg_write(void *data, u64 value)
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(reg_ops, fl2000_debugfs_reg_read,
-		fl2000_debugfs_reg_write, "%llx\n");
+		fl2000_debugfs_reg_write, "%08llx\n");
 
 static void fl2000_debugfs_reg_init(struct usb_device *usb_dev)
 {
