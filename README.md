@@ -1,6 +1,6 @@
 # Linux kernel FL2000DX/IT66121FN dongle DRM driver
 
-Clean re-implementation of FrescoLogic FL2000DX DRM driver and ITE Tech IT66121F driver, allowing to enable full display controller capabilities for [USB-to-HDMI dongle based on such chips](https://www.aliexpress.com/item/HD-1080P-USB-3-0-To-HDMI-External-Video-Graphic-Card-Multi-Display-Cable-Adapter-Converter/32808836824.html?spm=a2g0s.9042311.0.0.4a9f4c4dow19O6) in Linux
+Clean re-implementation of FrescoLogic FL2000DX DRM driver and ITE Tech IT66121F driver, allowing to enable full display controller capabilities for [USB-to-HDMI dongles](https://www.aliexpress.com/item/HD-1080P-USB-3-0-To-HDMI-External-Video-Graphic-Card-Multi-Display-Cable-Adapter-Converter/32808836824.html?spm=a2g0s.9042311.0.0.4a9f4c4dow19O6) based on such chips in Linux
 
 ## FL2000DX
 The FL2000DX is Fresco Logic’s USB 3.0 Display device controller. It integrates Fresco Logic’s display transfer engine, USB 3.0 device controller, USB 3.0 transceiver, and a VGA (D-Sub) DAC. Fresco Logic’s display transfer engine is designed with Fresco Logic’s proprietary architecture and processes the video stream optimally for USB 3.0 bandwidth. The high performance video DAC provides clear and crisp display quality, and supports full HD (1920×1080) resolution. The integrated USB 3.0 device controller and transceiver were developed in conjunction with the de-facto standard Fresco USB 3.0 host controllers, which ensures the best performance and compatibility.
@@ -12,36 +12,7 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 ![Diagram](fl2000.svg)
 All registers (both FL2000 and IT66121) access is implemented via regmaps. It is assumed that FL2000DX outputs DPI interface (kind of "crtc" output, not "encoder") that is connected to HDMI or other transciever. USB Bulk Streams are not supported by FL2000DX, so implementation will simly use Bulk endpoint.
 
-### Debug scenario
-Most probably, in order to implement flexibility of register programming we will use scripts (Python or shell) during development phase when there is lots of unknowns. Later – when programming flow will be clear and development is done – register programming flow will have to be implemented in the driver’s modules. Same is applied for I2C communication with respect to EDID parsing or IT66121 client programming or whatever else.
-NOTE: there are 2 exceptions: interrupts status register is still processed in the driver, IT66121 client detection will still happen on I2C automatically
-
-### Debugging implementation
-In order to implement debugging, following must be implemented in the driver:
-1. No register programming for fl2000 or it66121
-1. Storing of interrupt status values in a ringbufffer for further reading through debugfs
-1. Implementing debugfs entries
-#### Debugfs entries
-*Register programming*
-- reg_address: specify register address to work with
-- reg_data: read causes read from register, write causes write to register
-
-*I2C access*
-- i2c_address: i2c device address to operate with
-- i2c_offset: specify device register address to work with
-- i2c_value: read causes i2c read, write causes i2c write
-
-*Interrupt handling*
-- status: array of values of interrupt statuses since last reading
-
-*Entries structure*<br>
-:open_file_folder: fl2000_drm<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:reg_address<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:reg_data<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_address<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_offset<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:i2c_data<br>
-&nbsp;&nbsp;&nbsp;&nbsp;:page_facing_up:irq_status<br>
+See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) for more details on development.
 
 ## Limitations
  * HDMI CEC is not supported
@@ -49,6 +20,8 @@ In order to implement debugging, following must be implemented in the driver:
  * HDCP is not supported
  * USB2.0 is not supported
  * Dongle onboard SPI EEPROM access via USB Mass Storage not implemented
+
+## Known issues
  * Connecting more than one dongle to the same USB bus may not work
  * Non big-endian hosts (e.g. little endian) may not work
  * 32-bit hosts may not work
@@ -66,6 +39,9 @@ Considering, no firm decision yet
 ## Notes
  * VGA (D-Sub) DAC output of FL2000DX can be implemented as a DRM bridge (dumb_vga_dac)
  * For registration of sibling I2C devices of IT66121 (CEC, DDC, ...) i2c\_new\_dummy() function may be used
+ * Need to review, test and cleanup init/cleanup procedures to ensure no leaks or races or other issues
+ * Need to implement unit testing with latest kernel & DRM unit testing tools, target coverage shall be 100%
+ * Need to implement static code analysis with Coverity Scan and maybe some other tools
 
 ## Open questions
  * How to simultaneously support HDMI bridge and D-Sub bridge? Config option?
