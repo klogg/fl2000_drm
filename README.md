@@ -10,6 +10,7 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 
 ## Implementation
 ![Diagram](fl2000.svg)
+
 All registers (both FL2000 and IT66121) access is implemented via regmaps. It is assumed that FL2000DX outputs DPI interface (kind of "crtc" output, not "encoder") that is connected to HDMI or other transciever. USB Bulk Streams are not supported by FL2000DX, so implementation will simly use Bulk endpoint.
 
 See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) for more details on development.
@@ -33,8 +34,8 @@ Considering, no firm decision yet
  * Original driver by FrescoLogic: https://github.com/FrescoLogic/FL2000
  * Major clean-up of original FL driver by Hans Ulli Kroll: https://github.com/ulli-kroll/FL2000
  * Reference IT66121FN driver ftom RK3188 Android KK kernel repositpry: https://github.com/phjanderson/Kernel-3188
- * Reference USB DRM implementation of DisplayLink driver (see drivers/gpu/drm/udl)
- * Reference simple DRM implementation of PL111 driver (see drivers/gpu/drm/pl111)
+ * Reference USB DRM implementation of DisplayLink driver (see drivers/gpu/drm/udl in kernel sources)
+ * Reference simple DRM implementation of PL111 driver (see drivers/gpu/drm/pl111 in kernel sources)
 
 ## Notes
  * VGA (D-Sub) DAC output of FL2000DX can be implemented as a DRM bridge (dumb_vga_dac)
