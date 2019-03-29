@@ -2,6 +2,9 @@
 
 fl2k_proto = Proto("fl2k", "FL2000 Protocol")
 
+CONTROL_UNKNOWN = 0xFFFF
+INTERRUPT_AV = 0x10
+
 local f_stage = Field.new("usb.control_stage")
 local stage_types = {
     SETUP = 0,
@@ -16,32 +19,40 @@ local f = fl2k_proto.fields
 f.f_reg_op = ProtoField.uint8("fl2k.reg_op", "Register operation", base.HEX, op_types)
 f.f_reg_addr = ProtoField.uint16("fl2k.reg_addr", "Register address", base.HEX)
 f.f_reg_value = ProtoField.uint32("fl2k.reg_value", "Register value", base.HEX)
+f.f_irq = ProtoField.uint32("fl2k.irq", "Interrupt", base.DEC)
 
 function fl2k_proto.dissector(buffer, pinfo, tree)
-    local stage = f_stage()
     local t_fl2k = tree:add(fl2k_proto, buffer())
 
-    pinfo.cols["info"]:set("FL2000 Registers")
+    if (pinfo.match_uint == CONTROL_UNKNOWN) then
+        pinfo.cols["info"]:set("FL2000 Registers")
+        local stage = f_stage()
 
-    if (stage.value == stage_types.SETUP) then
-        -- For future use
-        local reg_op = buffer(0, 1):uint()
-        local reg_addr = buffer(3, 2):le_uint()
+        if (stage.value == stage_types.SETUP) then
+            -- For future use
+            local reg_op = buffer(0, 1):uint()
+            local reg_addr = buffer(3, 2):le_uint()
 
-        t_fl2k:add(f.f_reg_op, buffer(0, 1))
-        t_fl2k:add_le(f.f_reg_addr, buffer(3, 2))
-        
-    elseif (stage.value == stage_types.DATA) then
-        -- For future use
-        local reg_value = buffer(0, 4):le_uint()
+            t_fl2k:add(f.f_reg_op, buffer(0, 1))
+            t_fl2k:add_le(f.f_reg_addr, buffer(3, 2))
 
-        t_fl2k:add_le(f.f_reg_value, buffer(0, 4))
+        elseif (stage.value == stage_types.DATA) then
+            -- For future use
+            local reg_value = buffer(0, 4):le_uint()
 
-    elseif (stage == stage_types.STATUS) then
-        -- Do nothing
+            t_fl2k:add_le(f.f_reg_value, buffer(0, 4))
+
+        elseif (stage == stage_types.STATUS) then
+            -- Do nothing
+        end
+    elseif (pinfo.match_uint == INTERRUPT_AV) then
+        pinfo.cols["info"]:set("FL2000 Interrupt")
+        t_fl2k:add_le(f.f_irq, buffer(0, 1))
     end
-    
 end
 
 usb_table = DissectorTable.get("usb.control")
-usb_table:add(0xffff, fl2k_proto)
+usb_table:add(CONTROL_UNKNOWN, fl2k_proto) -- Maps to UNKNOWN InterfaceClass
+
+usb_table = DissectorTable.get("usb.interrupt")
+usb_table:add(INTERRUPT_AV, fl2k_proto) -- Maps to Audio/Video InterfaceClass
