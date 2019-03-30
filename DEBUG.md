@@ -33,7 +33,5 @@ Following functions are already implemented in the driver code:
 
 *TODO* Add buffer for sending arbitrary frame without using DRM
 
-Dump of correctly working windows driver with non-standard HDMI display is [available on Dropbox](https://www.dropbox.com/s/niizuk2d4xrkcmg/fl2000.pcapng?dl=0) (45MB pcapng)
-
 ## DRM implementation
 *TODO* Support for DRM development tools
