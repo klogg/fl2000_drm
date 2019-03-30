@@ -28,6 +28,16 @@ NOTE: for correct dissector operation Wireshark must be built with patch allowin
 800x480 (resolution) x3 (bytes per pixel) = 1152000
 * EO frame signaled by zero-sized BULK packet
 * First BULK frame has timestamp of 40.036560, last BULK packet has timestamp 50.371687, with total 681 ob non-zero BULK frames transmitted - this give us 65.9 FPS which seem to be a strange number.
-* Something happens starting sequence 8533
-  * set bit 25 in register 0x803C (0xD701084D -> 0xD501084D)
+* Display connect occur on sequence 1530
+  * receive interrupt (1) with status 0x680000E1
+    - External monitor event: external monitor connected
+* Display disconnect occur on sequence 8830
+  * receive interrupt (1) with status 0x480AA260
+    - External monitor event: external monitor disconnected
+* Something happens starting sequence 8533 - driver forces VGA connect and receives corresponding interrupt from EDID VGA detection circuitry. This does not seem to be correct because we use HDMI monitor, not VGA
+  * set bit 25 in register 0x803C (0xD701084D -> 0xD501084D): Force VGA Connect
   * receive interrupt (1) with status 0xA8087EE1
+    - EDID event: VGA monitor disconnected
+* VGA connect status and VGA DAC power up status correctly follow connection status
+* No errors observed during operation except LBUF overflow - but probably this is due too high FPS (66 vs expected 30)
+* It is interesting to note that on disconnect amount of frames transmitted is 680 which is 1 less than BULK frames on USB bus - probably disconnect circuitry took some time to raise interrupt so 1 extra frame got transmitted and lost
