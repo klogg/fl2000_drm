@@ -1,5 +1,7 @@
 -- Copyright 2019 Artem Mygaiev <joculator@gmail.com>
 
+-- Here goes Dissector
+
 fl2k_proto = Proto("fl2k", "FL2000 Protocol")
 
 InterfaceClass = {
@@ -80,9 +82,11 @@ function fl2k_proto.dissector(buffer, pinfo, tree)
         elseif (stage == ControlTransferStage.STATUS) then
             -- Do nothing
         end
+
     elseif (transfer.value == TransferType.INTERRUPT) then
         pinfo.cols["info"]:set("FL2000 Interrupt")
         t_fl2k:add_le(f.f_irq, buffer(0, 1))
+
     elseif (transfer.value == TransferType.BULK) then
         pinfo.cols["info"]:set("FL2000 Data")
         -- TODO: is it possible to parse it as image?
