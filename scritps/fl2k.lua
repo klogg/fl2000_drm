@@ -37,8 +37,8 @@ f.f_irq = ProtoField.uint32("fl2k.irq", "Interrupt", base.DEC)
 -- Bulk related
 f.f_fb = ProtoField.bytes("fl2k.fb", "Framebuffer", base.SPACE)
 
-function fl2k_proto.dissector(buffer, pinfo, tree)
-    local t_fl2k = tree:add(fl2k_proto, buffer())
+function fl2k_proto.dissector(tvb, pinfo, tree)
+    local t_fl2k = tree:add(fl2k_proto, tvb())
     local transfer = f_transfer()
 
     if (transfer.value == TransferType.CONTROL) then
@@ -47,10 +47,10 @@ function fl2k_proto.dissector(buffer, pinfo, tree)
         pinfo.cols["info"]:set("FL2000 Registers")
         if (stage.value == ControlTransferStage.SETUP) then
             -- For future use
-            local reg_op = buffer(0, 1):uint()
-            local reg_addr = buffer(3, 2):le_uint()
+            local reg_op = tvb(0, 1):uint()
+            local reg_addr = tvb(3, 2):le_uint()
 
-            t_fl2k:add(f.f_reg_op, buffer(0, 1))
+            t_fl2k:add(f.f_reg_op, tvb(0, 1))
 
             if (reg_addr == 0x8020) then
                 if (reg_op == 0x40) then
@@ -70,27 +70,27 @@ function fl2k_proto.dissector(buffer, pinfo, tree)
                 else
                     pinfo.cols["info"]:append(" Write")
                 end
-                t_fl2k:add_le(f.f_reg_addr, buffer(3, 2))
+                t_fl2k:add_le(f.f_reg_addr, tvb(3, 2))
             end
 
         elseif (stage.value == ControlTransferStage.DATA) then
             -- For future use
-            local reg_value = buffer(0, 4):le_uint()
+            local reg_value = tvb(0, 4):le_uint()
 
-            t_fl2k:add_le(f.f_reg_value, buffer(0, 4))
+            t_fl2k:add_le(f.f_reg_value, tvb(0, 4))
 
         elseif (stage == ControlTransferStage.STATUS) then
-            -- Do nothing
+        -- Do nothing
         end
 
     elseif (transfer.value == TransferType.INTERRUPT) then
         pinfo.cols["info"]:set("FL2000 Interrupt")
-        t_fl2k:add_le(f.f_irq, buffer(0, 1))
+        t_fl2k:add_le(f.f_irq, tvb(0, 1))
 
     elseif (transfer.value == TransferType.BULK) then
         pinfo.cols["info"]:set("FL2000 Data")
         -- TODO: is it possible to parse it as image?
-        t_fl2k:add_le(f.f_fb, buffer())
+        t_fl2k:add_le(f.f_fb, tvb())
 
     else
         pinfo.cols["info"]:set("FL2000 WTF???")
