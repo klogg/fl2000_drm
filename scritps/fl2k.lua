@@ -26,9 +26,14 @@ local op_types = {
     [0x41] = "Write",
 }
 local f = fl2k_proto.fields
+-- Registers related
 f.f_reg_op = ProtoField.uint8("fl2k.reg_op", "Register operation", base.HEX, op_types)
 f.f_reg_addr = ProtoField.uint16("fl2k.reg_addr", "Register address", base.HEX)
 f.f_reg_value = ProtoField.uint32("fl2k.reg_value", "Register value", base.HEX)
+-- I2C related
+f.f_i2c_addr = ProtoField.uint8("fl2k.i2c_addr", "I2C address", base.HEX)
+f.f_i2c_offset = ProtoField.uint16("fl2k.i2c_offset", "I2C offset", base.HEX)
+-- Interrupt related
 f.f_irq = ProtoField.uint32("fl2k.irq", "Interrupt", base.DEC)
 
 function fl2k_proto.dissector(buffer, pinfo, tree)
@@ -36,6 +41,7 @@ function fl2k_proto.dissector(buffer, pinfo, tree)
     local transfer = f_transfer()
 
     if (transfer.value == TransferType.CONTROL) then
+
         local stage = f_stage()
         pinfo.cols["info"]:set("FL2000 Registers")
         if (stage.value == ControlTransferStage.SETUP) then
@@ -44,7 +50,27 @@ function fl2k_proto.dissector(buffer, pinfo, tree)
             local reg_addr = buffer(3, 2):le_uint()
 
             t_fl2k:add(f.f_reg_op, buffer(0, 1))
-            t_fl2k:add_le(f.f_reg_addr, buffer(3, 2))
+
+            if (reg_addr == 0x8020) then
+                if (reg_op == 0x40) then
+                    pinfo.cols["info"]:append(" I2C Check")
+                else
+                    pinfo.cols["info"]:append(" I2C Operation")
+                end
+            elseif (reg_addr == 0x8024) then
+                pinfo.cols["info"]:append(" I2C Read Data")
+
+            elseif (reg_addr == 0x8028) then
+                pinfo.cols["info"]:append(" I2C Write Data")
+
+            else
+                if (reg_op == 0x40) then
+                    pinfo.cols["info"]:append(" Read")
+                else
+                    pinfo.cols["info"]:append(" Write")
+                end
+                t_fl2k:add_le(f.f_reg_addr, buffer(3, 2))
+            end
 
         elseif (stage.value == ControlTransferStage.DATA) then
             -- For future use
