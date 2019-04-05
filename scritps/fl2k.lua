@@ -24,9 +24,10 @@ ControlTransferStage = {
 local f_transfer = Field.new("usb.transfer_type")
 local f_stage = Field.new("usb.control_stage")
 local op_types = {
-    [0x40] = "Read",
-    [0x41] = "Write",
+    [0x40] = "RD",
+    [0x41] = "WR",
 }
+
 local f = fl2k_proto.fields
 -- Control related
 f.f_reg_op = ProtoField.uint8("fl2k.reg_op", "Register operation", base.HEX, op_types)
