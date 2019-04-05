@@ -52,6 +52,7 @@ function fl2k_proto.dissector(tvb, pinfo, tree)
             local reg_addr = tvb(3, 2):le_uint()
 
             t_fl2k:add(f.f_reg_op, tvb(0, 1))
+            t_fl2k:add_le(f.f_reg_addr, tvb(3, 2))
 
             if (reg_addr == 0x8020) then
                 if (reg_op == 0x40) then
@@ -61,17 +62,14 @@ function fl2k_proto.dissector(tvb, pinfo, tree)
                 end
             elseif (reg_addr == 0x8024) then
                 pinfo.cols["info"]:append(" I2C Read Data")
-
             elseif (reg_addr == 0x8028) then
                 pinfo.cols["info"]:append(" I2C Write Data")
-
             else
                 if (reg_op == 0x40) then
                     pinfo.cols["info"]:append(" Read")
                 else
                     pinfo.cols["info"]:append(" Write")
                 end
-                t_fl2k:add_le(f.f_reg_addr, tvb(3, 2))
             end
 
         elseif (stage.value == ControlTransferStage.DATA) then
