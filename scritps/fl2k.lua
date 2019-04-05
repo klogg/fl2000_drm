@@ -26,15 +26,14 @@ local op_types = {
     [0x41] = "Write",
 }
 local f = fl2k_proto.fields
--- Registers related
+-- Control related
 f.f_reg_op = ProtoField.uint8("fl2k.reg_op", "Register operation", base.HEX, op_types)
 f.f_reg_addr = ProtoField.uint16("fl2k.reg_addr", "Register address", base.HEX)
 f.f_reg_value = ProtoField.uint32("fl2k.reg_value", "Register value", base.HEX)
--- I2C related
-f.f_i2c_addr = ProtoField.uint8("fl2k.i2c_addr", "I2C address", base.HEX)
-f.f_i2c_offset = ProtoField.uint16("fl2k.i2c_offset", "I2C offset", base.HEX)
 -- Interrupt related
 f.f_irq = ProtoField.uint32("fl2k.irq", "Interrupt", base.DEC)
+-- Bulk related
+f.f_fb = ProtoField.bytes("fl2k.fb", "Framebuffer", base.SPACE)
 
 function fl2k_proto.dissector(buffer, pinfo, tree)
     local t_fl2k = tree:add(fl2k_proto, buffer())
@@ -87,6 +86,8 @@ function fl2k_proto.dissector(buffer, pinfo, tree)
     elseif (transfer.value == TransferType.BULK) then
         pinfo.cols["info"]:set("FL2000 Data")
         -- TODO: is it possible to parse it as image?
+        t_fl2k:add_le(f.f_fb, buffer())
+
     else
         pinfo.cols["info"]:set("FL2000 WTF???")
     end
