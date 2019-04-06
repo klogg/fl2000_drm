@@ -115,71 +115,86 @@ local f_reg_op = Field.new("fl2k.reg_op")
 local f_reg_addr = Field.new("fl2k.reg_addr")
 local f_reg_value = Field.new("fl2k.reg_value")
 
-I2C_STATE = {
-    IDLE = 0,   -- regular
-    WRITE = 1,  -- prepared for write operation (wrote to I2C_WR_DATA)
-    READ = 2,   -- prepared for read operation (programmed I2C_CTRL)
-}
 local i2c_devices = {
     [0x4C] = "IT66121",
 }
-local state = I2C_STATE.IDLE
-local i2c = {}
+
+I2C_STATE = {
+    IDLE = 0,
+    WRITE1 = 1,
+    WRITE2 = 2,
+    WRITE3 = 3,
+    READ1 = 4,
+    READ2 = 5,
+    READ3 = 6,
+}
+
+local i2c_state = I2C_STATE.IDLE
+local i2c = {}      -- array of i2c operations
 local i2c_idx = 1
 
+local ops = {}      -- array of register operations
+local op_idx = 1
+local op_i2c_start_idx = 0
+
+local regs = {}     -- count register access statistics
+
 local function analyze_i2c(op)
-    local res = false
-    --[[ Programming I2C operation ]]--
-    if op.reg_addr == 0x8020 and op.reg_op == "WR" and bit.band(op.reg_value, 0x80000000) == 0 then
+    local res
+    local i2c_done = bit.band(op.reg_value, 0x80000000)
+    if op.reg_addr == 0x8020 and op.reg_op == "RD" then
+        if i2c_state == I2C_STATE.IDLE and i2c_done ~= 0 then
+            i2c[i2c_idx] = {} -- start read operation
+            i2c_state = I2C_STATE.READ1
+            res = 0 -- suspected i2c flow
+        elseif i2c_state == I2C_STATE.READ2 and i2c_done == 0 then
+            -- do nothing, we are still waiting for i2c to complete
+        elseif i2c_state == I2C_STATE.READ2 and i2c_done ~= 0 then
+            i2c_state = I2C_STATE.READ3
+        elseif i2c_state == I2C_STATE.WRITE1 and i2c_done ~= 0 then
+            i2c_state = I2C_STATE.WRITE2
+        elseif i2c_state == I2C_STATE.WRITE3 and i2c_done == 0 then
+            -- do nothing, we are still waiting for i2c to complete
+        elseif i2c_state == I2C_STATE.WRITE3 and i2c_done ~= 0 then
+            i2c_state = I2C_STATE.IDLE
+            res = i2c_idx -- full i2c flow recovered
+            i2c_idx = i2c_idx + 1 -- finish write operation
+        else
+            i2c_state = I2C_STATE.IDLE
+        end
+    elseif op.reg_addr == 0x8020 and op.reg_op == "WR" then
         local i2c_address = bit.band(op.reg_value, 0x7F)
         local i2c_op = bit.band(bit.rshift(op.reg_value, 7), 0x01)
         local i2c_offset = bit.band(bit.rshift(op.reg_value, 8), 0xFF)
 
-        if i2c_op == 0 and state == I2C_STATE.WRITE then
-            state = I2C_STATE.IDLE
-            i2c[i2c_idx].i2c_op = "I2C WR"
-            i2c[i2c_idx].i2c_device = i2c_devices[i2c_address]
-            i2c[i2c_idx].i2c_offset = i2c_offset
-            i2c_idx = i2c_idx + 1 -- finish write operation
-            res = true
-
-        elseif i2c_op == 1 and state == I2C_STATE.IDLE then -- Read I2C
-            state = I2C_STATE.READ
-            i2c[i2c_idx] = {} -- start read operation
+        if i2c_state == I2C_STATE.READ1 and i2c_op == 1 then
             i2c[i2c_idx].i2c_op = "I2C RD"
             i2c[i2c_idx].i2c_device = i2c_devices[i2c_address]
             i2c[i2c_idx].i2c_offset = i2c_offset
-            res = true
+            i2c_state = I2C_STATE.READ2
+        elseif i2c_state == I2C_STATE.WRITE2 and i2c_op == 0 then
+            i2c[i2c_idx].i2c_op = "I2C WR"
+            i2c[i2c_idx].i2c_device = i2c_devices[i2c_address]
+            i2c[i2c_idx].i2c_offset = i2c_offset
+            i2c_state = I2C_STATE.WRITE3
+        else
+            i2c_state = I2C_STATE.IDLE
         end
-
-        --[[ Write I2C data ]]--
-    elseif op.reg_addr == 0x8028 and op.reg_op == "WR" then
-        if state == I2C_STATE.IDLE then
-            state = I2C_STATE.WRITE
-            i2c[i2c_idx] = {} -- start write operation
-            i2c[i2c_idx].i2c_data = op.reg_value
-            res = true
-        end
-
-        --[[ Read I2C data ]]--
-    elseif op.reg_addr == 0x8024 and op.reg_op == "RD" then
-        if state == I2C_STATE.READ then
-            state = I2C_STATE.IDLE
-            i2c[i2c_idx].i2c_data = op.reg_value
-            i2c_idx = i2c_idx + 1 -- finish read operation
-            res = true
-        end
-
-        --[[ Checking I2C operation status ]]--
-    elseif op.reg_addr == 0x8020 and op.reg_op == "RD" then
-        if state ~= I2C_STATE.IDLE and bit.band(op.reg_value, 0x80000000) ~= 0 then
-            res = true
-        end
+    elseif op.reg_addr == 0x8024 and op.reg_op == "RD" and i2c_state == I2C_STATE.READ3 then
+        i2c[i2c_idx].i2c_data = op.reg_value
+        i2c_state = I2C_STATE.IDLE
+        res = i2c_idx -- full i2c flow recovered
+        i2c_idx = i2c_idx + 1 -- finish read operation
+    elseif op.reg_addr == 0x8028 and op.reg_op == "WR" and i2c_state == I2C_STATE.IDLE then
+        i2c[i2c_idx] = {} -- start write operation
+        i2c[i2c_idx].i2c_data = op.reg_value
+        i2c_state = I2C_STATE.WRITE1
+        res = 0 -- suspected i2c flow
+    else
+        i2c_state = I2C_STATE.IDLE
     end
     return res
 end
-
-local regs = {}     -- count register access statistics
 
 local function count_regs(reg_addr, reg_op)
     if reg_addr and reg_op then
@@ -194,52 +209,65 @@ local function count_regs(reg_addr, reg_op)
     end
 end
 
-local ops = {}      -- array of register operations
-local op_idx = 1
-
 local function log_ops_setup(reg_addr, reg_op)
     if reg_op and reg_addr then
         ops[op_idx] = {}
         ops[op_idx].reg_op = reg_op
         ops[op_idx].reg_addr = reg_addr
-        count_regs(reg_addr, reg_op)
     end
 end
 
 local function log_ops_data(reg_value)
     if reg_value then
+        local is_i2c
         ops[op_idx].reg_value = reg_value
-        ops[op_idx].i2c = analyze_i2c(ops[op_idx])
+        is_i2c = analyze_i2c(ops[op_idx])
+        ops[op_idx].i2c = nil
+        if is_i2c == 0 then -- start detected
+            op_i2c_start_idx = op_idx
+        elseif is_i2c ~= nil then -- finish detected
+            local i = op_idx
+            while i >= op_i2c_start_idx do
+                 ops[i].i2c = is_i2c
+                 i = i - 1
+            end
+        end
         op_idx = op_idx + 1
     end
 end
 
 function fl2k_tap.packet(pinfo, tvb, tapinfo)
-    local stage = f_stage()
-    if (stage.value == ControlTransferStage.SETUP) then
-        local reg_addr = f_reg_addr().value
-        local reg_op = op_types[f_reg_op().value]
-        log_ops_setup(reg_addr, reg_op)
-    elseif (stage.value == ControlTransferStage.DATA) then
-        local reg_value = f_reg_value().value
-        log_ops_data(reg_value)
+    local transfer = f_transfer()
+    if (transfer.value == TransferType.CONTROL) then
+        local stage = f_stage()
+        if (stage.value == ControlTransferStage.SETUP) then
+            local reg_addr = f_reg_addr().value
+            local reg_op = op_types[f_reg_op().value]
+            log_ops_setup(reg_addr, reg_op)
+            count_regs(reg_addr, reg_op)
+        elseif (stage.value == ControlTransferStage.DATA) then
+            local reg_value = f_reg_value().value
+            log_ops_data(reg_value)
+        end
     elseif (transfer.value == TransferType.INTERRUPT) then
     elseif (transfer.value == TransferType.BULK) then
     end
 end
 
 function fl2k_tap.draw()
-    print ("========= Register Statistics =========")
-    pretty.dump(regs)
-
+    --print ("========= Register Statistics =========")
+    --pretty.dump(regs)
     print ("=========== Operations list ===========")
-    pretty.dump(ops)
-
-    print ("=========== I2C oprtations ============")
-    idx = 1
-    while (i2c[idx] ~= nil)
+    op_idx = 1
+    i2c_idx = nil
+    while (ops[op_idx])
     do
-        print(string.format("%s %s: 0x%02X : 0x%08X", i2c[idx].i2c_op, i2c[idx].i2c_device, i2c[idx].i2c_offset, i2c[idx].i2c_data))
-        idx = idx + 1
+        if (ops[op_idx].i2c == nil) then -- this is pure reg operation
+            print(string.format("REG %s 0x%04X : 0x%08X", ops[op_idx].reg_op, ops[op_idx].reg_addr, ops[op_idx].reg_value), ops[op_idx].i2c)
+        elseif (ops[op_idx].i2c ~= i2c_idx) then -- this is an i2c operation
+            i2c_idx = ops[op_idx].i2c
+            print(string.format("%s %s: 0x%02X : 0x%08X", i2c[i2c_idx].i2c_op, i2c[i2c_idx].i2c_device, i2c[i2c_idx].i2c_offset, i2c[i2c_idx].i2c_data))
+        end
+        op_idx = op_idx + 1
     end
 end
