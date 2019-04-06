@@ -107,7 +107,7 @@ usb_bulk_table:add(InterfaceClass.AV, fl2k_proto)
 
 -- Here we go with Tap
 
-fl2k_tap = Listener.new("usb", "fl2k && (usb.transfer_type == 2) && (usb.control_stage != 3)")
+fl2k_tap = Listener.new("usb", "fl2k")
 
 local pretty = require 'pl.pretty'
 
@@ -223,6 +223,8 @@ function fl2k_tap.packet(pinfo, tvb, tapinfo)
     elseif (stage.value == ControlTransferStage.DATA) then
         local reg_value = f_reg_value().value
         log_ops_data(reg_value)
+    elseif (transfer.value == TransferType.INTERRUPT) then
+    elseif (transfer.value == TransferType.BULK) then
     end
 end
 
