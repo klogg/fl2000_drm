@@ -109,8 +109,6 @@ usb_bulk_table:add(InterfaceClass.AV, fl2k_proto)
 
 fl2k_tap = Listener.new("usb", "fl2k")
 
-local pretty = require 'pl.pretty'
-
 local f_reg_op = Field.new("fl2k.reg_op")
 local f_reg_addr = Field.new("fl2k.reg_addr")
 local f_reg_value = Field.new("fl2k.reg_value")
@@ -189,13 +187,13 @@ local function analyze_i2c(op)
             i2c[i2c_idx].i2c_device = i2c_address
             i2c[i2c_idx].i2c_offset = i2c_offset
             i2c_state = I2C_STATE.READ2
-            count_i2c_regs(i2c_address, i2c_offset, "read")
+            count_i2c_regs(i2c_address, i2c_offset, "RD")
         elseif i2c_state == I2C_STATE.WRITE2 and i2c_op == 0 then
             i2c[i2c_idx].i2c_op = "I2C WR"
             i2c[i2c_idx].i2c_device = i2c_address
             i2c[i2c_idx].i2c_offset = i2c_offset
             i2c_state = I2C_STATE.WRITE3
-            count_i2c_regs(i2c_address, i2c_offset, "write")
+            count_i2c_regs(i2c_address, i2c_offset, "WR")
         else
             i2c_state = I2C_STATE.IDLE
         end
@@ -255,6 +253,15 @@ local function log_ops_data(reg_value)
     end
 end
 
+local function sort_table(s_table)
+    local ordered_keys = {}
+    for k in pairs(s_table) do
+        table.insert(ordered_keys, k)
+    end
+    table.sort(ordered_keys)
+    return ordered_keys
+end
+
 function fl2k_tap.packet(pinfo, tvb, tapinfo)
     local transfer = f_transfer()
     if (transfer.value == TransferType.CONTROL) then
@@ -274,9 +281,17 @@ function fl2k_tap.packet(pinfo, tvb, tapinfo)
 end
 
 function fl2k_tap.draw()
-    --print ("========= Register Statistics =========")
-    --pretty.dump(regs)
-    --pretty.dump(i2c_regs)
+    local ordered_keys = {}
+    print ("========= FL2000 register Statistics =========")
+    ordered_keys = sort_table(regs)
+    for i = 1, #ordered_keys do
+        print(string.format("0x%04X", ordered_keys[i]), regs[ordered_keys[i]]["WR"], regs[ordered_keys[i]]["RD"])
+    end
+    print ("========= IT66121 register Statistics =========")
+    ordered_keys = sort_table(i2c_regs["IT66121"])
+    for i = 1, #ordered_keys do
+        print(string.format("0x%02X", ordered_keys[i]), i2c_regs["IT66121"][ordered_keys[i]]["WR"], i2c_regs["IT66121"][ordered_keys[i]]["RD"])
+    end
     print ("=========== Operations list ===========")
     op_idx = 1
     i2c_idx = nil
