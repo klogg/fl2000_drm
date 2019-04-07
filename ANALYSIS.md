@@ -22,6 +22,56 @@ NOTE: for correct dissector operation Wireshark must be built with patch allowin
 
 1. Empty 'status' stage CONTROL packets and zero-size BULK packets are not dissected because of Wireshark implementation - see `dissect_usb_payload()` function not proceeding to dissection when there is no data beyond standard USB header
 
+## Register access statistics
+
+**FL2000**
+
+```
+0x0070	10	10
+0x0078	4	4
+0x8000	8	0
+0x8004	4	4
+0x8008	2	2
+0x800C	2	2
+0x8010	2	2
+0x8014	2	2
+0x801C	2	2
+0x8020	1926	836
+0x8024	568	0
+0x8028	0	264
+0x802C	2	2
+0x803C	14	14
+0x8048	6	6
+0x8088	2	2
+```
+**IT66121**
+```
+0x00	1	0
+0x04	17	9
+0x08	2	1
+0x0C	22	19
+0x10	29	22
+0x14	147	29
+0x30	4	4
+0x34	2	2
+0x58	1	2
+0x5C	0	1
+0x60	14	10
+0x64	7	5
+0x68	9	5
+0x6C	3	2
+0x70	4	2
+0x90	0	1
+0x94	1	1
+0x98	3	3
+0xC0	5	3
+0xC4	4	3
+0xCC	2	2
+0xE0	2	2
+0xE4	1	1
+0xF8	3	3
+```
+
 ## Observations
 
 * All video frames are transmitted in RGB24 which is confirmed by USB data frame size:<br>
