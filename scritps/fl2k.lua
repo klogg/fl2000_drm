@@ -285,12 +285,12 @@ function fl2k_tap.draw()
     print ("========= FL2000 register Statistics =========")
     ordered_keys = sort_table(regs)
     for i = 1, #ordered_keys do
-        print(string.format("0x%04X", ordered_keys[i]), regs[ordered_keys[i]]["WR"], regs[ordered_keys[i]]["RD"])
+        print(string.format("0x%04X", ordered_keys[i]), regs[ordered_keys[i]]["RD"], regs[ordered_keys[i]]["WR"])
     end
     print ("========= IT66121 register Statistics =========")
     ordered_keys = sort_table(i2c_regs["IT66121"])
     for i = 1, #ordered_keys do
-        print(string.format("0x%02X", ordered_keys[i]), i2c_regs["IT66121"][ordered_keys[i]]["WR"], i2c_regs["IT66121"][ordered_keys[i]]["RD"])
+        print(string.format("0x%02X", ordered_keys[i]), i2c_regs["IT66121"][ordered_keys[i]]["RD"], i2c_regs["IT66121"][ordered_keys[i]]["WR"])
     end
     print ("=========== Operations list ===========")
     op_idx = 1
