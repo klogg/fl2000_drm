@@ -133,11 +133,29 @@ local i2c_state = I2C_STATE.IDLE
 local i2c = {}      -- array of i2c operations
 local i2c_idx = 1
 
+local i2c_regs = {}
+
 local ops = {}      -- array of register operations
 local op_idx = 1
 local op_i2c_start_idx = 0
 
 local regs = {}     -- count register access statistics
+
+local function count_i2c_regs(i2c_device, reg_addr, reg_op)
+    if i2c_device and reg_addr and reg_op then
+        if not i2c_regs[i2c_device] then
+            i2c_regs[i2c_device] = {}
+        end
+        if not i2c_regs[i2c_device][reg_addr] then
+            i2c_regs[i2c_device][reg_addr] = {}
+        end
+        if not i2c_regs[i2c_device][reg_addr][reg_op] then
+            i2c_regs[i2c_device][reg_addr][reg_op] = 1
+        else
+            i2c_regs[i2c_device][reg_addr][reg_op] = i2c_regs[i2c_device][reg_addr][reg_op] + 1
+        end
+    end
+end
 
 local function analyze_i2c(op)
     local res
@@ -163,20 +181,21 @@ local function analyze_i2c(op)
             i2c_state = I2C_STATE.IDLE
         end
     elseif op.reg_addr == 0x8020 and op.reg_op == "WR" then
-        local i2c_address = bit.band(op.reg_value, 0x7F)
+        local i2c_address = i2c_devices[bit.band(op.reg_value, 0x7F)]
         local i2c_op = bit.band(bit.rshift(op.reg_value, 7), 0x01)
         local i2c_offset = bit.band(bit.rshift(op.reg_value, 8), 0xFF)
-
         if i2c_state == I2C_STATE.READ1 and i2c_op == 1 then
             i2c[i2c_idx].i2c_op = "I2C RD"
-            i2c[i2c_idx].i2c_device = i2c_devices[i2c_address]
+            i2c[i2c_idx].i2c_device = i2c_address
             i2c[i2c_idx].i2c_offset = i2c_offset
             i2c_state = I2C_STATE.READ2
+            count_i2c_regs(i2c_address, i2c_offset, "read")
         elseif i2c_state == I2C_STATE.WRITE2 and i2c_op == 0 then
             i2c[i2c_idx].i2c_op = "I2C WR"
-            i2c[i2c_idx].i2c_device = i2c_devices[i2c_address]
+            i2c[i2c_idx].i2c_device = i2c_address
             i2c[i2c_idx].i2c_offset = i2c_offset
             i2c_state = I2C_STATE.WRITE3
+            count_i2c_regs(i2c_address, i2c_offset, "write")
         else
             i2c_state = I2C_STATE.IDLE
         end
@@ -257,13 +276,14 @@ end
 function fl2k_tap.draw()
     --print ("========= Register Statistics =========")
     --pretty.dump(regs)
+    --pretty.dump(i2c_regs)
     print ("=========== Operations list ===========")
     op_idx = 1
     i2c_idx = nil
     while (ops[op_idx])
     do
         if (ops[op_idx].i2c == nil) then -- this is pure reg operation
-            print(string.format("REG %s 0x%04X : 0x%08X", ops[op_idx].reg_op, ops[op_idx].reg_addr, ops[op_idx].reg_value), ops[op_idx].i2c)
+            print(string.format("REG %s 0x%04X : 0x%08X", ops[op_idx].reg_op, ops[op_idx].reg_addr, ops[op_idx].reg_value))
         elseif (ops[op_idx].i2c ~= i2c_idx) then -- this is an i2c operation
             i2c_idx = ops[op_idx].i2c
             print(string.format("%s %s: 0x%02X : 0x%08X", i2c[i2c_idx].i2c_op, i2c[i2c_idx].i2c_device, i2c[i2c_idx].i2c_offset, i2c[i2c_idx].i2c_data))
