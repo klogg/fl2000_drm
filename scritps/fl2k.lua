@@ -23,6 +23,7 @@ ControlTransferStage = {
 
 local f_transfer = Field.new("usb.transfer_type")
 local f_stage = Field.new("usb.control_stage")
+local f_data_len = Field.new("usb.data_len")
 local op_types = {
     [0x40] = "RD",
     [0x41] = "WR",
@@ -90,7 +91,6 @@ function fl2k_proto.dissector(tvb, pinfo, tree)
         pinfo.cols["info"]:set("FL2000 Data")
         -- TODO: is it possible to parse it as image?
         t_fl2k:add_le(f.f_fb, tvb())
-
     else
         pinfo.cols["info"]:set("FL2000 WTF???")
     end
@@ -112,6 +112,7 @@ fl2k_tap = Listener.new("usb", "fl2k")
 local f_reg_op = Field.new("fl2k.reg_op")
 local f_reg_addr = Field.new("fl2k.reg_addr")
 local f_reg_value = Field.new("fl2k.reg_value")
+local f_irq = Field.new("fl2k.irq")
 
 local i2c_devices = {
     [0x4C] = "IT66121",
@@ -227,30 +228,41 @@ local function count_regs(reg_addr, reg_op)
 end
 
 local function log_ops_setup(reg_addr, reg_op)
-    if reg_op and reg_addr then
-        ops[op_idx] = {}
-        ops[op_idx].reg_op = reg_op
-        ops[op_idx].reg_addr = reg_addr
-    end
+    ops[op_idx] = {}
+    ops[op_idx].type = TransferType.CONTROL
+    ops[op_idx].reg_op = reg_op
+    ops[op_idx].reg_addr = reg_addr
 end
 
 local function log_ops_data(reg_value)
-    if reg_value then
-        local is_i2c
-        ops[op_idx].reg_value = reg_value
-        is_i2c = analyze_i2c(ops[op_idx])
-        ops[op_idx].i2c = nil
-        if is_i2c == 0 then -- start detected
-            op_i2c_start_idx = op_idx
-        elseif is_i2c ~= nil then -- finish detected
-            local i = op_idx
-            while i >= op_i2c_start_idx do
-                 ops[i].i2c = is_i2c
-                 i = i - 1
-            end
+    local is_i2c
+    ops[op_idx].reg_value = reg_value
+    is_i2c = analyze_i2c(ops[op_idx])
+    ops[op_idx].i2c = nil
+    if is_i2c == 0 then -- start detected
+        op_i2c_start_idx = op_idx
+    elseif is_i2c ~= nil then -- finish detected
+        local i = op_idx
+        while i >= op_i2c_start_idx do
+             ops[i].i2c = is_i2c
+             i = i - 1
         end
-        op_idx = op_idx + 1
     end
+    op_idx = op_idx + 1
+end
+
+local function log_ops_interrupt(intr_data)
+    ops[op_idx] = {}
+    ops[op_idx].type = TransferType.INTERRUPT
+    ops[op_idx].intr_data = intr_data
+    op_idx = op_idx + 1
+end
+
+local function log_ops_bulk(fb_size)
+    ops[op_idx] = {}
+    ops[op_idx].type = TransferType.BULK
+    ops[op_idx].fb_size = fb_size
+    op_idx = op_idx + 1
 end
 
 local function sort_table(s_table)
@@ -276,7 +288,11 @@ function fl2k_tap.packet(pinfo, tvb, tapinfo)
             log_ops_data(reg_value)
         end
     elseif (transfer.value == TransferType.INTERRUPT) then
+        local intr_data = f_irq().value
+        log_ops_interrupt(intr_data)
     elseif (transfer.value == TransferType.BULK) then
+        local fb_size = f_data_len().value
+        log_ops_bulk(fb_size)
     end
 end
 
@@ -297,11 +313,17 @@ function fl2k_tap.draw()
     i2c_idx = nil
     while (ops[op_idx])
     do
-        if (ops[op_idx].i2c == nil) then -- this is pure reg operation
-            print(string.format("REG %s 0x%04X : 0x%08X", ops[op_idx].reg_op, ops[op_idx].reg_addr, ops[op_idx].reg_value))
-        elseif (ops[op_idx].i2c ~= i2c_idx) then -- this is an i2c operation
-            i2c_idx = ops[op_idx].i2c
-            print(string.format("%s %s: 0x%02X : 0x%08X", i2c[i2c_idx].i2c_op, i2c[i2c_idx].i2c_device, i2c[i2c_idx].i2c_offset, i2c[i2c_idx].i2c_data))
+        if ops[op_idx].type == TransferType.CONTROL then
+            if (ops[op_idx].i2c == nil) then -- this is pure reg operation
+                print(string.format("REG %s 0x%04X : 0x%08X", ops[op_idx].reg_op, ops[op_idx].reg_addr, ops[op_idx].reg_value))
+            elseif (ops[op_idx].i2c ~= i2c_idx) then -- this is an i2c operation
+                i2c_idx = ops[op_idx].i2c
+                print(string.format("%s %s: 0x%02X : 0x%08X", i2c[i2c_idx].i2c_op, i2c[i2c_idx].i2c_device, i2c[i2c_idx].i2c_offset, i2c[i2c_idx].i2c_data))
+            end
+        elseif ops[op_idx].type == TransferType.INTERRUPT then
+            print("INTERRUPT", ops[op_idx].intr_data)
+        elseif ops[op_idx].type == TransferType.BULK then
+            print("FRAME", ops[op_idx].fb_size)
         end
         op_idx = op_idx + 1
     end
