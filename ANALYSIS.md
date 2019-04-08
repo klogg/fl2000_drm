@@ -47,6 +47,13 @@ See parsed stream dump and register access statistics below
   * Setting PLL configuration and application reset
   * Configuring TD and starting IT66121 I2C register access
 * There are 2 extra application resets besides the one on the start of the driver
+* In EDID section, it is seen how driver workarounds the problem of missing 3 first bytes of every EDID read operation: Ask for 6 bytes that will overlap the missing 3 bytes for every 32-bytes read. This leads to 7 read blocks while this could be brought done by 5 only significantly amount of activities:
+  * Fill 1st 3 bytes with 00 FF FF
+  * Read 32 bytes from offset 0
+  * Read 32 bytes from offset 29
+  * Read 32 bytes from offset 58
+  * Read 32 bytes from offset 87
+  * Read 12 bytes from offset 116
 
 ## Register access statistics
 
