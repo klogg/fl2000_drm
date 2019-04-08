@@ -16,7 +16,7 @@ NOTE: by default USBPcap captures 65535 bytes max, so packets with frame data ar
 To start Wireshark dissector please use following command:<br>
 `wireshark -X lua_script:fl2k.lua -r fl2000.pcapng`
 
-NOTE: for correct dissector operation Wireshark must be built with patch allowing dissection of CONTROL messages with "device" recipient. For details see https://code.wireshark.org/review/32626
+NOTE: for correct dissector operation Wireshark must be built with patch allowing dissection of CONTROL messages with "device" recipient. For details see https://code.wireshark.org/review/32626 (merged to Wireshark master development branch)
 
 ## Known issues
 
