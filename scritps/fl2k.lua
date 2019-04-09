@@ -118,6 +118,10 @@ local i2c_devices = {
     [0x4C] = "IT66121",
 }
 
+local i2c_bank = {
+    ["IT66121"] = 0,
+}
+
 I2C_STATE = {
     IDLE = 0,
     WRITE1 = 1,
@@ -140,19 +144,28 @@ local op_i2c_start_idx = 0
 
 local regs = {}     -- count register access statistics
 
-local function count_i2c_regs(i2c_device, reg_addr, reg_op)
-    if i2c_device and reg_addr and reg_op then
-        if not i2c_regs[i2c_device] then
-            i2c_regs[i2c_device] = {}
-        end
-        if not i2c_regs[i2c_device][reg_addr] then
-            i2c_regs[i2c_device][reg_addr] = {}
-        end
-        if not i2c_regs[i2c_device][reg_addr][reg_op] then
-            i2c_regs[i2c_device][reg_addr][reg_op] = 1
+local function check_i2c_bank(i2c_device, reg_addr, reg_value)
+    if (i2c_device == "IT66121" and reg_addr == 0x0C) then
+        if (bit.band(reg_value, 0x01000000) ~= 0) then
+            i2c_bank["IT66121"] = 0x100
         else
-            i2c_regs[i2c_device][reg_addr][reg_op] = i2c_regs[i2c_device][reg_addr][reg_op] + 1
+            i2c_bank["IT66121"] = 0x000
         end
+    end
+end
+
+local function count_i2c_regs(i2c_device, reg_addr, reg_op)
+    reg_addr = reg_addr + i2c_bank[i2c_device]
+    if not i2c_regs[i2c_device] then
+        i2c_regs[i2c_device] = {}
+    end
+    if not i2c_regs[i2c_device][reg_addr] then
+        i2c_regs[i2c_device][reg_addr] = {}
+    end
+    if not i2c_regs[i2c_device][reg_addr][reg_op] then
+        i2c_regs[i2c_device][reg_addr][reg_op] = 1
+    else
+        i2c_regs[i2c_device][reg_addr][reg_op] = i2c_regs[i2c_device][reg_addr][reg_op] + 1
     end
 end
 
@@ -194,6 +207,7 @@ local function analyze_i2c(op)
             i2c[i2c_idx].i2c_device = i2c_address
             i2c[i2c_idx].i2c_offset = i2c_offset
             i2c_state = I2C_STATE.WRITE3
+            check_i2c_bank(i2c_address, i2c_offset, i2c[i2c_idx].i2c_data)
             count_i2c_regs(i2c_address, i2c_offset, "WR")
         else
             i2c_state = I2C_STATE.IDLE
@@ -215,15 +229,13 @@ local function analyze_i2c(op)
 end
 
 local function count_regs(reg_addr, reg_op)
-    if reg_addr and reg_op then
-        if not regs[reg_addr] then
-            regs[reg_addr] = {}
-        end
-        if not regs[reg_addr][reg_op] then
-            regs[reg_addr][reg_op] = 1
-        else
-            regs[reg_addr][reg_op] = regs[reg_addr][reg_op] + 1
-        end
+    if not regs[reg_addr] then
+        regs[reg_addr] = {}
+    end
+    if not regs[reg_addr][reg_op] then
+        regs[reg_addr][reg_op] = 1
+    else
+        regs[reg_addr][reg_op] = regs[reg_addr][reg_op] + 1
     end
 end
 
