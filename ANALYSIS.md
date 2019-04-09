@@ -109,80 +109,90 @@ See parsed stream dump and register access statistics below
 
 NOTE: when reading the stream, one need to remember that byte access is not possible for I2C connected devices, always dword (4 bytes) is read; thus addresses are always 4-byte aligned.
 
+**FL2000 Reset**
+
 RST_CTRL_REG: Software reset to application logic
 ```
 REG RD 0x8048 : 0x00000004
 REG WR 0x8048 : 0x00008004
 ```
-Check connected IT66121 chip ID and revision
+**IT66121 Check connected chip ID and revision**
+
+0x00: Read vendor ID (0x4954) device ID (0x612) revision ID (1)
 ```
 I2C RD IT66121: 0x00 : 0x16124954
 ```
+**IT66121 Initial Reset as per 'Programming Guide'**
+
 0x04: SW Reset
 ```
 I2C RD IT66121: 0x04 : 0x0000601C
 I2C RD IT66121: 0x04 : 0x0000601C
 I2C WR IT66121: 0x04 : 0x0000603C
 ```
-0x0F: power down IACLK, TxCLK
+**IT66121 Initial Power On Sequence as per 'Programming Guide' (fl2000_hdmi_power_up)**
+
+0x0F: power down IACLK, TxCLK (reset bit 6 in guide)
 ```
 I2C RD IT66121: 0x0C : 0x080C0000
 I2C RD IT66121: 0x0C : 0x080C0000
 I2C WR IT66121: 0x0C : 0x380C0000
 ```
-???
+0x05: (reset bit 0)
 ```
 I2C RD IT66121: 0x04 : 0x0000601C
 I2C RD IT66121: 0x04 : 0x0000601C
 I2C WR IT66121: 0x04 : 0x0000601C
 ```
-???
+0x61: power on the DRV (reset bit 5)
 ```
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C WR IT66121: 0x60 : 0x188810FF
 ```
-???
+0x62: power on XPLL (reset bits 6 and 2)
 ```
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C WR IT66121: 0x60 : 0x188810FF
 ```
-???
+0x64: power on IPLL (reset bit 6)
 ```
 I2C RD IT66121: 0x64 : 0x00000094
 I2C RD IT66121: 0x64 : 0x00000094
 I2C WR IT66121: 0x64 : 0x00000094
 ```
-0x61: Disable reset for HDMI_TX_DRV
+0x61: Disable reset for HDMI_TX_DRV (reset bit 4)
 ```
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C WR IT66121: 0x60 : 0x188800FF
 ```
-???
+0x62: XP_RESETB (set bit 3)
 ```
 I2C RD IT66121: 0x60 : 0x188800FF
 I2C RD IT66121: 0x60 : 0x188800FF
 I2C WR IT66121: 0x60 : 0x188800FF
 ```
-???
+0x64: IP_RESETB (set bit 2)
 ```
 I2C RD IT66121: 0x64 : 0x00000094
 I2C RD IT66121: 0x64 : 0x00000094
 I2C WR IT66121: 0x64 : 0x00000094
 ```
-0x70: YUV422, 1/2 TXCLK, CCIR656
+**Now, WTF is this??? (extra steps in fl2000_hdmi_power_up)**
+
+0x6A: AFE magic 00 -> 70
 ```
 I2C RD IT66121: 0x68 : 0xFF003000
 I2C WR IT66121: 0x68 : 0xFF703000
 ```
-0x66: 00->1F ???
+0x66: AFE magic 00 -> 1F
 ```
 I2C RD IT66121: 0x64 : 0x00000094
 I2C WR IT66121: 0x64 : 0x001F0094
 ```
-0x63: 18->38 ???
+0x63: 7: AFE maximum output current setting
 ```
 I2C RD IT66121: 0x60 : 0x188800FF
 I2C WR IT66121: 0x60 : 0x388800FF
@@ -193,17 +203,23 @@ I2C RD IT66121: 0x0C : 0x380C0000
 I2C RD IT66121: 0x0C : 0x380C0000
 I2C WR IT66121: 0x0C : 0x080C0000
 ```
+**IT66121 Reset (unnecessary?)**
+
 SW Reset
 ```
 I2C RD IT66121: 0x04 : 0x0000601C
 I2C RD IT66121: 0x04 : 0x0000601C
 I2C WR IT66121: 0x04 : 0x0000603C
 ```
+**FL2000 Reset (unnecessary?)**
+
 RST_CTRL_REG: Software reset to application logic
 ```
 REG RD 0x8048 : 0x00000004
 REG WR 0x8048 : 0x00008004
 ```
+**FL2000 Enable monitor detection**
+
 VGA_I2C_SC_REG: VGA EDID detect enable
 ```
 REG RD 0x8020 : 0x8000044C
@@ -214,21 +230,27 @@ VGA_I2C_SC_REG: VGA External monitor detect enable
 REG RD 0x8020 : 0xC000044C
 REG WR 0x8020 : 0xD000044C
 ```
+**FL2000 Some HW issue workaround**
+
 VGA Control Register3: Disable an auto-generation of reset when we wakeup from disconnect
 ```
 REG RD 0x8088 : 0x00000488
 REG WR 0x8088 : 0x00000088
 ```
-Just in case - check interrupt status register
+**FL2000 check interrupt status register and enable interrupts**
+
+Interrupt status register empty
 ```
 REG RD 0x8000 : 0x08000000
 ```
 **Monitor connected**
+
 ```
 INTERRUPT	1
 REG RD 0x8000 : 0x680000E1
 ```
 **'Enable' sequence for USB interface**
+
 ```
 REG RD 0x0070 : 0x04006085
 REG WR 0x0070 : 0x04106085
@@ -612,7 +634,7 @@ VGA_CTRL_REG_ACLK: Force PLL power UP always
 REG RD 0x803C : 0xE001084D
 REG WR 0x803C : 0xE401084D
 ```
-<u>Mixup</u><br>
+_Mixup_<br>
 VGA_PLL_REG: configure PLL parameters<br>
 RST_CTRL_REG: Software reset to application logic
 ```
@@ -671,8 +693,8 @@ REG WR 0x801C : 0x00000000
 REG RD 0x0070 : 0x04186085
 REG WR 0x0070 : 0x04186085
 ```
-<u>Mixup</u><br>
-VGA_CTRL_REG_ACLK: Force VGA connect<br>
+_Mixup_<br>
+VGA_CTRL_REG_ACLK: Force VGA connect (probably useless, unless a workaround)<br>
 I2C RD IT66121: 0x0C : 0x006C0000
 ```
 REG RD 0x8020 : 0xC00014CC
@@ -683,13 +705,13 @@ REG RD 0x8020 : 0x40000CCC
 REG RD 0x8020 : 0xC0000CCC
 REG RD 0x8024 : 0x006C0000
 ```
-**Configure IT66121 for streaming**
+**IT66121 mute (fl2000_hdmi_av_mute)**
 
-???
+0x0F: Bank 0
 ```
 I2C WR IT66121: 0x0C : 0x006C0000
 ```
-???
+0xC1: set AVMute
 ```
 I2C RD IT66121: 0xC0 : 0x089A8102
 I2C RD IT66121: 0xC0 : 0x089A8102
@@ -700,24 +722,26 @@ I2C WR IT66121: 0xC0 : 0x089A8102
 I2C RD IT66121: 0xC4 : 0xFF0004C0
 I2C WR IT66121: 0xC4 : 0xFF0304C0
 ```
+**IT66121 Set AVI InfoFrame (fl2000_hdmi_set_avi_info_frame)**
+
 0x0F: Bank 1
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x016C0000
 ```
-0x158-0x15B
+0x158-0x15B: packed_frame 4..7
 ```
 I2C WR IT66121: 0x58 : 0x00005810
 ```
-0x15C-0x15F
+0x15C-0x15F: packed_frame 8,3,9,10
 ```
 I2C WR IT66121: 0x5C : 0x00000700
 ```
-0x160-0x163
+0x160-0x163: packed_frame 11..14
 ```
 I2C WR IT66121: 0x60 : 0x00000000
 ```
-0x164-0x167
+0x164-0x165: packed_frame 15..16
 ```
 I2C WR IT66121: 0x64 : 0x00000000
 ```
@@ -731,52 +755,61 @@ I2C WR IT66121: 0x0C : 0x006C0000
 I2C RD IT66121: 0xCC : 0xFF0000FF
 I2C WR IT66121: 0xCC : 0xFF0003FF
 ```
+**fl2000_hdmi_enable_video_output**
+
 0x04: set HDCP reset, clear Audio FIFO reset, clear SW Audio base clock reset
 ```
 I2C RD IT66121: 0x04 : 0x0000601C
 I2C WR IT66121: 0x04 : 0x00006009
 ```
+**fl2000_hdmi_set_input_mode**
+
 0x70: Input PCLK delay = 01
 ```
 I2C RD IT66121: 0x70 : 0x10000800
 I2C RD IT66121: 0x70 : 0x10000800
 I2C WR IT66121: 0x70 : 0x10000801
 ```
+**fl2000_hdmi_set_csc_scale**
+
 0x0F: Power Down TxCLK
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x106C0000
 ```
-???
+**fl2000_hdmi_set_csc_scale**
+
+0x72: bypass dither, disable color conversion, Cr/Cb up/downsampling, noise filter
 ```
 I2C RD IT66121: 0x70 : 0x10000801
 I2C RD IT66121: 0x70 : 0x10000801
 I2C WR IT66121: 0x70 : 0x10000801
 ```
-0xC0: ???
+0xC0: Set TX mode - HDMI
 ```
 I2C RD IT66121: 0xC0 : 0x089A8102
 I2C WR IT66121: 0xC0 : 0x089A8100
 ```
-???
+**IT66121 Setup AFE (according to guide) (fl2000_hdmi_setup_afe)**
+0x61: Enable reset for HDMI_TX_DRV
 ```
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C WR IT66121: 0x60 : 0x188810FF
 ```
-0x62: set parameters for TDMS < 80MHz
+0x62: set parameters for TDMS < 80MHz (guide: reset bit 7, set bit 4)
 ```
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C RD IT66121: 0x60 : 0x188810FF
 I2C WR IT66121: 0x60 : 0x181810FF
 ```
-0x64: set parameters for TDMS < 80MHz
+0x64: set parameters for TDMS < 80MHz guide: reset bit 7, set bits 3 and 1)
 ```
 I2C RD IT66121: 0x64 : 0x00000094
 I2C RD IT66121: 0x64 : 0x00000094
 I2C WR IT66121: 0x64 : 0x0000001D
 ```
-0x68: set parameters for TDMS < 80MHz
+0x68: set parameters for TDMS < 80MHz (guide: set bit 4)
 ```
 I2C RD IT66121: 0x68 : 0xFF003000
 I2C RD IT66121: 0x68 : 0xFF003000
@@ -788,16 +821,17 @@ I2C RD IT66121: 0x04 : 0x00006009
 I2C RD IT66121: 0x04 : 0x00006009
 I2C WR IT66121: 0x04 : 0x00006001
 ```
-0x61: Disable reset for HDMI_TX_DRV
+0x61: Disable reset for HDMI_TX_DRV (guide: fire AFE by writing 0)
 ```
 I2C RD IT66121: 0x60 : 0x181810FF
 I2C WR IT66121: 0x60 : 0x181800FF
 ```
-???
+0x04: set HDCP reset
 ```
 I2C RD IT66121: 0x04 : 0x00006001
 I2C WR IT66121: 0x04 : 0x00006001
 ```
+
 0x0F: Power Up TxCLK
 ```
 I2C RD IT66121: 0x0C : 0x106C0000
@@ -808,44 +842,42 @@ I2C WR IT66121: 0x0C : 0x006C0000
 I2C RD IT66121: 0x60 : 0x181800FF
 I2C WR IT66121: 0x60 : 0x181800FF
 ```
-0x0F: Power Down TxCLK
+**IT66121 Start Audio Configuration (fl2000_hdmi_set_audio_info_frame)**
+0x0F: Bank 1
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x016C0000
 ```
-0x68: 00 -> 01 ???
+0x168: Audio InfoFrame
 ```
 I2C RD IT66121: 0x68 : 0x00000000
 I2C WR IT66121: 0x68 : 0x00000001
-```
-???
-```
 I2C RD IT66121: 0x68 : 0x00000001
-I2C RD IT66121: 0x68 : 0x00000001
-I2C WR IT66121: 0x68 : 0x00000001
 ```
-???
+0x169: Audio InfoFrame
 ```
-I2C RD IT66121: 0x68 : 0x00000001
 I2C RD IT66121: 0x68 : 0x00000001
 I2C WR IT66121: 0x68 : 0x00000001
-```
-???
-```
 I2C RD IT66121: 0x68 : 0x00000001
 ```
-???
+0x16B: Audio InfoFrame
+```
+I2C RD IT66121: 0x68 : 0x00000001
+I2C WR IT66121: 0x68 : 0x00000001
+I2C RD IT66121: 0x68 : 0x00000001
+```
+0x16C: Audio InfoFrame
 ```
 I2C RD IT66121: 0x6C : 0xFF7F7B00
 I2C WR IT66121: 0x6C : 0xFF7F7B00
-```
-0x6D: 7B ->70 ???
-```
 I2C RD IT66121: 0x6C : 0xFF7F7B00
+```
+0x16D: Audio InfoFrame checksum
+```
 I2C RD IT66121: 0x6C : 0xFF7F7B00
 I2C WR IT66121: 0x6C : 0xFF7F7000
 ```
-0x0F: Power Up TxCLK
+0x0F: Bank 0
 ```
 I2C RD IT66121: 0x0C : 0x016C0000
 I2C WR IT66121: 0x0C : 0x006C0000
@@ -855,111 +887,118 @@ I2C WR IT66121: 0x0C : 0x006C0000
 I2C RD IT66121: 0xCC : 0xFF0003FF
 I2C WR IT66121: 0xCC : 0xFF0303FF
 ```
+**fl2000_hdmi_setup_audio_output**
+
 0x04: Audio FIFO reset, SW Audio base clock reset
 ```
 I2C RD IT66121: 0x04 : 0x00006001
 I2C RD IT66121: 0x04 : 0x00006001
 I2C WR IT66121: 0x04 : 0x00006015
 ```
-0x58: MCLK 01: 2x128Fs
+0x58: MCLK 01: Auto oversampling clock, 2x128Fs
 ```
 I2C RD IT66121: 0x58 : 0xFE030311
 I2C WR IT66121: 0x58 : 0xFE030315
 ```
-???
+0x0F: reset bit 4
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x006C0000
 ```
-???
+0xE0: Configure SPDIF
 ```
 I2C RD IT66121: 0xE0 : 0x00E441C0
 I2C RD IT66121: 0xE0 : 0x00E441C0
 I2C WR IT66121: 0xE0 : 0x00E441C0
 ```
-???
+**IT66121 Program N / Clock TimeStamp (fl2000_hdmi_setup_ncts)**
+0xE5: check bitrate
 ```
 I2C RD IT66121: 0xE4 : 0x00000000
 ```
-0x0F: Power Down TxCLK
+0x0F: Switch Bank 1
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x016C0000
 ```
-0x33: 80 -> 00
+0x33: N0
 ```
 I2C RD IT66121: 0x30 : 0x80F3D8A7
 I2C WR IT66121: 0x30 : 0x00F3D8A7
 ```
-0x34: 18 -> 10
+0x34: N1
 ```
 I2C RD IT66121: 0x34 : 0x00000018
 I2C WR IT66121: 0x34 : 0x00000010
 ```
-???
+0x35: N2
 ```
 I2C RD IT66121: 0x34 : 0x00000010
 I2C WR IT66121: 0x34 : 0x00000010
 ```
-0x30: A7 -> 00 ???
+0x30: CTS0
 ```
 I2C RD IT66121: 0x30 : 0x00F3D8A7
 I2C WR IT66121: 0x30 : 0x00F3D800
 ```
-0x31: D8 -> 00 ???
+0x31: CTS1
 ```
 I2C RD IT66121: 0x30 : 0x00F3D800
 I2C WR IT66121: 0x30 : 0x00F30000
 ```
-0x32: F3 -> 00 ???
+0x32: CTS2
 ```
 I2C RD IT66121: 0x30 : 0x00F30000
 I2C WR IT66121: 0x30 : 0x00000000
 ```
-0x0F: Power Up TxCLK
+0x0F: Switch bank 0
 ```
 I2C RD IT66121: 0x0C : 0x016C0000
 I2C WR IT66121: 0x0C : 0x006C0000
 ```
-0xF8: 00 -> C3 ???
+N/CTS password byte 0<br>
+0xF8: 00 -> C3
 ```
 I2C RD IT66121: 0xF8 : 0xFFFFFF00
 I2C WR IT66121: 0xF8 : 0xFFFFFFC3
 ```
-0xF8: C3 -> A5 ???
+N/CTS password byte 1<br>
+0xF8: C3 -> A5
 ```
 I2C RD IT66121: 0xF8 : 0xFFFFFFC3
 I2C WR IT66121: 0xF8 : 0xFFFFFFA5
 ```
-???
+0xC5: Set HW auto count for CTS generation
 ```
 I2C RD IT66121: 0xC4 : 0xFF0304C0
 I2C RD IT66121: 0xC4 : 0xFF0304C0
 I2C WR IT66121: 0xC4 : 0xFF0304C0
 ```
-0xF8: A5 -> FF ???
+N/CTS protect back<br>
+0xF8: A5 -> FF
 ```
 I2C RD IT66121: 0xF8 : 0xFFFFFFA5
 I2C WR IT66121: 0xF8 : 0xFFFFFFFF
 ```
-0x0F: Power Down TxCLK
+Set HBR<br>
+0x0F: Switch bank 1
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x016C0000
 ```
-0x98: 00 -> 09 ???
+0x198: Enable HBR (768kHz)
 ```
 I2C RD IT66121: 0x98 : 0xFFFF7800
 I2C WR IT66121: 0x98 : 0xFFFF7809
 ```
-0x99: F7 -> F6 ???
+0x199: Enable HBR (768kHz)
 ```
 I2C RD IT66121: 0x98 : 0xFFFF7809
 I2C RD IT66121: 0x98 : 0xFFFF7809
 I2C WR IT66121: 0x98 : 0xFFFF6809
 ```
-0x0F: Power Up TxCLK
+0x0F: Switch bank 0
 ```
 I2C RD IT66121: 0x0C : 0x016C0000
 I2C WR IT66121: 0x0C : 0x006C0000
@@ -970,39 +1009,43 @@ I2C RD IT66121: 0x04 : 0x00006015
 I2C RD IT66121: 0x04 : 0x00006015
 I2C WR IT66121: 0x04 : 0x00006011
 ```
-0x0F: Power Down TxCLK
+**IT66121 Set Audio Channel Status (fl2000_hdmi_setup_ch_stat)**
+
+0x0F: Switch to bank 1
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x016C0000
 ```
-0x90 - 0x93: ???
+0x90 - 0x93: ChStatData 0..2
 ```
 I2C WR IT66121: 0x90 : 0x02000000
 ```
-0x94: 06 -> 00 ???
+0x94: ChStatData 2
 ```
 I2C RD IT66121: 0x94 : 0xFFFFFF06
 I2C WR IT66121: 0x94 : 0xFFFFFF00
 ```
-0x98 - 00x9B: ???
+0x98 - 00x9B: ChStatData 3
 ```
 I2C WR IT66121: 0x98 : 0x00000000
 ```
-0x0F: Power Up TxCLK
+0x0F: Switch to bank 0
 ```
 I2C RD IT66121: 0x0C : 0x016C0000
 I2C WR IT66121: 0x0C : 0x006C0000
 ```
-???
+**IT66121 Configure Audio Format fl2000_hdmi_setup_pcm_audio**
+
+0x0F: Switch bank 0
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x006C0000
 ```
-0xE0 - 0xE3: ???
+0xE0 - 0xE3: AudioFormat
 ```
 I2C WR IT66121: 0xE0 : 0x00E44101
 ```
-0xE4 - 0xE7: ???
+0xE4 - 0xE5: AudioFormat
 ```
 I2C WR IT66121: 0xE4 : 0x00000000
 ```
@@ -1018,7 +1061,9 @@ I2C RD IT66121: 0x04 : 0x00006011
 I2C RD IT66121: 0x04 : 0x00006011
 I2C WR IT66121: 0x04 : 0x00006001
 ```
-???
+**IT66121 Unmute AV (fl2000_hdmi_av_mute)**
+
+0x0F: Switch bank 0
 ```
 I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x006C0000
@@ -1029,7 +1074,7 @@ I2C RD IT66121: 0xC0 : 0x089A8100
 I2C RD IT66121: 0xC0 : 0x089A8100
 I2C WR IT66121: 0xC0 : 0x089A8000
 ```
-???
+0xC6: enable General Control Packet, Repeat General Control Packet
 ```
 I2C RD IT66121: 0xC4 : 0xFF0304C0
 I2C WR IT66121: 0xC4 : 0xFF0304C0
