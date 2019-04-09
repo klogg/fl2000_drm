@@ -43,9 +43,7 @@ See parsed stream dump and register access statistics below
 * VGA connect status and VGA DAC power up status correctly follow connection status
 * No errors observed during operation except LBUF overflow - but probably this is due too high FPS (66 vs expected 30)
 * It is interesting to note that on disconnect amount of frames transmitted is 680 which is 1 less than BULK frames on USB bus - probably disconnect circuitry took some time to raise interrupt so 1 extra frame got transmitted and lost
-* There are at least 2 times when (seemingly) concurrent access to registers happened leading to some sort of mixup:
-  * Setting PLL configuration and application reset
-  * Configuring TD and starting IT66121 I2C register access
+* There is (seemingly) concurrent access to registers happened leading to some sort of mixup when forcing VGA connect and starting IT66121 I2C register access. Linux implementation is different and does not have this issue.
 * There are 2 extra application resets besides the one on the start of the driver
 * In EDID section, it is seen how driver workarounds the problem of missing 3 first bytes of every EDID read operation: Ask for 6 bytes that will overlap the missing 3 bytes for every 32-bytes read. This leads to 7 read blocks while this could be brought done by 5 only significantly amount of activities:
   * Fill 1st 3 bytes with 00 FF FF
@@ -185,7 +183,7 @@ I2C RD IT66121: 0x64 : 0x00000094
 I2C RD IT66121: 0x64 : 0x00000094
 I2C WR IT66121: 0x64 : 0x00000094
 ```
-**Now, WTF is this??? (extra steps in fl2000_hdmi_power_up)**
+**(extra steps in fl2000_hdmi_power_up)**
 
 0x6A: AFE magic 00 -> 70
 ```
@@ -639,15 +637,21 @@ VGA_CTRL_REG_ACLK: Force PLL power UP always
 REG RD 0x803C : 0xE001084D
 REG WR 0x803C : 0xE401084D
 ```
-_Mixup_<br>
-VGA_PLL_REG: configure PLL parameters<br>
-RST_CTRL_REG: Software reset to application logic
+**fl2000_monitor_set_resolution**
+VGA_PLL_REG: configure PLL parameters
 ```
 REG WR 0x802C : 0x0020410A
+```
+RST_CTRL_REG: Software reset to application logic
+```
 REG RD 0x8048 : 0x00000004
 REG WR 0x8048 : 0x00008004
+```
+VGA_PLL_REG: confirm PLL parameters setting
+```
 REG RD 0x802C : 0x0020410A
 ```
+**_fl2000_set_intrl_ctrl**
 VGA_CTRL_REG_ACLK: Do not use packet pending
 ```
 REG RD 0x803C : 0xE401084D
@@ -658,6 +662,7 @@ VGA_CTRL_REG_ACLK: Use zero-length packet, VGA error interrupt enable
 REG RD 0x803C : 0xC401084D
 REG WR 0x803C : 0xD501084D
 ```
+**_fl2000_set_video_mode**
 VGA_CTRL_REG_PXCLK: Disable DAC output, disable continuous drop count
 ```
 REG RD 0x8004 : 0x0010239C
@@ -668,6 +673,7 @@ VGA_CTRL_REG_PXCLK: Enable DAC output, Clear watermark
 REG RD 0x8004 : 0x0010031C
 REG WR 0x8004 : 0x0010039D
 ```
+**_fl2000_set_video_timing**
 VGA_HSYNC_REG1: value
 ```
 REG WR 0x8008 : 0x032003A0
@@ -693,14 +699,15 @@ VGA_ISOCH_REG: reset mframe_count to 0
 REG RD 0x801C : 0x00850000
 REG WR 0x801C : 0x00000000
 ```
-(???)
+0x0070: magic set bit 13
 ```
 REG RD 0x0070 : 0x04186085
 REG WR 0x0070 : 0x04186085
 ```
-_Mixup_<br>
-VGA_CTRL_REG_ACLK: Force VGA connect (probably useless, unless a workaround)<br>
-I2C RD IT66121: 0x0C : 0x006C0000
+**fl2000_hdmi_init - total mixup**
+VGA_CTRL_REG_ACLK: Force VGA connect (probably useless, at least disabled in the FL2000 linux port)<br>
+I2C RD IT66121: 0x0C : 0x006C0000<br>
+Linux implementation also disable interrupts here
 ```
 REG RD 0x8020 : 0xC00014CC
 REG RD 0x803C : 0xD501084D
@@ -831,18 +838,19 @@ I2C WR IT66121: 0x04 : 0x00006001
 I2C RD IT66121: 0x60 : 0x181810FF
 I2C WR IT66121: 0x60 : 0x181800FF
 ```
+****
 0x04: set HDCP reset
 ```
 I2C RD IT66121: 0x04 : 0x00006001
 I2C WR IT66121: 0x04 : 0x00006001
 ```
-
-0x0F: Power Up TxCLK
+**fl2000_hdmi_setup_afe**
+0x0F: Switch bank 0, also by chance clear pending interrupt in bit 7
 ```
 I2C RD IT66121: 0x0C : 0x106C0000
 I2C WR IT66121: 0x0C : 0x006C0000
 ```
-???
+0x61: fire AFE by writing 0 (duplicate operation)
 ```
 I2C RD IT66121: 0x60 : 0x181800FF
 I2C WR IT66121: 0x60 : 0x181800FF
