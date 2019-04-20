@@ -1,5 +1,7 @@
 #!/bin/sh
 
+export PATH=$PATH:/usr/local/bin
+
 modprobe drm
 modprobe drm_kms_helper
 
