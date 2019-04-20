@@ -83,7 +83,8 @@ static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
 static enum drm_mode_status fl2000_mode_valid(struct drm_crtc *crtc,
 		const struct drm_display_mode *mode)
 {
-	/* TODO: check mode against USB bulk endpoint bandwidth */
+	/* TODO: check mode against USB bulk endpoint bandwidth and other FL2000
+	 * HW limitations*/
 
 	dev_info(crtc->dev->dev, "fl2000_mode_valid");
 
@@ -94,9 +95,13 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		struct drm_crtc_state *cstate,
 		struct drm_plane_state *plane_state)
 {
-	/* TODO: all FL2000DX HW configuration stuff here */
-
 	dev_info(pipe->crtc.dev->dev, "fl2000_display_enable");
+	/**
+	 * RST_CTRL_REG: Software reset to application logic
+	 * VGA_I2C_SC_REG: VGA EDID detect enable
+	 * VGA_I2C_SC_REG: VGA External monitor detect enable
+	 * VGA Control Register3: Disable an auto-generation of reset when we wakeup from disconnect
+	 */
 }
 
 void fl2000_display_disable(struct drm_simple_display_pipe *pipe)

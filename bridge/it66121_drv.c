@@ -70,24 +70,35 @@ static const struct regmap_config it66121_regmap_config = {
 
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
+	/* 1. drm_do_get_edid
+	 * 2. drm_add_edid_modes
+	 * 3. drm_mode_connector_update_edid_property */
 	return 0;
+}
+
+static int it66121_connector_detect_ctx(struct drm_connector *connector,
+		struct drm_modeset_acquire_ctx *ctx, bool force)
+{
+	/* TODO: check connected monitor */
+	return connector_status_disconnected;
 }
 
 static struct drm_connector_helper_funcs it66121_connector_helper_funcs = {
 	.get_modes = it66121_connector_get_modes,
+	.detect_ctx = it66121_connector_detect_ctx,
 };
 
 static enum drm_connector_status it66121_connector_detect(
 		struct drm_connector *connector, bool force)
 {
-	return connector_status_disconnected;
+	return it66121_connector_detect_ctx(connector, NULL, force);
 }
 
 static const struct drm_connector_funcs it66121_connector_funcs = {
-	.fill_modes = drm_helper_probe_single_connector_modes,
-	.detect = it66121_connector_detect,
-	.destroy = drm_connector_cleanup,
 	.reset = drm_atomic_helper_connector_reset,
+	.detect = it66121_connector_detect,
+	.fill_modes = drm_helper_probe_single_connector_modes,
+	.destroy = drm_connector_cleanup,
 	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
 };
@@ -99,40 +110,9 @@ static int it66121_bind(struct device *comp, struct device *master,
 	int ret;
 	struct drm_bridge *bridge = dev_get_drvdata(comp);
 	struct drm_simple_display_pipe *pipe = master_data;
-	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
-			bridge);
 
 	dev_info(comp, "Binding IT66121 component");
-
 	/* TODO: Do some checks? */
-
-	/* Reset according to IT66121 manual */
-	regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
-	regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (0<<5));
-
-	/* Power up according to IT66121 manual */
-	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL_2, (1<<6), (0<<6));
-	regmap_write_bits(priv->regmap, IT66121_INT_CONTROL, (1<<0), (0<<0));
-	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<5), (0<<5));
-	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<2)|(1<<6), (0<<2)|(0<<6));
-	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<6), (0<<6));
-	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<4), (0<<4));
-	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<3), (1<<3));
-	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<2), (1<<2));
-
-	regmap_write(priv->regmap, IT66121_INT_MASK_1, 0);
-	regmap_write(priv->regmap, IT66121_INT_MASK_2, 0);
-	regmap_write(priv->regmap, IT66121_INT_MASK_3, 0);
-
-	/* IT66121_AFE_XP_TEST: 0x30 --> 0x70
-	 * whole register is defined as XP_TEST, values are undisclosed */
-
-	/* IT66121_AFE_DRV_HS: 0x00 --> 0x1F
-	 * lower 5 bits are undisclosed in manual */
-
-	/* IT66121_AFE_IP_CONTROL_2: 0x18 --> 0x38
-	 * DRV_ISW[5:3] value '011' is a default output current level swing,
-	 * with change to '111' we set output current level swing to maximum */
 
 	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
 	if (ret != 0)
@@ -144,8 +124,8 @@ static int it66121_bind(struct device *comp, struct device *master,
 static void it66121_unbind(struct device *comp, struct device *master,
 		void *master_data)
 {
-	/* TODO: Detach? */
 	dev_info(comp, "Unbinding IT66121 component");
+	/* TODO: Detach? */
 }
 
 static struct component_ops it66121_component_ops = {
@@ -179,10 +159,37 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 
 static void it66121_bridge_detach(struct drm_bridge *bridge)
 {
+	/* TODO: Detach encoder */
 }
 
 static void it66121_bridge_enable(struct drm_bridge *bridge)
 {
+	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
+			bridge);
+
+	/* Reset according to IT66121 manual */
+	regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
+
+	/* Power up according to IT66121 manual */
+	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL_2, (1<<6), (0<<6));
+	regmap_write_bits(priv->regmap, IT66121_INT_CONTROL, (1<<0), (0<<0));
+	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<5), (0<<5));
+	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<2)|(1<<6), (0<<2)|(0<<6));
+	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<6), (0<<6));
+	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<4), (0<<4));
+	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<3), (1<<3));
+	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<2), (1<<2));
+
+	/* Extra steps for AFE from original driver */
+	/* IT66121_AFE_XP_TEST: 0x30 --> 0x70
+	 * whole register is defined as XP_TEST, values are undisclosed */
+
+	/* IT66121_AFE_DRV_HS: 0x00 --> 0x1F
+	 * lower 5 bits are undisclosed in manual */
+
+	/* IT66121_AFE_IP_CONTROL_2: 0x18 --> 0x38
+	 * DRV_ISW[5:3] value '011' is a default output current level swing,
+	 * with change to '111' we set output current level swing to maximum */
 }
 
 static void it66121_bridge_disable(struct drm_bridge *bridge)
@@ -191,8 +198,14 @@ static void it66121_bridge_disable(struct drm_bridge *bridge)
 
 static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		struct drm_display_mode *mode,
-		struct drm_display_mode *adjusted_mode)
+		struct drm_display_mode 	*adjusted_mode)
+
 {
+	/*
+	 * hdmi_avi_infoframe_init()
+	 * drm_hdmi_avi_infoframe_from_display_mode()
+	 * */
+
 }
 
 static const struct drm_bridge_funcs it66121_bridge_funcs = {
