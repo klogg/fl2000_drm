@@ -266,7 +266,7 @@ REG WR 0x0070 : 0x04186085
 REG RD 0x0078 : 0x18010D14
 REG WR 0x0078 : 0x18010D14
 ```
-**Read monitor EDID data**
+**Read monitor EDID data (fl2000_hdmi_read_edid_table)**
 
 Pattern here is: `rrw10-rw14-rrw10-rw14-rw14-w10-w14`<br>
 0x04-0x07: read default values
@@ -1135,3 +1135,7 @@ REG WR 0x0070 : 0x04086085
 REG RD 0x0070 : 0x04086085
 REG WR 0x0070 : 0x04006085
 ```
+## Implementation notes
+1. On interrupt we need to check output change and then call ``drm_kms_helper_hotplug_event()``. This can be done from workqueue probably
+2. Not clear when userspace calls _enable() / _disable() for drm device chain
+3. Need to strip down HDCP/Audio stuff, hope it will work when unconfigured
