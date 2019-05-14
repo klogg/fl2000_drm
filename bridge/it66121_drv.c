@@ -65,7 +65,8 @@ static const struct regmap_config it66121_regmap_config = {
 	.reg_format_endian = REGMAP_ENDIAN_BIG,
 	.val_format_endian = REGMAP_ENDIAN_BIG,
 
-	.use_single_rw = true,
+	.use_single_read = true,
+	.use_single_write = true,
 };
 
 static int it66121_connector_get_modes(struct drm_connector *connector)
@@ -152,7 +153,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	drm_connector_helper_add(&priv->connector,
 			&it66121_connector_helper_funcs);
 
-	drm_mode_connector_attach_encoder(&priv->connector, bridge->encoder);
+	drm_connector_attach_encoder(&priv->connector, bridge->encoder);
 
 	return 0;
 }

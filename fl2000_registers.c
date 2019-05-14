@@ -105,7 +105,8 @@ static const struct regmap_config fl2000_regmap_config = {
 	.reg_read = fl2000_reg_read,
 	.reg_write = fl2000_reg_write,
 
-	.use_single_rw = true,
+	.use_single_read = true,
+	.use_single_write = true,
 };
 
 #if defined(CONFIG_DEBUG_FS)
