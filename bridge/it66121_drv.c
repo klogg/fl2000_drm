@@ -3,7 +3,7 @@
  * it66121_drv.c
  *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
- * (C) Copyright 2018, Artem Mygaiev
+ * (C) Copyright 2018-2019, Artem Mygaiev
  */
 
 #include <linux/device.h>
@@ -44,9 +44,9 @@ struct it66121_priv {
 
 static int it66121_remove(struct i2c_client *client);
 
-/* According to datasheet IT66121 addresses are 0x98 or 0x9A, but this is
- * including lsb which is responsible for r/w command - that's why shift */
-static const unsigned short it66121_addr[] = {(0x98 >> 1), I2C_CLIENT_END};
+/* According to datasheet IT66121 addresses are 0x98 or 0x9A including cmd */
+static const unsigned short it66121_addr[] = {(0x98 >> 1), (0x9A >> 1),
+	I2C_CLIENT_END};
 
 static const struct regmap_config it66121_regmap_config = {
 	.val_bits = 8, /* 8-bit register size */
@@ -304,7 +304,7 @@ static int it66121_detect(struct i2c_client *client,
 	for (i = 0; i < 4; i++) {
 		ret = i2c_smbus_read_byte_data(client, i);
 		if (ret < 0) {
-			dev_err(&adapter->dev, "I2C transfer failed (%d)", ret);
+			dev_dbg(&adapter->dev, "I2C transfer failed (%d)", ret);
 			return -ENODEV;
 		}
 		id.b[i] = ret;
@@ -312,7 +312,7 @@ static int it66121_detect(struct i2c_client *client,
 
 	if ((id.vendor != VENDOR_ID) ||
 			((id.device & ~REVISION_MASK) != DEVICE_ID)) {
-		dev_err(&adapter->dev, "IT66121 not found (0x%X-0x%X)",
+		dev_dbg(&adapter->dev, "IT66121 not found (0x%X-0x%X)",
 				id.vendor, id.device);
 		return -ENODEV;
 	}
