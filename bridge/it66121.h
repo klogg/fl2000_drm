@@ -47,7 +47,6 @@
 #define IT66121_AFE_IP_CONTROL_2	0x63
 #define IT66121_AFE_IP_CONTROL_1	0x64
 #define IT66121_AFE_RING_CONTROL	0x65
-/* reserved */
 #define IT66121_AFE_DRV_HS		0x66
 /* reserved */
 #define IT66121_AFE_IP_CONTROL_3	0x68
