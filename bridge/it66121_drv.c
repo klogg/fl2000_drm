@@ -6,21 +6,6 @@
  * (C) Copyright 2018-2019, Artem Mygaiev
  */
 
-#include <linux/device.h>
-#include <linux/module.h>
-
-#include <linux/hdmi.h>
-#include <linux/i2c.h>
-#include <linux/component.h>
-#include <linux/regmap.h>
-
-#include <drm/drmP.h>
-#include <drm/drm_atomic.h>
-#include <drm/drm_atomic_helper.h>
-#include <drm/drm_crtc_helper.h>
-#include <drm/drm_simple_kms_helper.h>
-#include <drm/drm_edid.h>
-
 #include "it66121.h"
 
 #define VENDOR_ID	0x4954
@@ -31,8 +16,6 @@
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
 
-/* Custom code for DRM bridge autodetection since there is no DT support */
-#define I2C_CLASS_HDMI	(1<<9)
 
 struct it66121_priv {
 	struct regmap *regmap;
