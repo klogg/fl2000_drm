@@ -7,6 +7,9 @@
  * (C) Copyright 2019, Artem Mygaiev
  */
 
+#ifndef __FL2000_REGISTERS_H__
+#define __FL2000_REGISTERS_H__
+
 #define regmap_reg_default(addr, val) {.reg = addr, .def = val}
 
 /* #### USB Control Registers Bank #### */
@@ -182,3 +185,5 @@ static inline bool FL2000_REG_VOLATILE(u32 reg)
 		return false;
 	}
 }
+
+#endif /* __FL2000_REGISTERS_H__ */
