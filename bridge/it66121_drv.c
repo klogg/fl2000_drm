@@ -436,15 +436,13 @@ static void it66121_bridge_enable(struct drm_bridge *bridge)
 	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<2), (1<<2));
 
 	/* Extra steps for AFE from original driver */
-	/* IT66121_AFE_XP_TEST: 0x30 --> 0x70
-	 * whole register is defined as XP_TEST, values are undisclosed */
-
-	/* IT66121_AFE_DRV_HS: 0x00 --> 0x1F
-	 * lower 5 bits are undisclosed in manual */
-
-	/* IT66121_AFE_IP_CONTROL_2: 0x18 --> 0x38
-	 * DRV_ISW[5:3] value '011' is a default output current level swing,
+	/* whole register is defined as XP_TEST, values are undisclosed */
+	regmap_write_bits(priv->regmap, IT66121_AFE_XP_TEST, (1<<2), (1<<2));
+	/* lower 5 bits are undisclosed in manual */
+	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_HS, 0x1F, 0x1F);
+	/* DRV_ISW[5:3] value '011' is a default output current level swing,
 	 * with change to '111' we set output current level swing to maximum */
+	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_2, (1<<5), (1<<5));
 }
 
 static void it66121_bridge_disable(struct drm_bridge *bridge)
