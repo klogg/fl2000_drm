@@ -8,8 +8,10 @@
 
 #include "fl2000.h"
 
-#define RUN	(1U)
-#define STOP	(0U)
+enum fl2000_intr_state {
+	RUN = (1U),
+	STOP = (0U),
+};
 
 #define INTR_BUFSIZE	4
 
