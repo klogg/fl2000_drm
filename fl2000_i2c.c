@@ -287,6 +287,8 @@ int fl2000_i2c_create(struct usb_device *usb_dev)
 
 	fl2000_debugfs_i2c_init(adapter);
 
+	/* TODO: reset i2c bus (possible hang) */
+
 	dev_info(&adapter->dev, "Connected FL2000 I2C adapter");
 	return 0;
 }
