@@ -63,7 +63,7 @@ static const struct regmap_config it66121_regmap_config = {
 	.val_bits = 8, /* 8-bit register size */
 	.reg_bits = 8, /* 8-bit register address space */
 	.reg_stride = 1,
-	.max_register = 0xFF,
+	.max_register = 2 * IT66121_BANK_SIZE - 1, /* 2 banks of registers */
 
 	.cache_type = REGCACHE_NONE,
 
