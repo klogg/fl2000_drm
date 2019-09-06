@@ -15,6 +15,9 @@ All registers (both FL2000 and IT66121) access is implemented via regmaps. It is
 
 See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) for more details on development.
 
+## How to use
+**IMPORTANT!** As it is seen from the original driver sources FL2000 does not properly support USB3 U1/U2 LPM. While the dongle was working properly woth desktop Linux machine, on the laptop with Linux the dongle had issues because USB hub was setting U1/U2 timers despite LPM configuration was disabled in the driver. Issues observed were: all interrupt URBs were not delivered, sometimes control URBs were not delivered. This can *probably* be fixed using [Linux USB device quirks](elixir.bootlin.com/linux/latest/source/drivers/usb/core/quirks.c), e.g. with kernel boot param:<br> `quirks=1D5C:2000:USB_QUIRK_NO_LPM`
+
 ## Limitations
  * HDMI CEC is not supported
  * HDMI Audio is not supported
