@@ -16,10 +16,9 @@
 #define DRM_DRIVER_MINOR	0
 #define DRM_DRIVER_PATCHLEVEL	1
 
-#define MAX_WIDTH	4000
-#define MAX_HEIGHT	4000
-#define BPP		32
-#define MAX_CONN	1
+#define MAX_WIDTH		4000
+#define MAX_HEIGHT		4000
+#define BPP			32
 
 int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_wait(struct usb_device *usb_dev);
@@ -91,7 +90,8 @@ static enum drm_mode_status fl2000_mode_valid(struct drm_crtc *crtc,
 	/* TODO: check mode against USB bulk endpoint bandwidth and other FL2000
 	 * HW limitations*/
 
-	dev_info(crtc->dev->dev, "fl2000_mode_valid");
+	dev_info(crtc->dev->dev, "DRM mode validation: "DRM_MODE_FMT,
+			DRM_MODE_ARG(mode));
 
 	return MODE_OK;
 }
@@ -100,6 +100,8 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		struct drm_crtc_state *cstate,
 		struct drm_plane_state *plane_state)
 {
+	/* TODO: enable HW */
+
 	dev_info(pipe->crtc.dev->dev, "fl2000_display_enable");
 }
 
@@ -123,7 +125,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	dev_info(pipe->crtc.dev->dev, "fl2000_display_update");
 
 	if (fb) {
-		//dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
+		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
 		int idx;
 
 		/* TODO: Do we really need this? What if it fails? */
@@ -132,6 +134,8 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		/* TODO:
 		 * Calculate & validate real buffer area for transmission
 		 * Schedule transmission of 'addr' over USB */
+		printk("%lld", addr);
+
 
 		drm_dev_exit(idx);
 	}

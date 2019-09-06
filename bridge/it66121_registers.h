@@ -50,10 +50,12 @@ typedef union {
 #define IT66121_INT_CLEAR_1		0x0C
 #define IT66121_INT_CLEAR_2		0x0D
 #define IT66121_SYS_STATUS		0x0E
-static const struct reg_field IT66121_SYS_STATUS_int =
+static const struct reg_field IT66121_SYS_STATUS_irq_pending=
 		REG_FIELD(IT66121_SYS_STATUS, 7, 7);
 static const struct reg_field IT66121_SYS_STATUS_hpd =
 		REG_FIELD(IT66121_SYS_STATUS, 6, 6);
+static const struct reg_field IT66121_SYS_STATUS_clr_irq =
+		REG_FIELD(IT66121_SYS_STATUS, 0, 0);
 
 #define IT66121_SYS_CONTROL		0x0F
 
@@ -69,9 +71,9 @@ static const struct reg_field IT66121_SYS_STATUS_hpd =
 #define IT66121_DDC_SEGMENT		0x14
 #define IT66121_DDC_COMMAND		0x15
 #define IT66121_DDC_STATUS		0x16
-static const struct reg_field IT66121_DDC_STATUS_done =
+static const struct reg_field IT66121_DDC_STATUS_ddc_done =
 		REG_FIELD(IT66121_DDC_STATUS, 7, 7);
-static const struct reg_field IT66121_DDC_STATUS_error =
+static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 		REG_FIELD(IT66121_DDC_STATUS, 3, 5);
 
 #define IT66121_DDC_RD_FIFO		0x17

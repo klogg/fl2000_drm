@@ -16,6 +16,8 @@
 #define OFFSET_BITS	8
 #define VALUE_BITS	8
 
+#define IRQ_POLL_INTRVL	100
+
 enum it66121_intr_state {
 	RUN = (1U),
 	STOP = (0U),
@@ -32,10 +34,14 @@ struct it66121_priv {
 	struct workqueue_struct *work_queue;
 	atomic_t state;
 
-	struct regmap_field *sys_status_int;
-	struct regmap_field *sys_status_hpd;
-	struct regmap_field *ddc_status_done;
-	struct regmap_field *ddc_status_error;
+	struct regmap_field *irq_pending;
+	struct regmap_field *hpd;
+	struct regmap_field *ddc_done;
+	struct regmap_field *ddc_error;
+	struct regmap_field *clr_irq;
+
+	struct hdmi_avi_infoframe *hdmi_avi_infoframe;
+	u8 hdmi_avi_infoframe_raw[HDMI_AVI_INFOFRAME_SIZE];
 };
 
 static int it66121_remove(struct i2c_client *client);
@@ -103,17 +109,16 @@ enum {
 	DDC_CMD_ABORT = 0xF,
 } ddc_cmd;
 
-#if 0
 static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
 {
 	int res, val;
 
-	res = regmap_field_read_poll_timeout(priv->ddc_status_done, val, true,
+	res = regmap_field_read_poll_timeout(priv->ddc_done, val, true,
 			EDID_SLEEP, EDID_TIMEOUT);
 	if (res != 0)
 		return res;
 
-	res = regmap_field_read(priv->ddc_status_error, &val);
+	res = regmap_field_read(priv->ddc_error, &val);
 	if (res != 0)
 		return res;
 	if (val != 0)
@@ -209,7 +214,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 	/* TODO: use mutex */
 
-	res = regmap_field_read(priv->sys_status_int, &val);
+	res = regmap_field_read(priv->irq_pending, &val);
 	if (res < 0) {
 		dev_err(dev, "Cannot read interrupt status (%d)", res);
 	}
@@ -224,8 +229,6 @@ static void it66121_intr_work(struct work_struct *work_item)
 	else if (val == true) {
 		it666121_int_status_1_reg status_1;
 
-		dev_info(dev, "Interrupt detected");
-
 		res = regmap_read(priv->regmap, IT66121_INT_STATUS_1,
 				&status_1.val);
 		if (res < 0) {
@@ -237,6 +240,8 @@ static void it66121_intr_work(struct work_struct *work_item)
 			if (status_1.ddc_bus_hang)
 				it66121_abort_ddc_ops(priv);
 		}
+
+		regmap_field_write(priv->clr_irq, 1);
 	}
 
 	if (atomic_read(&priv->state) != RUN)
@@ -244,9 +249,9 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 
-	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(50));
+	queue_delayed_work(priv->work_queue, &priv->work,
+			msecs_to_jiffies(IRQ_POLL_INTRVL));
 }
-#endif
 
 static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		size_t len)
@@ -354,7 +359,6 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 	return 0;
 }
 
-
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
 	int res;
@@ -384,7 +388,7 @@ static int it66121_connector_detect_ctx(struct drm_connector *connector,
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv,
 			connector);
 
-	res = regmap_field_read(priv->sys_status_hpd, &val);
+	res = regmap_field_read(priv->hpd, &val);
 	return val == 0 ? connector_status_disconnected :
 			connector_status_connected;
 }
@@ -445,8 +449,6 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
 			bridge);
 
-	dev_info(bridge->dev->dev, "Bridge attached");
-
 	if (!bridge->encoder) {
 		DRM_ERROR("Parent encoder object not found");
 		return -ENODEV;
@@ -484,23 +486,33 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	ret = regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
 	msleep(50);
 
-	/* Start interrupts */
-	//regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
-	//		IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG,
-	//		~(IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG));
-	//atomic_set(&priv->state, RUN);
-	//INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
-	//queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(50));
-
 	ret = drm_connector_init(bridge->dev, &priv->connector,
 					 &it66121_connector_funcs,
 					 DRM_MODE_CONNECTOR_HDMIA);
-	if (ret != 0) return ret;
+	if (ret != 0) {
+		DRM_ERROR("Cannot initialize bridge connector");
+		return ret;
+	}
 
 	drm_connector_helper_add(&priv->connector,
 			&it66121_connector_helper_funcs);
 
-	drm_connector_attach_encoder(&priv->connector, bridge->encoder);
+	ret = drm_connector_attach_encoder(&priv->connector, bridge->encoder);
+	if (ret != 0) {
+		DRM_ERROR("Cannot attach bridge");
+		return ret;
+	}
+
+	/* Start interrupts */
+	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
+			IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG,
+			~(IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG));
+	atomic_set(&priv->state, RUN);
+	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
+	queue_delayed_work(priv->work_queue, &priv->work,
+			msecs_to_jiffies(IRQ_POLL_INTRVL));
+
+	dev_info(bridge->dev->dev, "Bridge attached");
 
 	return 0;
 }
@@ -508,16 +520,19 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 static void it66121_bridge_detach(struct drm_bridge *bridge)
 {
 	/* TODO: Detach encoder */
+	dev_info(bridge->dev->dev, "it66121_bridge_detach");
 }
 
 static void it66121_bridge_enable(struct drm_bridge *bridge)
 {
-	//struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
-	//		bridge);
+	/* TODO: Enable HW */
+	dev_info(bridge->dev->dev, "it66121_bridge_enable");
 }
 
 static void it66121_bridge_disable(struct drm_bridge *bridge)
 {
+	/* TODO: Disable HW */
+	dev_info(bridge->dev->dev, "it66121_bridge_disable");
 }
 
 static void it66121_bridge_mode_set(struct drm_bridge *bridge,
@@ -525,10 +540,33 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		struct drm_display_mode *adjusted_mode)
 
 {
-	/*
-	 * hdmi_avi_infoframe_init()
-	 * drm_hdmi_avi_infoframe_from_display_mode()
-	 * */
+	int ret;
+	ssize_t frame_size;
+	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
+			bridge);
+
+	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " \
+			DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
+
+	hdmi_avi_infoframe_init(priv->hdmi_avi_infoframe);
+
+	ret = drm_hdmi_avi_infoframe_from_display_mode(priv->hdmi_avi_infoframe,
+			adjusted_mode, false);
+	if (ret != 0) {
+		dev_error(bridge->dev->dev, "Cannot create AVI infoframe");
+		return;
+	}
+
+	frame_size = hdmi_avi_infoframe_pack_only(priv->hdmi_avi_infoframe,
+			priv->hdmi_avi_infoframe_raw, HDMI_AVI_INFOFRAME_SIZE);
+	if (frame_size < 0) {
+		dev_error(bridge->dev->dev, "Cannot pack AVI infoframe");
+		return;
+	}
+
+
+	/* TODO: send raw avi info frame to it66121 */
+
 
 }
 
@@ -563,35 +601,50 @@ static int it66121_probe(struct i2c_client *client)
 
 	priv->bridge.funcs = &it66121_bridge_funcs;
 
-	priv->sys_status_int = devm_regmap_field_alloc(&client->dev,
-			priv->regmap, IT66121_SYS_STATUS_int);
-	if (IS_ERR(priv->sys_status_int)) {
-		ret = PTR_ERR(priv->sys_status_int);
+	priv->irq_pending = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_SYS_STATUS_irq_pending);
+	if (IS_ERR(priv->irq_pending)) {
+		ret = PTR_ERR(priv->irq_pending);
 		goto error;
 	}
 
-	priv->sys_status_hpd = devm_regmap_field_alloc(&client->dev,
+	priv->hpd = devm_regmap_field_alloc(&client->dev,
 			priv->regmap, IT66121_SYS_STATUS_hpd);
-	if (IS_ERR(priv->sys_status_hpd)) {
-		ret = PTR_ERR(priv->sys_status_hpd);
+	if (IS_ERR(priv->hpd)) {
+		ret = PTR_ERR(priv->hpd);
 		goto error;
 	}
 
-	priv->ddc_status_done = devm_regmap_field_alloc(&client->dev,
-			priv->regmap, IT66121_DDC_STATUS_done);
-	if (IS_ERR(priv->ddc_status_done)) {
-		ret = PTR_ERR(priv->ddc_status_done);
+	priv->clr_irq = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_SYS_STATUS_clr_irq);
+	if (IS_ERR(priv->clr_irq)) {
+		ret = PTR_ERR(priv->clr_irq);
 		goto error;
 	}
 
-	priv->ddc_status_error = devm_regmap_field_alloc(&client->dev,
-			priv->regmap, IT66121_DDC_STATUS_error);
-	if (IS_ERR(priv->ddc_status_error)) {
-		ret = PTR_ERR(priv->ddc_status_error);
+	priv->ddc_done = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_DDC_STATUS_ddc_done);
+	if (IS_ERR(priv->ddc_done)) {
+		ret = PTR_ERR(priv->ddc_done);
+		goto error;
+	}
+
+	priv->ddc_error = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_DDC_STATUS_ddc_error);
+	if (IS_ERR(priv->ddc_error)) {
+		ret = PTR_ERR(priv->ddc_error);
 		goto error;
 	}
 
 	drm_bridge_add(&priv->bridge);
+
+	/* Setup work queue for interrupt processing work */
+	priv->work_queue = create_workqueue("work_queue");
+	if (IS_ERR_OR_NULL(priv->work_queue)) {
+		dev_err(&client->dev, "Create interrupt workqueue failed");
+		ret = PTR_ERR(priv->work_queue);
+		goto error;
+	}
 
 	/* Important and somewhat unsafe - bridge pointer is in device structure
 	 * Ideally, after detecting connection encoder would need to find bridge
@@ -601,14 +654,6 @@ static int it66121_probe(struct i2c_client *client)
 	ret = component_add(&client->dev, &it66121_component_ops);
 	if (ret != 0) {
 		dev_err(&client->dev, "Cannot register IT66121 component");
-		goto error;
-	}
-
-	/* Setup work queue for interrupt processing work */
-	priv->work_queue = create_workqueue("work_queue");
-	if (IS_ERR_OR_NULL(priv->work_queue)) {
-		dev_err(&client->dev, "Create interrupt workqueue failed");
-		ret = PTR_ERR(priv->work_queue);
 		goto error;
 	}
 
