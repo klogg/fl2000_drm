@@ -706,23 +706,18 @@ REG WR 0x801C : 0x00000000
 REG RD 0x0070 : 0x04186085
 REG WR 0x0070 : 0x04186085
 ```
-**fl2000_hdmi_init - total mixup**
+**fl2000_hdmi_init - total mixup (reordered)**
 VGA_CTRL_REG_ACLK: Force VGA connect (probably useless, at least disabled in the FL2000 linux port)<br>
-I2C RD IT66121: 0x0C : 0x006C0000<br>
 Linux implementation also disable interrupts here
 ```
-REG RD 0x8020 : 0xC00014CC
 REG RD 0x803C : 0xD501084D
-REG WR 0x8020 : 0x50000CCC
 REG WR 0x803C : 0xD701084D
-REG RD 0x8020 : 0x40000CCC
-REG RD 0x8020 : 0xC0000CCC
-REG RD 0x8024 : 0x006C0000
 ```
 **IT66121 mute (fl2000_hdmi_av_mute)**
 
 0x0F: Bank 0
 ```
+I2C RD IT66121: 0x0C : 0x006C0000
 I2C WR IT66121: 0x0C : 0x006C0000
 ```
 0xC1: set AVMute
