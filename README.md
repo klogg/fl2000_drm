@@ -19,6 +19,7 @@ See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) fo
 **IMPORTANT!** As it is seen from the original driver sources FL2000 does not properly support USB3 U1/U2 LPM. While the dongle was working properly woth desktop Linux machine, on the laptop with Linux the dongle had issues because USB hub was setting U1/U2 timers despite LPM configuration was disabled in the driver. Issues observed were: all interrupt URBs were not delivered, sometimes control URBs were not delivered. This can *probably* be fixed using [Linux USB device quirks](elixir.bootlin.com/linux/latest/source/drivers/usb/core/quirks.c), e.g. with kernel boot param:<br> `quirks=1D5C:2000:USB_QUIRK_NO_LPM`
 
 ## Limitations
+ * D-sub is not supported
  * HDMI CEC is not supported
  * HDMI Audio is not supported
  * HDCP is not supported
@@ -31,7 +32,7 @@ See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) fo
  * 32-bit hosts may not work
 
 ## Upstreaming
-Considering, no firm decision yet
+Considering, no firm decision yet. Current design uses unsafe components linking and non-standard I2C device class for autodetection, this has to be addresed prior to upstreaming
 
 ## Sources
  * Original driver by FrescoLogic: https://github.com/FrescoLogic/FL2000
@@ -47,6 +48,11 @@ Considering, no firm decision yet
  * Need to implement unit testing with latest kernel & DRM unit testing tools, target coverage shall be 100%
  * Need to implement static code analysis with Coverity Scan and maybe some other tools
 
-## Open questions
- * How to simultaneously support HDMI bridge and D-Sub bridge? Config option?
- * I2C autodetection require non-empty class. Is it safe to introduce custom one? Need to ask community
+## TODO
+ * Debug and fix deinitialization (shutdown / remove)
+ * Move all (or as much as possible) resources to device resources (dev/devres functions) and simplify release
+ * Replace bus detection & components linking with configuration (modprobe / udev)
+ * Allow driver to be builtin to kernel
+ * Refactor for better / cleaner structure and modularity
+ * Minimize debugfs implementation
+ * Move all regmaps to RBTREE
