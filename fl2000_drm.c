@@ -21,6 +21,9 @@
 #define BPP		32
 #define MAX_CONN	1
 
+int fl2000_reset(struct usb_device *usb_dev);
+int fl2000_wait(struct usb_device *usb_dev);
+
 /* List all supported bridges */
 static const char *fl2000_supported_bridges[] = {
 	"it66121", /* IT66121 driver name*/
@@ -96,12 +99,6 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		struct drm_plane_state *plane_state)
 {
 	dev_info(pipe->crtc.dev->dev, "fl2000_display_enable");
-	/**
-	 * RST_CTRL_REG: Software reset to application logic
-	 * VGA_I2C_SC_REG: VGA EDID detect enable
-	 * VGA_I2C_SC_REG: VGA External monitor detect enable
-	 * VGA Control Register3: Disable an auto-generation of reset when we wakeup from disconnect
-	 */
 }
 
 void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
@@ -168,6 +165,8 @@ static int fl2000_bind(struct device *master)
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct drm_mode_config *mode_config;
+	struct usb_device *usb_dev = container_of(master, struct usb_device,
+			dev);
 	u64 mask;
 
 	dev_info(master, "Binding FL2000 master component");
@@ -233,6 +232,9 @@ static int fl2000_bind(struct device *master)
 		return ret;
 	}
 
+	fl2000_reset(usb_dev);
+	fl2000_wait(usb_dev);
+
 	return 0;
 }
 
@@ -268,7 +270,7 @@ static struct component_master_ops fl2000_drm_master_ops = {
 
 static void fl2000_match_release(struct device *dev, void *data)
 {
-	//component_master_del(dev, &fl2000_drm_master_ops);
+	component_master_del(dev, &fl2000_drm_master_ops);
 }
 
 static int fl2000_compare(struct device *dev, void *data)

@@ -91,8 +91,10 @@ static void fl2000_intr_work(struct work_struct *work_item)
 		ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
 		if (ret != 0) {
 			dev_err(&usb_dev->dev, "Cannot read interrupt" \
-					"register (%d)", ret);
+					" register (%d)", ret);
 		} else {
+			dev_info(&intr->interface->dev, "FL2000 interrupt" \
+					" status = 0x%X", status);
 			fl2000_debugfs_intr_status(status);
 		}
 	}
@@ -108,9 +110,6 @@ static void fl2000_intr_work(struct work_struct *work_item)
 static void fl2000_intr_completion(struct urb *urb)
 {
 	struct fl2000_intr *intr = urb->context;
-	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
-
-	dev_info(&usb_dev->dev, " Interrupt!!!");
 
 	if (intr == NULL) return;
 
@@ -127,37 +126,19 @@ int fl2000_intr_create(struct usb_interface *interface)
 {
 	int i, ret = 0;
 	struct fl2000_intr *intr;
-	struct usb_host_interface *host_interface = NULL;
 	struct usb_endpoint_descriptor *desc = NULL;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
 	/* There's only one altsetting (#0) and one endpoint (#3) in the
 	 * interrupt interface (#2) but lets try and "find" it anyway */
 	for (i = 0; i < interface->num_altsetting; i++) {
-		host_interface = &interface->altsetting[i];
-		if (!usb_find_int_in_endpoint(host_interface, &desc))
+		if (!usb_find_int_in_endpoint(&interface->altsetting[i], &desc))
 			break;
 	}
-
 	if (desc == NULL) {
 		dev_err(&interface->dev, "Cannot find altsetting with " \
 				"interrupt endpoint");
 		ret = -ENXIO;
-		goto error;
-	}
-
-	dev_info(&interface->dev, "Setting interrupt interface %d: " \
-			"altsetting %d, endpoint %d",
-			host_interface->desc.bInterfaceNumber,
-			host_interface->desc.bAlternateSetting,
-			usb_endpoint_num(desc));
-
-	ret = usb_set_interface(usb_dev,
-			host_interface->desc.bInterfaceNumber,
-			host_interface->desc.bAlternateSetting);
-	if (ret != 0) {
-		dev_err(&interface->dev,"Cannot set interrupt endpoint " \
-				"altsetting");
 		goto error;
 	}
 
@@ -196,7 +177,12 @@ int fl2000_intr_create(struct usb_interface *interface)
 
 	usb_set_intfdata(interface, intr);
 
-	fl2000_intr_work(&intr->work);
+	ret = fl2000_intr_submit_urb(intr);
+	if (ret != 0) {
+		atomic_set(&intr->state, STOP);
+		dev_err(&intr->interface->dev, "URB submission failed");
+		goto error;
+	}
 
 	fl2000_debugfs_intr_init();
 
