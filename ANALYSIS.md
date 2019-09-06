@@ -11,6 +11,8 @@ Dump of correctly working windows driver with non-standard HDMI display is [avai
 
 NOTE: by default USBPcap captures 65535 bytes max, so packets with frame data are incomplete. For details see https://github.com/desowin/usbpcap/issues/26
 
+**IMPORTANT!** As it is seen from the original driver sources FL2000 does not properly support USB3 U1/U2 LPM. While the dongle was working properly woth desktop Linux machine, on the laptop with Linux the dongle had issues because USB hub was setting U1/U2 timers despite LPM configuration was disabled in the driver. Issues observed were: all interrupt URBs were not delivered, sometimes control URBs were not delivered. This can *probably* be fixed using [Linux USB device quirks](elixir.bootlin.com/linux/latest/source/drivers/usb/core/quirks.c), e.g. with kernel boot param:<br> `quirks=1D5C:2000:USB_QUIRK_NO_LPM`
+
 ## Using Wireshark dissector
 
 To start Wireshark dissector please use following command:<br>
@@ -18,13 +20,13 @@ To start Wireshark dissector please use following command:<br>
 
 NOTE: for correct dissector operation Wireshark must be built with patch allowing dissection of CONTROL messages with "device" recipient. For details see https://code.wireshark.org/review/32626 (merged to Wireshark master development branch)
 
-## Known issues
+### Known issues
 
-1. Empty 'status' stage CONTROL packets and zero-size BULK packets are not dissected because of Wireshark implementation - see `dissect_usb_payload()` function not proceeding to dissection when there is no data beyond standard USB header
+* Empty 'status' stage CONTROL packets and zero-size BULK packets are not dissected because of Wireshark implementation - see `dissect_usb_payload()` function not proceeding to dissection when there is no data beyond standard USB header
 
 ## Observations
 
-See parsed stream dump and register access statistics below
+See parsed stream dump and register access statistics below.
 
 * All video frames are transmitted in RGB24 which is confirmed by USB data frame size:<br>
 800x480 (resolution) x3 (bytes per pixel) = 1152000
