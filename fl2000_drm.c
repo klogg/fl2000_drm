@@ -64,6 +64,8 @@ static struct drm_driver fl2000_drm_driver = {
 	.gem_prime_import_sg_table = drm_gem_cma_prime_import_sg_table,
 	.gem_prime_export = drm_gem_prime_export,
 	.gem_prime_get_sg_table	= drm_gem_cma_prime_get_sg_table,
+	.gem_prime_mmap = drm_gem_cma_prime_mmap,
+	.gem_prime_vmap = drm_gem_cma_prime_vmap,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
@@ -218,17 +220,17 @@ static int fl2000_bind(struct device *master)
 
 	drm_mode_config_reset(drm);
 
-	ret = drm_fb_cma_fbdev_init(drm, BPP, MAX_CONN);
-	if (ret != 0) {
-		dev_err(drm->dev, "Cannot initialize CMA framebuffer (%d)", ret);
-		return ret;
-	}
-
 	drm_kms_helper_poll_init(drm);
 
 	ret = drm_dev_register(drm, 0);
 	if (ret < 0) {
 		dev_err(drm->dev, "Cannot register DRM device (%d)", ret);
+		return ret;
+	}
+
+	ret = drm_fb_cma_fbdev_init(drm, BPP, 0);
+	if (ret != 0) {
+		dev_err(drm->dev, "Cannot initialize CMA framebuffer (%d)", ret);
 		return ret;
 	}
 
