@@ -46,12 +46,14 @@ See parsed stream dump and register access statistics below
 * There is (seemingly) concurrent access to registers happened leading to some sort of mixup when forcing VGA connect and starting IT66121 I2C register access. Linux implementation is different and does not have this issue.
 * There are 2 extra application resets besides the one on the start of the driver
 * In EDID section, it is seen how driver workarounds the problem of missing 3 first bytes of every EDID read operation: Ask for 6 bytes that will overlap the missing 3 bytes for every 32-bytes read. This leads to 7 read blocks while this could be brought done by 5 only significantly amount of activities:
-  * Fill 1st 3 bytes with 00 FF FF
-  * Read 32 bytes from offset 0
-  * Read 32 bytes from offset 29
-  * Read 32 bytes from offset 58
-  * Read 32 bytes from offset 87
-  * Read 12 bytes from offset 116
+  * Fill 3 bytes with '00 FF FF'
+  * Read 29 bytes from offset 3
+  * Read 29 bytes from offset 32
+  * Read 29 bytes from offset 61
+  * Read 29 bytes from offset 90
+  * Read 9 bytes from offset 119
+* When reading EDID original driver seem to reset 2 high bytes (readonly as per doc) to 0, in capture we see that windows driver just keeps them 'dirty' with previous operation result
+* DDC Abort issued twice during EDID, with EDID_ROM flag enabled (flag setting is absent in original driver)
 
 ## Register access statistics
 
@@ -135,7 +137,7 @@ I2C WR IT66121: 0x04 : 0x0000603C
 ```
 **IT66121 Initial Power On Sequence as per 'Programming Guide' (fl2000_hdmi_power_up)**
 
-0x0F: power down IACLK, TxCLK (reset bit 6 in guide)
+0x0F: power up GRCLK (reset bit 6 in guide), power down IACLK, TxCLK, CRCLK (???)
 ```
 I2C RD IT66121: 0x0C : 0x080C0000
 I2C RD IT66121: 0x0C : 0x080C0000
@@ -200,7 +202,7 @@ I2C WR IT66121: 0x64 : 0x001F0094
 I2C RD IT66121: 0x60 : 0x188800FF
 I2C WR IT66121: 0x60 : 0x388800FF
 ```
-0x0F: power up IACLK, TxCLK
+0x0F: power up IACLK, TxCLK (???)
 ```
 I2C RD IT66121: 0x0C : 0x380C0000
 I2C RD IT66121: 0x0C : 0x380C0000
@@ -221,7 +223,7 @@ RST_CTRL_REG: Software reset to application logic
 REG RD 0x8048 : 0x00000004
 REG WR 0x8048 : 0x00008004
 ```
-**FL2000 Enable monitor detection**
+**FL2000 Enable VGA monitor detection (unnecessary?)**
 
 VGA_I2C_SC_REG: VGA EDID detect enable
 ```
