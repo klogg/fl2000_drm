@@ -28,7 +28,7 @@ struct it66121_priv {
 	struct drm_connector connector;
 	enum drm_connector_status status;
 
-	struct work_struct work;
+	struct delayed_work work;
 	struct workqueue_struct *work_queue;
 	atomic_t state;
 
@@ -41,7 +41,7 @@ struct it66121_priv {
 static int it66121_remove(struct i2c_client *client);
 
 /* According to datasheet IT66121 addresses are 0x98 or 0x9A including cmd */
-static const unsigned short it66121_addr[] = {(0x98 >> 1), (0x9A >> 1),
+static const unsigned short it66121_addr[] = {(0x98 >> 1), /*(0x9A >> 1),*/
 	I2C_CLIENT_END};
 
 static const struct regmap_range_cfg it66121_regmap_banks[] = {
@@ -103,6 +103,7 @@ enum {
 	DDC_CMD_ABORT = 0xF,
 } ddc_cmd;
 
+#if 0
 static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
 {
 	int res, val;
@@ -124,9 +125,12 @@ static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
 static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 {
 	int res;
-	unsigned int val;
+	unsigned int ddc_control_val;
 
-	res = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &val);
+	struct device *dev = priv->bridge.dev->dev;
+	dev_info(dev, "Clear DDC FIFO");
+
+	res = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
 	if (res != 0)
 		return res;
 
@@ -141,7 +145,7 @@ static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 	if (res != 0)
 		return res;
 
-	res = regmap_write(priv->regmap, IT66121_DDC_CONTROL, val);
+	res = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
 	if (res != 0)
 		return res;
 
@@ -151,7 +155,10 @@ static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 {
 	int i, res;
-	unsigned int val;
+	unsigned int ddc_control_val;
+
+	struct device *dev = priv->bridge.dev->dev;
+	dev_info(dev, "Abort DDC Operations");
 
 	/* XXX: Prior to DDC abort command there was also a reset of HDCP:
 	 *  1. HDCP_DESIRE clear bit CP DESIRE
@@ -160,19 +167,19 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	 * state, but somehow this is how it was implemented. This sequence is
 	 * removed since HDCP is not supported */
 
-	res = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &val);
-	if (res != 0)
-		return res;
-
-	res = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
-			IT66121_DDC_MASTER_DDC |
-			IT66121_DDC_MASTER_HOST);
+	res = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
 	if (res != 0)
 		return res;
 
 	/* According to 2009/01/15 modification by Jau-Chih.Tseng@ite.com.tw
 	 * do abort DDC twice */
 	for (i = 0; i < 2; i++) {
+		res = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
+				IT66121_DDC_MASTER_DDC |
+				IT66121_DDC_MASTER_HOST);
+		if (res != 0)
+			return res;
+
 		res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_ABORT);
 		if (res != 0)
@@ -183,7 +190,7 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 			return res;
 	}
 
-	res = regmap_write(priv->regmap, IT66121_DDC_CONTROL, val);
+	res = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
 	if (res != 0)
 		return res;
 
@@ -194,16 +201,18 @@ static void it66121_intr_work(struct work_struct *work_item)
 {
 	int res;
 	unsigned int val;
-	struct it66121_priv *priv = container_of(work_item, struct it66121_priv,
+	struct delayed_work *dwork = container_of(work_item,
+			struct delayed_work, work);
+	struct it66121_priv *priv = container_of(dwork, struct it66121_priv,
 			work);
+	struct device *dev = priv->bridge.dev->dev;
 
 	/* TODO: use mutex */
 
 	res = regmap_field_read(priv->sys_status_int, &val);
-	if (res < 0)
-		/* TODO: Signal error here somehow */
-		return;
-
+	if (res < 0) {
+		dev_err(dev, "Cannot read interrupt status (%d)", res);
+	}
 	/* XXX: There are at least 5 registers that can source interrupt:
 	 *  - 0x06 (IT66121_INT_STATUS_1)
 	 *  - 0x07 (IT66121_INT_STATUS_2)
@@ -212,43 +221,58 @@ static void it66121_intr_work(struct work_struct *work_item)
 	 *  - 0xF0 (IT66121_EXT_INT_STATUS_2)
 	 * For now we process only DDC events of the IT66121_INT_STATUS_1 which
 	 * implies proper masks configuration */
-	if (val == true) {
+	else if (val == true) {
 		it666121_int_status_1_reg status_1;
+
+		dev_info(dev, "Interrupt detected");
+
 		res = regmap_read(priv->regmap, IT66121_INT_STATUS_1,
 				&status_1.val);
-		if (res < 0)
-			/* TODO: Signal error here somehow */
-			return;
-		if (status_1.ddc_fifo_err)
-			it66121_clear_ddc_fifo(priv);
-		if (status_1.ddc_bus_hang)
-			it66121_abort_ddc_ops(priv);
+		if (res < 0) {
+			dev_err(dev, "Cannot read IT66121_INT_STATUS_1 (%d)",
+					res);
+		} else {
+			if (status_1.ddc_fifo_err)
+				it66121_clear_ddc_fifo(priv);
+			if (status_1.ddc_bus_hang)
+				it66121_abort_ddc_ops(priv);
+		}
 	}
 
 	if (atomic_read(&priv->state) != RUN)
 		return;
 
-	INIT_WORK(&priv->work, &it66121_intr_work);
+	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 
-	queue_work(priv->work_queue, &priv->work);
+	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(50));
 }
+#endif
 
-static int it66121_get_edid_block(void *data, u8 *buf, unsigned int block,
+static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		size_t len)
 {
-	int res, val, offset = 0, remain = len;
+	int i, res, remain = len, offset = 0;
+	unsigned int rd_fifo_val;
+	static u8 header[EDID_LOSS_LEN] = {0x00, 0xFF, 0xFF};
 
-	struct it66121_priv *priv = data;
+	struct it66121_priv *priv = context;
+	struct device *dev = priv->bridge.dev->dev;
 
-	/* XXX: Probably we may need to
-	 *  - abort running DDC operation
-	 *  - clear DDC FIFO */
+	dev_info(dev, "Reading EDID block %d (%zd bytes)", block, len);
 
-	do {
-		int i;
-		int size = (remain > EDID_FIFO_SIZE) ? EDID_FIFO_SIZE : remain;
+	/* Statically fill first 3 bytes (due to EDID reading HW bug) */
+	for (i = 0; (i < EDID_LOSS_LEN) && (remain > 0); i++) {
+		*(buf++) = header[i];
+		remain--;
+		offset++;
+	}
 
-		/* Set PC master */
+	while (remain > 0) {
+		/* Add bytes that will be lost during EDID read */
+		int size = ((remain + EDID_LOSS_LEN) > EDID_FIFO_SIZE) ?
+				EDID_FIFO_SIZE : (remain + EDID_LOSS_LEN);
+
+		/* Switch port to PC */
 		res = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
 				IT66121_DDC_MASTER_DDC |
 				IT66121_DDC_MASTER_HOST);
@@ -261,15 +285,43 @@ static int it66121_get_edid_block(void *data, u8 *buf, unsigned int block,
 		if (res != 0)
 			return res;
 
-		res = it66121_wait_ddc_ready(priv);
+		/* Power up CRCLK */
+		regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (1<<3), (1<<3));
 		if (res != 0)
 			return res;
 
+		/* Do abort DDC twice - HW defect */
+		for (i = 0; i < 2; i++) {
+			res = regmap_write_bits(priv->regmap, IT66121_DDC_CONTROL, (3<<0), (3<<0));
+			if (res != 0)
+				return res;
+
+			res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
+					DDC_CMD_ABORT);
+			if (res != 0)
+				return res;
+		}
+
+		/* Clear DDC FIFO */
+		res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
+				DDC_CMD_FIFO_CLEAR);
+		if (res != 0)
+			return res;
+
+		/* Start reading */
+		res = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
+				IT66121_DDC_MASTER_DDC |
+				IT66121_DDC_MASTER_HOST);
+		if (res != 0)
+			return res;
 		res = regmap_write(priv->regmap, IT66121_DDC_ADDRESS,
 				EDID_DDC_ADDR);
 		if (res != 0)
 			return res;
-		res = regmap_write(priv->regmap, IT66121_DDC_OFFSET, offset);
+
+		/* Account 3 bytes that will be lost */
+		res = regmap_write(priv->regmap, IT66121_DDC_OFFSET,
+				offset - EDID_LOSS_LEN);
 		if (res != 0)
 			return res;
 		res = regmap_write(priv->regmap, IT66121_DDC_SIZE, size);
@@ -283,22 +335,21 @@ static int it66121_get_edid_block(void *data, u8 *buf, unsigned int block,
 		if (res != 0)
 			return res;
 
-		res = it66121_wait_ddc_ready(priv);
-		if (res != 0)
-			return res;
+		/* Deduct lost bytes when reading from FIFO */
+		size -= EDID_LOSS_LEN;
 
 		for (i = 0; i < size; i++) {
 			res = regmap_read(priv->regmap, IT66121_DDC_RD_FIFO,
-					&val);
+					&rd_fifo_val);
 			if (res != 0)
 				return res;
 
-			*(buf++) = val & 0xFF;
+			*(buf++) = rd_fifo_val & 0xFF;
 		}
 
 		remain -= size;
 		offset += size;
-	} while (remain > 0);
+	}
 
 	return 0;
 }
@@ -394,10 +445,52 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
 			bridge);
 
+	dev_info(bridge->dev->dev, "Bridge attached");
+
 	if (!bridge->encoder) {
 		DRM_ERROR("Parent encoder object not found");
 		return -ENODEV;
 	}
+
+	/* Reset according to IT66121 manual */
+	ret = regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
+	msleep(50);
+
+	/* Power up GRCLK & power down IACLK, TxCLK, CRCLK */
+	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (0xf<<3), (7<<3));
+
+	/* Continue according to IT66121 manual */
+	regmap_write_bits(priv->regmap, IT66121_INT_CONTROL, (1<<0), (0<<0));
+	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<5), (0<<5));
+	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<2)|(1<<6), (0<<2)|(0<<6));
+	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<6), (0<<6));
+	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<4), (0<<4));
+	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<3), (1<<3));
+	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<2), (1<<2));
+
+	/* Extra steps for AFE from original driver */
+	/* whole register is defined as XP_TEST, values are undisclosed */
+	regmap_write_bits(priv->regmap, IT66121_AFE_XP_TEST, 0xFF, 0x70);
+	/* lower 5 bits are undisclosed in manual */
+	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_HS, 0xFF, 0x1F);
+	/* DRV_ISW[5:3] value '011' is a default output current level swing,
+	 * with change to '111' we set output current level swing to maximum */
+	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_2, 0xFF, 0x38);
+
+	/* power up IACLK, TxCLK */
+	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (3<<4), (0<<4));
+
+	/* Reset according to IT66121 manual */
+	ret = regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
+	msleep(50);
+
+	/* Start interrupts */
+	//regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
+	//		IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG,
+	//		~(IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG));
+	//atomic_set(&priv->state, RUN);
+	//INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
+	//queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(50));
 
 	ret = drm_connector_init(bridge->dev, &priv->connector,
 					 &it66121_connector_funcs,
@@ -419,30 +512,8 @@ static void it66121_bridge_detach(struct drm_bridge *bridge)
 
 static void it66121_bridge_enable(struct drm_bridge *bridge)
 {
-	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
-			bridge);
-
-	/* Reset according to IT66121 manual */
-	regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
-
-	/* Power up according to IT66121 manual */
-	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (1<<6), (0<<6));
-	regmap_write_bits(priv->regmap, IT66121_INT_CONTROL, (1<<0), (0<<0));
-	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<5), (0<<5));
-	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<2)|(1<<6), (0<<2)|(0<<6));
-	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<6), (0<<6));
-	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_CONTROL, (1<<4), (0<<4));
-	regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, (1<<3), (1<<3));
-	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, (1<<2), (1<<2));
-
-	/* Extra steps for AFE from original driver */
-	/* whole register is defined as XP_TEST, values are undisclosed */
-	regmap_write_bits(priv->regmap, IT66121_AFE_XP_TEST, (1<<2), (1<<2));
-	/* lower 5 bits are undisclosed in manual */
-	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_HS, 0x1F, 0x1F);
-	/* DRV_ISW[5:3] value '011' is a default output current level swing,
-	 * with change to '111' we set output current level swing to maximum */
-	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_2, (1<<5), (1<<5));
+	//struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
+	//		bridge);
 }
 
 static void it66121_bridge_disable(struct drm_bridge *bridge)
@@ -541,8 +612,6 @@ static int it66121_probe(struct i2c_client *client)
 		goto error;
 	}
 
-	it66121_intr_work(&priv->work);
-
 	return 0;
 
 error:
@@ -596,7 +665,7 @@ static int it66121_detect(struct i2c_client *client,
 	for (i = 0; i < 4; i++) {
 		ret = i2c_smbus_read_byte_data(client, i);
 		if (ret < 0) {
-			dev_dbg(&adapter->dev, "I2C transfer failed (%d)", ret);
+			dev_err(&adapter->dev, "I2C transfer failed (%d)", ret);
 			return -ENODEV;
 		}
 		id.b[i] = ret;

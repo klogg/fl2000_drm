@@ -43,19 +43,27 @@ static struct usb_device_id fl2000_id_table[] = {
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
 struct usb_dev_data {
+	struct regmap_field *u1_reject;
+	struct regmap_field *u2_reject;
+	struct regmap_field *wake_nrdy;
 	struct regmap_field *app_reset;
 	struct regmap_field *wakeup_clear_en;
+	struct regmap_field *edid_detect;
+	struct regmap_field *monitor_detect;
 };
 
 static void fl2000_usb_dev_data_release(struct device *dev, void *res)
 {
 }
 
-static int fl2000_init(struct usb_device *usb_dev)
+static int fl2000_create_controls(struct usb_device *usb_dev)
 {
-	int ret;
 	struct usb_dev_data *usb_dev_data;
-	struct regmap *regmap;
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	if (!regmap) {
+		dev_err(&usb_dev->dev, "Regmap capture failed");
+		return -ENOMEM;
+	}
 
 	/* Create local data structure */
 	usb_dev_data = devres_alloc(fl2000_usb_dev_data_release,
@@ -66,21 +74,21 @@ static int fl2000_init(struct usb_device *usb_dev)
 	}
 	devres_add(&usb_dev->dev, usb_dev_data);
 
-	/* Create registers map */
-	ret = fl2000_regmap_create(usb_dev);
-	if (ret != 0) {
-		dev_err(&usb_dev->dev, "Cannot create registers map (%d)", ret);
-		return ret;
-	}
+	usb_dev_data->u1_reject = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_USB_LPM_u1_reject);
+	if (IS_ERR(usb_dev_data->u1_reject))
+		return PTR_ERR(usb_dev_data->u1_reject);
 
-	/* Regmap must exist on initialization */
-	regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	if (!regmap) {
-		dev_err(&usb_dev->dev, "Regmap capture failed");
-		return -ENOMEM;
-	}
+	usb_dev_data->u2_reject = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_USB_LPM_u2_reject);
+	if (IS_ERR(usb_dev_data->u2_reject))
+		return PTR_ERR(usb_dev_data->u2_reject);
 
-	/* Create control fields */
+	usb_dev_data->wake_nrdy = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_USB_CTRL_wake_nrdy);
+	if (IS_ERR(usb_dev_data->wake_nrdy))
+		return PTR_ERR(usb_dev_data->wake_nrdy);
+
 	usb_dev_data->app_reset = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_RST_CTRL_REG_app_reset);
 	if (IS_ERR(usb_dev_data->app_reset))
@@ -91,11 +99,103 @@ static int fl2000_init(struct usb_device *usb_dev)
 	if (IS_ERR(usb_dev_data->wakeup_clear_en))
 		return PTR_ERR(usb_dev_data->wakeup_clear_en);
 
+	usb_dev_data->edid_detect = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_VGA_I2C_SC_REG_edid_detect);
+	if (IS_ERR(usb_dev_data->edid_detect))
+		return PTR_ERR(usb_dev_data->edid_detect);
+
+	usb_dev_data->monitor_detect = devm_regmap_field_alloc(&usb_dev->dev,
+			regmap, FL2000_VGA_I2C_SC_REG_monitor_detect);
+	if (IS_ERR(usb_dev_data->monitor_detect))
+		return PTR_ERR(usb_dev_data->monitor_detect);
+
+	return 0;
+}
+
+int fl2000_reset(struct usb_device *usb_dev)
+{
+	int ret;
+	struct usb_dev_data *usb_dev_data = devres_find(&usb_dev->dev,
+			fl2000_usb_dev_data_release, NULL, NULL);;
+
+	if (!usb_dev_data) {
+		dev_err(&usb_dev->dev, "Device resources not found");
+		return -ENOMEM;
+	}
+
 	ret = regmap_field_write(usb_dev_data->app_reset, true);
+	msleep(10);
 	if (ret != 0) return -EIO;
 
+	return 0;
+}
+
+int fl2000_wait(struct usb_device *usb_dev)
+{
+	int ret;
+	struct usb_dev_data *usb_dev_data = devres_find(&usb_dev->dev,
+			fl2000_usb_dev_data_release, NULL, NULL);;
+
+	if (!usb_dev_data) {
+		dev_err(&usb_dev->dev, "Device resources not found");
+		return -ENOMEM;
+	}
+
+	ret = regmap_field_write(usb_dev_data->edid_detect, true);
+	if (ret != 0) return -EIO;
+	ret = regmap_field_write(usb_dev_data->monitor_detect, true);
+	if (ret != 0) return -EIO;
 	ret = regmap_field_write(usb_dev_data->wakeup_clear_en, false);
 	if (ret != 0) return -EIO;
+
+	return 0;
+}
+
+int fl2000_start(struct usb_device *usb_dev)
+{
+	int ret;
+	struct usb_dev_data *usb_dev_data = devres_find(&usb_dev->dev,
+			fl2000_usb_dev_data_release, NULL, NULL);;
+
+	if (!usb_dev_data) {
+		dev_err(&usb_dev->dev, "Device resources not found");
+		return -ENOMEM;
+	}
+
+	ret = regmap_field_write(usb_dev_data->u1_reject, false);
+	if (ret != 0) return -EIO;
+	ret = regmap_field_write(usb_dev_data->u2_reject, false);
+	if (ret != 0) return -EIO;
+	ret = regmap_field_write(usb_dev_data->wake_nrdy, true);
+	if (ret != 0) return -EIO;
+
+	return 0;
+}
+
+static int fl2000_init(struct usb_device *usb_dev)
+{
+	int ret;
+
+	/* Create registers map */
+	ret = fl2000_regmap_create(usb_dev);
+	if (ret != 0) {
+		dev_err(&usb_dev->dev, "Cannot create registers map (%d)", ret);
+		return ret;
+	}
+
+	/* Create controls */
+	ret = fl2000_create_controls(usb_dev);
+	if (ret != 0) {
+		dev_err(&usb_dev->dev, "Cannot create controls (%d)", ret);
+		return ret;
+	}
+
+	/* Reset application logic */
+	ret = fl2000_reset(usb_dev);
+	if (ret != 0) {
+		dev_err(&usb_dev->dev, "Initial device reset failed (%d)", ret);
+		return ret;
+	}
 
 	/* Create I2C adapter */
 	ret = fl2000_i2c_create(usb_dev);
@@ -135,7 +235,10 @@ static int fl2000_probe(struct usb_interface *interface,
 				iface_num);
 
 		/* TODO: create streaming structures */
-		ret = 0;
+
+		ret = usb_set_interface(usb_dev,
+				interface->cur_altsetting->desc.bInterfaceNumber,
+				interface->cur_altsetting->desc.bAlternateSetting);
 
 		break;
 

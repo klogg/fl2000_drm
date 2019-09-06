@@ -12,9 +12,6 @@
 #define CONTROL_MSG_READ	64
 #define CONTROL_MSG_WRITE	65
 
-/* Timeout in ms for USB Control Message (transport for I2C bus)  */
-#define CONTROL_XFER_TIMEOUT	2000
-
 static bool fl2000_reg_precious(struct device *dev, unsigned int reg)
 {
 	return FL2000_REG_PRECIOUS(reg);
@@ -30,7 +27,7 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 	int ret;
 	struct usb_device *usb_dev = context;
 	u16 offset = (u16)reg;
-	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL);
+	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL | GFP_DMA);
 
 	BUG_ON(data == NULL);
 
@@ -43,13 +40,18 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 		offset,
 		data,
 		CONTROL_MSG_LEN,
-		CONTROL_XFER_TIMEOUT);
+		USB_CTRL_GET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != CONTROL_MSG_LEN) ret = -1;
 		else ret = 0;
 	}
 
 	*val = *data;
+
+	if ((reg != FL2000_VGA_I2C_SC_REG) && (reg != FL2000_VGA_I2C_RD_REG) &&
+			(reg != FL2000_VGA_I2C_WR_REG)) {
+		dev_info(&usb_dev->dev, "RD: 0x%04X - 0x%08X", reg, *data);
+	}
 
 	kfree(data);
 	return ret;
@@ -60,11 +62,16 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	int ret;
 	struct usb_device *usb_dev = context;
 	u16 offset = (u16)reg;
-	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL);
+	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL | GFP_DMA);
 
 	BUG_ON(data == NULL);
 
 	*data = val;
+
+	if ((reg != FL2000_VGA_I2C_SC_REG) && (reg != FL2000_VGA_I2C_RD_REG) &&
+			(reg != FL2000_VGA_I2C_WR_REG)) {
+		dev_info(&usb_dev->dev, "WR: 0x%04X - 0x%08X", reg, *data);
+	}
 
 	ret = usb_control_msg(
 		usb_dev,
@@ -75,7 +82,7 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 		offset,
 		data,
 		CONTROL_MSG_LEN,
-		CONTROL_XFER_TIMEOUT);
+		USB_CTRL_SET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != CONTROL_MSG_LEN) ret = -1;
 		else ret = 0;
@@ -91,7 +98,7 @@ static const struct regmap_config fl2000_regmap_config = {
 	.reg_stride = 4,
 	.max_register = 0xFFFF,
 
-	.cache_type = REGCACHE_RBTREE,
+	.cache_type = REGCACHE_NONE,
 
 	.precious_reg = fl2000_reg_precious,
 	.volatile_reg = fl2000_reg_volatile,

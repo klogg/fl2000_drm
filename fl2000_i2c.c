@@ -21,8 +21,8 @@
 #define I2C_ENABLE_TIMEOUT	750
 
 /* Timeout in us for I2C read/write operations */
-#define I2C_RDWR_INTERVAL	(5 * 1000)
-#define I2C_RDWR_TIMEOUT	(20 * I2C_RDWR_INTERVAL)
+#define I2C_RDWR_INTERVAL	(16 * 1000 * 4) 		/* 16ms */
+#define I2C_RDWR_TIMEOUT	(16 * I2C_RDWR_INTERVAL * 4)	/* 256ms */
 
 struct fl2000_i2c_algo_data {
 	struct usb_device *usb_dev;
@@ -113,8 +113,14 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		}
 	}
 
+	/* XXX: This bit always reads back as 0, so we need to restore it back.
+	 * Though not quite sure if we need to enable monitor detection circuit
+	 * for HDMI use case. */
 	reg.monitor_detect = true;
 	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, monitor_detect);
+	reg.edid_detect = true;
+	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, edid_detect);
+
 	reg.i2c_status = 0;
 	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, i2c_status);
 	reg.i2c_addr = addr;
@@ -126,7 +132,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 	reg.i2c_done = false;
 	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, i2c_done);
 
-	ret = regmap_update_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, reg.val);
+	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, reg.val);
 	if (ret != 0) {
 		dev_err(&adapter->dev, "FL2000_VGA_I2C_SC_REG write failed!");
 		return ret;
@@ -135,15 +141,20 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 	ret = regmap_read_poll_timeout(regmap, FL2000_VGA_I2C_SC_REG,
 			reg.val, (reg.i2c_done == true),
 			I2C_RDWR_INTERVAL, I2C_RDWR_TIMEOUT);
+	/* This shouldn't normally happen: there's internal 256ms HW timeout on
+	 * I2C operations and USB must be always available so no I/O errors. But
+	 * if it happens we are probably in irreversible HW issue */
 	if (ret != 0) {
 		dev_err(&adapter->dev, "FL2000_VGA_I2C_SC_REG poll failed!");
 		return ret;
 	}
 
+	/* XXX: Weirdly enough we cannot rely on internal HW 256ms I2C timeout
+	 * indicated in bit 29. Somehow it always read back as 0 */
 	if (reg.i2c_status != 0) {
-		dev_err(&adapter->dev, "I2C operation failed (%X)!",
+		dev_err(&adapter->dev, "I2C error detected: status %d",
 				reg.i2c_status);
-		return -EIO;
+		ret = -EIO;
 	}
 
 	if (read) {
@@ -162,50 +173,66 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		struct i2c_msg *msgs, int num)
 {
 	int ret;
-	struct i2c_msg *addr_msg = &msgs[0], *data_msg;
-	u8 idx, offset = addr_msg->buf[0] & I2C_XFER_ADDR_MASK;
+	bool read;
+	u16 addr;
+	u8 idx, offset;
 	union {
 		u32 w;
 		u8 b[4];
 	} data;
 
-	/* Emulate 1 byte read for detection procedure, poison buffer */
-	if (num == 1) {
-		msgs[0].buf[0] = 0xAA;
-		return num;
+	addr = msgs[0].addr;
+	offset = msgs[0].buf[0] & I2C_XFER_ADDR_MASK;
+	idx = msgs[0].buf[0] - offset;
+
+	/* We expect following:
+	 * - 2 messages, each 1 byte, first write than read
+	 * - 1 message, 2 bytes, write
+	 * - 1 message, 1 byte, read */
+	if (num == 2) {
+		read = true;
+	} else if (num == 1) {
+		if ((msgs[0].len == 2) && !(msgs[0].flags & I2C_M_RD)) {
+			read = false;
+		} else if ((msgs[0].len == 1) && (msgs[0].flags & I2C_M_RD)) {
+			msgs[0].buf[0] = 0xAA; /* poison buffer */
+			return num;
+		} else {
+			ret = -ENOTSUPP;
+			goto error;
+		}
+	} else {
+		ret = -ENOTSUPP;
+		goto error;
 	}
-
-	data_msg = &msgs[1];
-
-	idx = addr_msg->buf[0] - offset;
 
 	/* Somehow the original FL2000 driver forces offset to be bound to
 	 * 4-byte margin. This is really strange because i2c operation shall not
 	 * depend on i2c margin, unless the HW design is completely crippled.
 	 * Oh, yes, it is crippled :( */
-
-	if (!!(data_msg->flags & I2C_M_RD)) {
-		ret = fl2000_i2c_read_dword(adapter, addr_msg->addr,
-				offset, &data.w);
+	if (read) {
+		ret = fl2000_i2c_read_dword(adapter, addr, offset, &data.w);
 		if (ret != 0) goto error;
 
-		data_msg->buf[0] = data.b[idx];
+		msgs[1].buf[0] = data.b[idx];
+
+		dev_info(&adapter->dev, "I2C RD: 0x%02X - 0x%02X", offset + idx,
+				data.b[idx]);
 	} else {
 		/* Since FL2000 i2c bus implementation always operates with
 		 * 4-byte messages, we need to read before write in order not to
 		 * corrupt unrelated registers in case if we do not write whole
 		 * dword */
-		if (data_msg->len < sizeof(data)) {
-			ret = fl2000_i2c_read_dword(adapter, addr_msg->addr,
-					offset, &data.w);
-			if (ret != 0) goto error;
-		}
-
-		data.b[idx] = data_msg->buf[0];
-
-		ret = fl2000_i2c_write_dword(adapter, addr_msg->addr,
-				offset, &data.w);
+		ret = fl2000_i2c_read_dword(adapter, addr, offset, &data.w);
 		if (ret != 0) goto error;
+
+		data.b[idx] = msgs[0].buf[1];
+
+		ret = fl2000_i2c_write_dword(adapter, addr, offset, &data.w);
+		if (ret != 0) goto error;
+
+		dev_info(&adapter->dev, "I2C WR: 0x%02X - 0x%02X", offset + idx,
+				data.b[idx]);
 	}
 
 	return num;
@@ -216,8 +243,7 @@ error:
 
 static u32 fl2000_i2c_func(struct i2c_adapter *adap)
 {
-	return I2C_FUNC_I2C | I2C_FUNC_NOSTART | I2C_FUNC_SMBUS_READ_BYTE |
-			I2C_FUNC_SMBUS_BYTE_DATA;
+	return I2C_FUNC_I2C | I2C_FUNC_NOSTART | I2C_FUNC_SMBUS_READ_BYTE;
 }
 
 static const struct i2c_algorithm fl2000_i2c_algorithm = {

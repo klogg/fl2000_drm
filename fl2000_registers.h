@@ -22,6 +22,8 @@ static const struct reg_field FL2000_USB_LPM_u1_reject =
 		REG_FIELD(FL2000_USB_LPM, 20, 20);
 
 #define FL2000_USB_CTRL			(FL2000_USB_CONTROL_OFFSET + 0x78)
+static const struct reg_field FL2000_USB_CTRL_wake_nrdy =
+		REG_FIELD(FL2000_USB_CTRL, 17, 17);
 
 /* #### VGA Control Registers Bank #### */
 #define FL2000_VGA_CONTROL_OFFSET	0x8000
@@ -76,6 +78,11 @@ typedef union {
 		u32 i2c_done:1;
 	} __attribute__ ((aligned, packed));
 } fl2000_vga_i2c_sc_reg;
+static const struct reg_field FL2000_VGA_I2C_SC_REG_edid_detect =
+		REG_FIELD(FL2000_VGA_I2C_SC_REG, 30, 30);
+static const struct reg_field FL2000_VGA_I2C_SC_REG_monitor_detect =
+		REG_FIELD(FL2000_VGA_I2C_SC_REG, 28, 28);
+
 
 #define FL2000_VGA_I2C_RD_REG		(FL2000_VGA_CONTROL_OFFSET + 0x24)
 #define FL2000_VGA_I2C_WR_REG		(FL2000_VGA_CONTROL_OFFSET + 0x28)
