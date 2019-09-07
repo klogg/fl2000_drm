@@ -553,17 +553,16 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	ret = drm_hdmi_avi_infoframe_from_display_mode(priv->hdmi_avi_infoframe,
 			adjusted_mode, false);
 	if (ret != 0) {
-		dev_error(bridge->dev->dev, "Cannot create AVI infoframe");
+		dev_err(bridge->dev->dev, "Cannot create AVI infoframe");
 		return;
 	}
 
 	frame_size = hdmi_avi_infoframe_pack_only(priv->hdmi_avi_infoframe,
 			priv->hdmi_avi_infoframe_raw, HDMI_AVI_INFOFRAME_SIZE);
 	if (frame_size < 0) {
-		dev_error(bridge->dev->dev, "Cannot pack AVI infoframe");
+		dev_err(bridge->dev->dev, "Cannot pack AVI infoframe");
 		return;
 	}
-
 
 	/* TODO: send raw avi info frame to it66121 */
 
