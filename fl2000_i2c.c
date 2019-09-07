@@ -216,7 +216,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 
 		msgs[1].buf[0] = data.b[idx];
 
-		dev_info(&adapter->dev, "I2C RD: 0x%02X - 0x%02X", offset + idx,
+		dev_dbg(&adapter->dev, "I2C RD: 0x%02X - 0x%02X", offset + idx,
 				data.b[idx]);
 	} else {
 		/* Since FL2000 i2c bus implementation always operates with
@@ -231,7 +231,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		ret = fl2000_i2c_write_dword(adapter, addr, offset, &data.w);
 		if (ret != 0) goto error;
 
-		dev_info(&adapter->dev, "I2C WR: 0x%02X - 0x%02X", offset + idx,
+		dev_dbg(&adapter->dev, "I2C WR: 0x%02X - 0x%02X", offset + idx,
 				data.b[idx]);
 	}
 
