@@ -96,6 +96,9 @@ static void fl2000_intr_work(struct work_struct *work_item)
 			dev_info(&intr->interface->dev, "FL2000 interrupt" \
 					" status = 0x%X", status);
 			fl2000_debugfs_intr_status(status);
+			/* TODO:
+			 * drm_kms_helper_hotplug_event();
+			 * */
 		}
 	}
 
