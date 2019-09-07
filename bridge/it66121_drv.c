@@ -40,8 +40,8 @@ struct it66121_priv {
 	struct regmap_field *ddc_error;
 	struct regmap_field *clr_irq;
 
-	struct hdmi_avi_infoframe *hdmi_avi_infoframe;
-	u8 hdmi_avi_infoframe_raw[HDMI_AVI_INFOFRAME_SIZE];
+	struct hdmi_avi_infoframe hdmi_avi_infoframe;
+	u8 *hdmi_avi_infoframe_raw;
 };
 
 static int it66121_remove(struct i2c_client *client);
@@ -548,25 +548,24 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " \
 			DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
 
-	hdmi_avi_infoframe_init(priv->hdmi_avi_infoframe);
+	hdmi_avi_infoframe_init(&priv->hdmi_avi_infoframe);
 
-	ret = drm_hdmi_avi_infoframe_from_display_mode(priv->hdmi_avi_infoframe,
+	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
 			adjusted_mode, false);
 	if (ret != 0) {
 		dev_err(bridge->dev->dev, "Cannot create AVI infoframe");
 		return;
 	}
 
-	frame_size = hdmi_avi_infoframe_pack_only(priv->hdmi_avi_infoframe,
-			priv->hdmi_avi_infoframe_raw, HDMI_AVI_INFOFRAME_SIZE);
+	frame_size = hdmi_avi_infoframe_pack(&priv->hdmi_avi_infoframe,
+			priv->hdmi_avi_infoframe_raw, HDMI_INFOFRAME_SIZE(AVI));
 	if (frame_size < 0) {
-		dev_err(bridge->dev->dev, "Cannot pack AVI infoframe");
+		dev_err(bridge->dev->dev, "Cannot pack AVI infoframe (%ld)",
+				frame_size);
 		return;
 	}
 
 	/* TODO: send raw avi info frame to it66121 */
-
-
 }
 
 static const struct drm_bridge_funcs it66121_bridge_funcs = {
@@ -587,7 +586,16 @@ static int it66121_probe(struct i2c_client *client)
 	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(priv)) {
 		dev_err(&client->dev, "Cannot allocate IT66121 client private" \
-				"structure");
+				" structure");
+		ret = PTR_ERR(priv);
+		goto error;
+	}
+
+	priv->hdmi_avi_infoframe_raw = devm_kzalloc(&client->dev,
+			HDMI_INFOFRAME_SIZE(AVI), GFP_KERNEL);
+	if (IS_ERR_OR_NULL(priv)) {
+		dev_err(&client->dev, "Cannot allocate IT66121 AVI infoframe" \
+				" buffer");
 		ret = PTR_ERR(priv);
 		goto error;
 	}
