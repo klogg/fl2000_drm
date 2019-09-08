@@ -292,7 +292,8 @@ static int fl2000_suspend(struct usb_interface *interface,
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	dev_dbg(&usb_dev->dev, "resume");
 
-	/* TODO: suspend */
+	/* TODO: suspend
+	 * drm_mode_config_helper_suspend() */
 
 	return 0;
 }
@@ -302,7 +303,8 @@ static int fl2000_resume(struct usb_interface *interface)
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	dev_dbg(&usb_dev->dev, "suspend");
 
-	/* TODO: resume */
+	/* TODO: resume
+	 * drm_mode_config_helper_resume() */
 
 	return 0;
 }
