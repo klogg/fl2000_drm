@@ -90,11 +90,11 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	if (regmap) {
 		ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
 		if (ret != 0) {
-			dev_err(&usb_dev->dev, "Cannot read interrupt" \
-					" register (%d)", ret);
+			dev_err(&usb_dev->dev, "Cannot read interrupt " \
+					"register (%d)", ret);
 		} else {
-			dev_info(&intr->interface->dev, "FL2000 interrupt" \
-					" status = 0x%X", status);
+			dev_info(&intr->interface->dev, "FL2000 interrupt " \
+					"status = 0x%X", status);
 			fl2000_debugfs_intr_status(status);
 			/* TODO:
 			 * drm_kms_helper_hotplug_event();
@@ -147,7 +147,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 
 	intr = kzalloc(sizeof(*intr), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(intr)) {
-		dev_err(&interface->dev, "Cannot allocate interrupt private" \
+		dev_err(&interface->dev, "Cannot allocate interrupt private " \
 				"structure");
 		ret = PTR_ERR(intr);
 		goto error;
