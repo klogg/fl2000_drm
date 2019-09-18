@@ -84,7 +84,8 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	u32 status;
 
-	if (atomic_read(&intr->state) != RUN) return;
+	if (atomic_read(&intr->state) != RUN)
+		return;
 
 	/* Process interrupt */
 	if (regmap) {
@@ -116,9 +117,8 @@ static void fl2000_intr_completion(struct urb *urb)
 	int ret;
 	struct fl2000_intr *intr = urb->context;
 
-	if (intr == NULL) return;
-
-	if (atomic_read(&intr->state) != RUN) return;
+	if (intr == NULL || atomic_read(&intr->state) != RUN)
+		return;
 
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 
@@ -160,86 +160,68 @@ int fl2000_intr_create(struct usb_interface *interface)
 	if (desc == NULL) {
 		dev_err(&interface->dev, "Cannot find altsetting containing " \
 				"interrupt endpoint");
-		ret = -ENXIO;
-		goto error;
+		return -ENXIO;
 	}
 
-	intr = kzalloc(sizeof(*intr), GFP_KERNEL);
+	intr = devm_kzalloc(&interface->dev, sizeof(*intr), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(intr)) {
 		dev_err(&interface->dev, "Cannot allocate interrupt private " \
 				"structure");
-		ret = PTR_ERR(intr);
-		goto error;
+		return PTR_ERR(intr);
 	}
 
-	intr->buf = kzalloc(INTR_BUFSIZE, GFP_DMA);
+	intr->buf = devm_kzalloc(&interface->dev, INTR_BUFSIZE, GFP_DMA);
 	if (IS_ERR_OR_NULL(intr->buf)) {
 		dev_err(&interface->dev, "Cannot allocate interrupt data");
-		ret = PTR_ERR(intr->buf);
-		goto error;
+		return PTR_ERR(intr->buf);
 	}
 
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (IS_ERR_OR_NULL(intr->urb)) {
 		dev_err(&interface->dev, "Allocate interrupt URB failed");
-		ret = PTR_ERR(intr->urb);
-		goto error;
+		return PTR_ERR(intr->urb);
 	}
+
+	/* Mark interrupt as operation as soon as URB is allocated */
+	atomic_set(&intr->state, RUN);
 
 	intr->work_queue = create_workqueue("work_queue");
 	if (IS_ERR_OR_NULL(intr->work_queue)) {
 		dev_err(&interface->dev, "Create interrupt workqueue failed");
-		ret = PTR_ERR(intr->work_queue);
-		goto error;
+		atomic_set(&intr->state, STOP);
+		usb_free_urb(intr->urb);
+		return PTR_ERR(intr->work_queue);
 	}
 	intr->interface = interface;
 	intr->pipe = usb_rcvintpipe(usb_dev, usb_endpoint_num(desc));
 	intr->interval = desc->bInterval;
-	atomic_set(&intr->state, RUN);
 
 	usb_set_intfdata(interface, intr);
 
 	ret = fl2000_intr_submit_urb(intr);
 	if (ret != 0) {
-		atomic_set(&intr->state, STOP);
 		dev_err(&intr->interface->dev, "URB submission failed");
-		goto error;
+		atomic_set(&intr->state, STOP);
+		destroy_workqueue(intr->work_queue);
+		usb_free_urb(intr->urb);
+		return ret;
 	}
 
 	fl2000_debugfs_intr_init();
 
 	return 0;
-error:
-	/* Enforce cleanup in case of error */
-	fl2000_intr_destroy(interface);
-	return ret;
 }
 
 void fl2000_intr_destroy(struct usb_interface *interface)
 {
 	struct fl2000_intr *intr = usb_get_intfdata(interface);
 
-	if (IS_ERR_OR_NULL(intr))
+	if (intr == NULL || atomic_read(&intr->state) != RUN)
 		return;
 
 	atomic_set(&intr->state, STOP);
-
-	if (!IS_ERR_OR_NULL(intr->urb))
-		usb_kill_urb(intr->urb);
-
-	if (!IS_ERR_OR_NULL(intr->work_queue))
-		drain_workqueue(intr->work_queue);
-
-	if (!IS_ERR_OR_NULL(intr->work_queue))
-		destroy_workqueue(intr->work_queue);
-
-	if (!IS_ERR_OR_NULL(intr->urb))
-		usb_free_urb(intr->urb);
-
-	usb_set_intfdata(interface, NULL);
-
-	if (!IS_ERR_OR_NULL(intr->buf))
-		kfree(intr->buf);
-
-	kfree(intr);
+	usb_kill_urb(intr->urb);
+	drain_workqueue(intr->work_queue);
+	destroy_workqueue(intr->work_queue);
+	usb_free_urb(intr->urb);
 }
