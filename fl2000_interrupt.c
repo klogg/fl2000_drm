@@ -105,13 +105,15 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	/* Restart urb */
 	ret = fl2000_intr_submit_urb(intr);
 	if (ret != 0) {
-		atomic_set(&intr->state, STOP);
-		dev_err(&intr->interface->dev, "URB submission failed");
+		/* TODO: WTF! Signal general failure, stop driver */
+		dev_err(&intr->interface->dev, "URB submission failed (%d)",
+				ret);
 	}
 }
 
 static void fl2000_intr_completion(struct urb *urb)
 {
+	int ret;
 	struct fl2000_intr *intr = urb->context;
 
 	if (intr == NULL) return;
@@ -120,7 +122,18 @@ static void fl2000_intr_completion(struct urb *urb)
 
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 
-	queue_work(intr->work_queue, &intr->work);
+	/* Since we use a single URB for interrupt processing this means that we
+	 * have already submitted URB from work and it was returned to us before
+	 * work was dequeued. In this case we just re-submit URB so we will get
+	 * it back hopefully with workqueue processing finished */
+	if (!queue_work(intr->work_queue, &intr->work)) {
+		ret = fl2000_intr_submit_urb(intr);
+		if (ret != 0) {
+			/* TODO: WTF! Signal general failure, stop driver */
+			dev_err(&intr->interface->dev, "URB submission " \
+					"failed (%d)", ret);
+		}
+	}
 }
 
 void fl2000_intr_destroy(struct usb_interface *interface);
@@ -135,11 +148,17 @@ int fl2000_intr_create(struct usb_interface *interface)
 	/* There's only one altsetting (#0) and one endpoint (#3) in the
 	 * interrupt interface (#2) but lets try and "find" it anyway */
 	for (i = 0; i < interface->num_altsetting; i++) {
-		if (!usb_find_int_in_endpoint(&interface->altsetting[i], &desc))
+		if (!usb_find_int_in_endpoint(&interface->altsetting[i],
+				&desc)) {
+			dev_info(&interface->dev, "Found interrupt endpoint " \
+					"%d in altsetting %d",
+					usb_endpoint_num(desc),
+					desc->bEndpointAddress);
 			break;
+		}
 	}
 	if (desc == NULL) {
-		dev_err(&interface->dev, "Cannot find altsetting with " \
+		dev_err(&interface->dev, "Cannot find altsetting containing " \
 				"interrupt endpoint");
 		ret = -ENXIO;
 		goto error;
