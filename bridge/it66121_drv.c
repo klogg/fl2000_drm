@@ -587,8 +587,7 @@ static int it66121_probe(struct i2c_client *client)
 	if (IS_ERR_OR_NULL(priv)) {
 		dev_err(&client->dev, "Cannot allocate IT66121 client " \
 				"private structure");
-		ret = PTR_ERR(priv);
-		goto error;
+		return PTR_ERR(priv);
 	}
 
 	priv->hdmi_avi_infoframe_raw = devm_kzalloc(&client->dev,
@@ -596,51 +595,34 @@ static int it66121_probe(struct i2c_client *client)
 	if (IS_ERR_OR_NULL(priv)) {
 		dev_err(&client->dev, "Cannot allocate IT66121 AVI " \
 				"infoframe buffer");
-		ret = PTR_ERR(priv);
-		goto error;
+		return PTR_ERR(priv);
 	}
 
 	priv->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
 	if (IS_ERR(priv->regmap)) {
-		ret = PTR_ERR(priv);
-		goto error;
+		return PTR_ERR(priv);
 	}
 
 	priv->bridge.funcs = &it66121_bridge_funcs;
 
 	priv->irq_pending = devm_regmap_field_alloc(&client->dev,
 			priv->regmap, IT66121_SYS_STATUS_irq_pending);
-	if (IS_ERR(priv->irq_pending)) {
-		ret = PTR_ERR(priv->irq_pending);
-		goto error;
-	}
-
 	priv->hpd = devm_regmap_field_alloc(&client->dev,
 			priv->regmap, IT66121_SYS_STATUS_hpd);
-	if (IS_ERR(priv->hpd)) {
-		ret = PTR_ERR(priv->hpd);
-		goto error;
-	}
-
 	priv->clr_irq = devm_regmap_field_alloc(&client->dev,
 			priv->regmap, IT66121_SYS_STATUS_clr_irq);
-	if (IS_ERR(priv->clr_irq)) {
-		ret = PTR_ERR(priv->clr_irq);
-		goto error;
-	}
-
 	priv->ddc_done = devm_regmap_field_alloc(&client->dev,
 			priv->regmap, IT66121_DDC_STATUS_ddc_done);
-	if (IS_ERR(priv->ddc_done)) {
-		ret = PTR_ERR(priv->ddc_done);
-		goto error;
-	}
-
 	priv->ddc_error = devm_regmap_field_alloc(&client->dev,
 			priv->regmap, IT66121_DDC_STATUS_ddc_error);
-	if (IS_ERR(priv->ddc_error)) {
-		ret = PTR_ERR(priv->ddc_error);
-		goto error;
+
+	/* Dont really care which one failed */
+	if (IS_ERR(priv->irq_pending) ||
+			IS_ERR(priv->hpd) ||
+			IS_ERR(priv->clr_irq) ||
+			IS_ERR(priv->ddc_done) ||
+			IS_ERR(priv->ddc_error)) {
+		return -1;
 	}
 
 	drm_bridge_add(&priv->bridge);
@@ -649,8 +631,8 @@ static int it66121_probe(struct i2c_client *client)
 	priv->work_queue = create_workqueue("work_queue");
 	if (IS_ERR_OR_NULL(priv->work_queue)) {
 		dev_err(&client->dev, "Create interrupt workqueue failed");
-		ret = PTR_ERR(priv->work_queue);
-		goto error;
+		drm_bridge_remove(&priv->bridge);
+		return PTR_ERR(priv->work_queue);
 	}
 
 	/* Important and somewhat unsafe - bridge pointer is in device structure
@@ -661,14 +643,12 @@ static int it66121_probe(struct i2c_client *client)
 	ret = component_add(&client->dev, &it66121_component_ops);
 	if (ret != 0) {
 		dev_err(&client->dev, "Cannot register IT66121 component");
-		goto error;
+		destroy_workqueue(priv->work_queue);
+		drm_bridge_remove(&priv->bridge);
+		return ret;
 	}
 
 	return 0;
-
-error:
-	it66121_remove(client);
-	return ret;
 }
 
 static int it66121_remove(struct i2c_client *client)
@@ -684,14 +664,15 @@ static int it66121_remove(struct i2c_client *client)
 	if (IS_ERR_OR_NULL(priv))
 		return 0;
 
-	/*TODO: Cancel pending work and destroy workqueue */
+	atomic_set(&priv->state, STOP);
+	drain_workqueue(priv->work_queue);
+	destroy_workqueue(priv->work_queue);
 
 	component_del(&client->dev, &it66121_component_ops);
 
 	drm_bridge_remove(bridge);
 
 	i2c_set_clientdata(client, NULL);
-	kfree(priv);
 
 	return 0;
 }
