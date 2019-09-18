@@ -585,8 +585,8 @@ static int it66121_probe(struct i2c_client *client)
 
 	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(priv)) {
-		dev_err(&client->dev, "Cannot allocate IT66121 client private" \
-				" structure");
+		dev_err(&client->dev, "Cannot allocate IT66121 client " \
+				"private structure");
 		ret = PTR_ERR(priv);
 		goto error;
 	}
@@ -594,8 +594,8 @@ static int it66121_probe(struct i2c_client *client)
 	priv->hdmi_avi_infoframe_raw = devm_kzalloc(&client->dev,
 			HDMI_INFOFRAME_SIZE(AVI), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(priv)) {
-		dev_err(&client->dev, "Cannot allocate IT66121 AVI infoframe" \
-				" buffer");
+		dev_err(&client->dev, "Cannot allocate IT66121 AVI " \
+				"infoframe buffer");
 		ret = PTR_ERR(priv);
 		goto error;
 	}
