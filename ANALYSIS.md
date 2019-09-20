@@ -36,8 +36,8 @@ See parsed stream dump and register access statistics below.
 * Display disconnect occur on sequence 8830
   * receive interrupt (1) with status 0x480AA260
     - External monitor event: external monitor disconnected
-* Something happens starting sequence 8533 - driver stops forcing VGA connect and receives corresponding interrupt from EDID VGA detection circuitry. This does not seem to be correct because we use HDMI monitor, not VGA
-  * set bit 25 in register 0x803C (0xD701084D -> 0xD501084D): Force VGA Connect
+* Not clear what "Force VGA Connect" bit is responsible for. In Linux implementation this bit is set on reconfiguring IT66121 (infoframes, AFE, etc.) and immediately reset after reconfiguration. In Windows it is reset after 537 operational frames were sent (see sequence 8533). When this bit reset, FL2000 shoots interrupt from EDID VGA detection circuitry.
+  * reset bit 25 in register 0x803C (0xD701084D -> 0xD501084D): Force VGA Connect
   * receive interrupt (1) with status 0xA8087EE1
     - EDID event: VGA monitor disconnected
 * VGA connect status and VGA DAC power up status correctly follow connection status
@@ -706,9 +706,8 @@ REG WR 0x801C : 0x00000000
 REG RD 0x0070 : 0x04186085
 REG WR 0x0070 : 0x04186085
 ```
-**fl2000_hdmi_init - total mixup (reordered)**
-VGA_CTRL_REG_ACLK: Force VGA connect (probably useless, at least disabled in the FL2000 linux port)<br>
-Linux implementation also disable interrupts here
+**fl2000_hdmi_init (reordered)**
+VGA_CTRL_REG_ACLK: Set "Force VGA Connect"
 ```
 REG RD 0x803C : 0xD501084D
 REG WR 0x803C : 0xD701084D
@@ -1092,7 +1091,7 @@ I2C WR IT66121: 0xC4 : 0xFF0304C0
 **Strange sequence of NOT forcing "monitor connected" status**
 
 *537 frames of 1152000 bytes each skipped*<br>
-VGA_CTRL_REG_ACLK: Do not force VGA connect
+VGA_CTRL_REG_ACLK: Reset "Force VGA Connect"
 ```
 REG RD 0x803C : 0xD701084D
 REG WR 0x803C : 0xD501084D
