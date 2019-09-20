@@ -100,7 +100,8 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		struct drm_crtc_state *cstate,
 		struct drm_plane_state *plane_state)
 {
-	/* TODO: enable HW */
+	/* TODO: enable HW
+	 * Here goes all HW configuration for PLLs, timings and so on */
 
 	dev_info(pipe->crtc.dev->dev, "fl2000_display_enable");
 }
@@ -152,6 +153,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	}
 }
 
+/* TODO: Possibly we need .check callback as well */
 static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_mode_valid,
 	.enable = fl2000_display_enable,
