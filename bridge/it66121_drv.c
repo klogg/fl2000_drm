@@ -692,7 +692,14 @@ static int it66121_detect(struct i2c_client *client,
 	dev_info(&adapter->dev, "Detecting IT66121 at address 0x%X on %s",
 			address, adapter->name);
 
-	/* TODO: i2c_check_functionality()? */
+	/* We rely on full I2C protocol + 1 byte SMBUS read for detection */
+	ret = i2c_check_functionality(adapter, I2C_FUNC_I2C |
+			I2C_FUNC_SMBUS_READ_BYTE);
+	if (!ret) {
+		dev_info(&adapter->dev, "Adapter does not support I2C properly",
+				address, adapter->name);
+		return -ENODEV;
+	}
 
 	/* No regmap here yet: we will allocate it if detection succeeds */
 	for (i = 0; i < 4; i++) {
