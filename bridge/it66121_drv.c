@@ -696,8 +696,8 @@ static int it66121_detect(struct i2c_client *client,
 	ret = i2c_check_functionality(adapter, I2C_FUNC_I2C |
 			I2C_FUNC_SMBUS_READ_BYTE);
 	if (!ret) {
-		dev_info(&adapter->dev, "Adapter does not support I2C properly",
-				address, adapter->name);
+		dev_info(&adapter->dev, "Adapter does not support I2C " \
+				"functions properly");
 		return -ENODEV;
 	}
 
