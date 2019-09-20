@@ -51,13 +51,13 @@ static u8 i2c_debug_offset;	/* Offset of the register within I2C address */
 
 static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 {
-	int res;
+	int ret;
 	u32 u32_value;
 	struct i2c_adapter *i2c_adapter = data;
-	res = fl2000_i2c_read_dword(i2c_adapter, i2c_debug_address,
+	ret = fl2000_i2c_read_dword(i2c_adapter, i2c_debug_address,
 			i2c_debug_offset, &u32_value);
 	*value = u32_value;
-	return res;
+	return ret;
 }
 
 static int fl2000_debugfs_i2c_write(void *data, u64 value)

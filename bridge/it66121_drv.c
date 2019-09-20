@@ -111,16 +111,16 @@ enum {
 
 static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
 {
-	int res, val;
+	int ret, val;
 
-	res = regmap_field_read_poll_timeout(priv->ddc_done, val, true,
+	ret = regmap_field_read_poll_timeout(priv->ddc_done, val, true,
 			EDID_SLEEP, EDID_TIMEOUT);
-	if (res != 0)
-		return res;
+	if (ret != 0)
+		return ret;
 
-	res = regmap_field_read(priv->ddc_error, &val);
-	if (res != 0)
-		return res;
+	ret = regmap_field_read(priv->ddc_error, &val);
+	if (ret != 0)
+		return ret;
 	if (val != 0)
 		return -EIO;
 
@@ -129,37 +129,37 @@ static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
 
 static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 {
-	int res;
+	int ret;
 	unsigned int ddc_control_val;
 
 	struct device *dev = priv->bridge.dev->dev;
 	dev_info(dev, "Clear DDC FIFO");
 
-	res = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
-	if (res != 0)
-		return res;
+	ret = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
+	if (ret != 0)
+		return ret;
 
-	res = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
+	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
 			IT66121_DDC_MASTER_DDC |
 			IT66121_DDC_MASTER_HOST);
-	if (res != 0)
-		return res;
+	if (ret != 0)
+		return ret;
 
-	res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
+	ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 			DDC_CMD_FIFO_CLEAR);
-	if (res != 0)
-		return res;
+	if (ret != 0)
+		return ret;
 
-	res = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
-	if (res != 0)
-		return res;
+	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
+	if (ret != 0)
+		return ret;
 
 	return 0;
 }
 
 static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 {
-	int i, res;
+	int i, ret;
 	unsigned int ddc_control_val;
 
 	struct device *dev = priv->bridge.dev->dev;
@@ -172,39 +172,39 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	 * state, but somehow this is how it was implemented. This sequence is
 	 * removed since HDCP is not supported */
 
-	res = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
-	if (res != 0)
-		return res;
+	ret = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
+	if (ret != 0)
+		return ret;
 
 	/* According to 2009/01/15 modification by Jau-Chih.Tseng@ite.com.tw
 	 * do abort DDC twice */
 	for (i = 0; i < 2; i++) {
-		res = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
+		ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
 				IT66121_DDC_MASTER_DDC |
 				IT66121_DDC_MASTER_HOST);
-		if (res != 0)
-			return res;
+		if (ret != 0)
+			return ret;
 
-		res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
+		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_ABORT);
-		if (res != 0)
-			return res;
+		if (ret != 0)
+			return ret;
 
-		res = it66121_wait_ddc_ready(priv);
-		if (res != 0)
-			return res;
+		ret = it66121_wait_ddc_ready(priv);
+		if (ret != 0)
+			return ret;
 	}
 
-	res = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
-	if (res != 0)
-		return res;
+	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
+	if (ret != 0)
+		return ret;
 
 	return 0;
 }
 
 static void it66121_intr_work(struct work_struct *work_item)
 {
-	int res;
+	int ret;
 	unsigned int val;
 	struct delayed_work *dwork = container_of(work_item,
 			struct delayed_work, work);
@@ -214,9 +214,9 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 	/* TODO: use mutex */
 
-	res = regmap_field_read(priv->irq_pending, &val);
-	if (res < 0) {
-		dev_err(dev, "Cannot read interrupt status (%d)", res);
+	ret = regmap_field_read(priv->irq_pending, &val);
+	if (ret < 0) {
+		dev_err(dev, "Cannot read interrupt status (%d)", ret);
 	}
 	/* XXX: There are at least 5 registers that can source interrupt:
 	 *  - 0x06 (IT66121_INT_STATUS_1)
@@ -229,11 +229,11 @@ static void it66121_intr_work(struct work_struct *work_item)
 	else if (val == true) {
 		it666121_int_status_1_reg status_1;
 
-		res = regmap_read(priv->regmap, IT66121_INT_STATUS_1,
+		ret = regmap_read(priv->regmap, IT66121_INT_STATUS_1,
 				&status_1.val);
-		if (res < 0) {
+		if (ret < 0) {
 			dev_err(dev, "Cannot read IT66121_INT_STATUS_1 (%d)",
-					res);
+					ret);
 		} else {
 			if (status_1.ddc_fifo_err)
 				it66121_clear_ddc_fifo(priv);
@@ -256,7 +256,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		size_t len)
 {
-	int i, res, remain = len, offset = 0;
+	int i, ret, remain = len, offset = 0;
 	unsigned int rd_fifo_val;
 	static u8 header[EDID_LOSS_LEN] = {0x00, 0xFF, 0xFF};
 
@@ -278,76 +278,76 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 				EDID_FIFO_SIZE : (remain + EDID_LOSS_LEN);
 
 		/* Switch port to PC */
-		res = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
+		ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
 				IT66121_DDC_MASTER_DDC |
 				IT66121_DDC_MASTER_HOST);
-		if (res != 0)
-			return res;
+		if (ret != 0)
+			return ret;
 
 		/* Clear DDC FIFO */
-		res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
+		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_FIFO_CLEAR);
-		if (res != 0)
-			return res;
+		if (ret != 0)
+			return ret;
 
 		/* Power up CRCLK */
 		regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (1<<3), (1<<3));
-		if (res != 0)
-			return res;
+		if (ret != 0)
+			return ret;
 
 		/* Do abort DDC twice - HW defect */
 		for (i = 0; i < 2; i++) {
-			res = regmap_write_bits(priv->regmap, IT66121_DDC_CONTROL, (3<<0), (3<<0));
-			if (res != 0)
-				return res;
+			ret = regmap_write_bits(priv->regmap, IT66121_DDC_CONTROL, (3<<0), (3<<0));
+			if (ret != 0)
+				return ret;
 
-			res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
+			ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 					DDC_CMD_ABORT);
-			if (res != 0)
-				return res;
+			if (ret != 0)
+				return ret;
 		}
 
 		/* Clear DDC FIFO */
-		res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
+		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_FIFO_CLEAR);
-		if (res != 0)
-			return res;
+		if (ret != 0)
+			return ret;
 
 		/* Start reading */
-		res = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
+		ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
 				IT66121_DDC_MASTER_DDC |
 				IT66121_DDC_MASTER_HOST);
-		if (res != 0)
-			return res;
-		res = regmap_write(priv->regmap, IT66121_DDC_ADDRESS,
+		if (ret != 0)
+			return ret;
+		ret = regmap_write(priv->regmap, IT66121_DDC_ADDRESS,
 				EDID_DDC_ADDR);
-		if (res != 0)
-			return res;
+		if (ret != 0)
+			return ret;
 
 		/* Account 3 bytes that will be lost */
-		res = regmap_write(priv->regmap, IT66121_DDC_OFFSET,
+		ret = regmap_write(priv->regmap, IT66121_DDC_OFFSET,
 				offset - EDID_LOSS_LEN);
-		if (res != 0)
-			return res;
-		res = regmap_write(priv->regmap, IT66121_DDC_SIZE, size);
-		if (res != 0)
-			return res;
-		res = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, block);
-		if (res != 0)
-			return res;
-		res = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
+		if (ret != 0)
+			return ret;
+		ret = regmap_write(priv->regmap, IT66121_DDC_SIZE, size);
+		if (ret != 0)
+			return ret;
+		ret = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, block);
+		if (ret != 0)
+			return ret;
+		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_EDID_READ);
-		if (res != 0)
-			return res;
+		if (ret != 0)
+			return ret;
 
 		/* Deduct lost bytes when reading from FIFO */
 		size -= EDID_LOSS_LEN;
 
 		for (i = 0; i < size; i++) {
-			res = regmap_read(priv->regmap, IT66121_DDC_RD_FIFO,
+			ret = regmap_read(priv->regmap, IT66121_DDC_RD_FIFO,
 					&rd_fifo_val);
-			if (res != 0)
-				return res;
+			if (ret != 0)
+				return ret;
 
 			*(buf++) = rd_fifo_val & 0xFF;
 		}
@@ -361,7 +361,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
-	int res;
+	int ret;
 	struct edid *edid;
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv,
 			connector);
@@ -370,13 +370,13 @@ static int it66121_connector_get_modes(struct drm_connector *connector)
 	if (edid == NULL)
 		return -ENOMEM;
 
-	res = drm_add_edid_modes(connector, edid);
-	if (res != 0)
-		return res;
+	ret = drm_add_edid_modes(connector, edid);
+	if (ret != 0)
+		return ret;
 
-	res = drm_connector_update_edid_property(connector, edid);
-	if (res != 0)
-		return res;
+	ret = drm_connector_update_edid_property(connector, edid);
+	if (ret != 0)
+		return ret;
 
 	return 0;
 }
@@ -384,11 +384,11 @@ static int it66121_connector_get_modes(struct drm_connector *connector)
 static int it66121_connector_detect_ctx(struct drm_connector *connector,
 		struct drm_modeset_acquire_ctx *ctx, bool force)
 {
-	int res, val;
+	int ret, val;
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv,
 			connector);
 
-	res = regmap_field_read(priv->hpd, &val);
+	ret = regmap_field_read(priv->hpd, &val);
 	return val == 0 ? connector_status_disconnected :
 			connector_status_connected;
 }
