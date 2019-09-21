@@ -195,7 +195,22 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 /* 0F9 - 0FF undefined*/
 
 /* 130 - 1BF Bank 1 */
-/* 130 - 18F HDMI packet content registers, ignored */
+/* 130 - 18F HDMI packet content registers, ignored except AVI InfoFrame */
+#define IT66121_HDMI_AVIINFO_DB1	0x158
+#define IT66121_HDMI_AVIINFO_DB2	0x159
+#define IT66121_HDMI_AVIINFO_DB3	0x15A
+#define IT66121_HDMI_AVIINFO_DB4	0x15B
+#define IT66121_HDMI_AVIINFO_DB5	0x15C
+#define IT66121_HDMI_AVIINFO_CSUM	0x15D
+#define IT66121_HDMI_AVIINFO_DB6	0x15E
+#define IT66121_HDMI_AVIINFO_DB7	0x15F
+#define IT66121_HDMI_AVIINFO_DB8	0x160
+#define IT66121_HDMI_AVIINFO_DB9	0x161
+#define IT66121_HDMI_AVIINFO_DB10	0x162
+#define IT66121_HDMI_AVIINFO_DB11	0x163
+#define IT66121_HDMI_AVIINFO_DB12	0x164
+#define IT66121_HDMI_AVIINFO_DB13	0x165
+
 /* 190 - 1BF Audio channel status registers, ignored */
 
 #define IT66121_BANK_END		0x1FF

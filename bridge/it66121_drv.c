@@ -41,7 +41,6 @@ struct it66121_priv {
 	struct regmap_field *clr_irq;
 
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
-	u8 *hdmi_avi_infoframe_raw;
 };
 
 static int it66121_remove(struct i2c_client *client);
@@ -443,6 +442,7 @@ static struct component_ops it66121_component_ops = {
 	.unbind = it66121_unbind,
 };
 
+/* TODO: rewrite register access properly */
 static int it66121_bridge_attach(struct drm_bridge *bridge)
 {
 	int ret;
@@ -504,6 +504,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	}
 
 	/* Start interrupts */
+	/* TODO: rewrite properly */
 	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
 			IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG,
 			~(IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG));
@@ -540,10 +541,26 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		struct drm_display_mode *adjusted_mode)
 
 {
-	int ret;
+	int i, ret;
 	ssize_t frame_size;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
 			bridge);
+	u8 buf[HDMI_INFOFRAME_SIZE(AVI)];
+	const u16 aviinfo_reg[HDMI_AVI_INFOFRAME_SIZE] = {
+		IT66121_HDMI_AVIINFO_DB1,
+		IT66121_HDMI_AVIINFO_DB2,
+		IT66121_HDMI_AVIINFO_DB3,
+		IT66121_HDMI_AVIINFO_DB4,
+		IT66121_HDMI_AVIINFO_DB5,
+		IT66121_HDMI_AVIINFO_DB6,
+		IT66121_HDMI_AVIINFO_DB7,
+		IT66121_HDMI_AVIINFO_DB8,
+		IT66121_HDMI_AVIINFO_DB9,
+		IT66121_HDMI_AVIINFO_DB10,
+		IT66121_HDMI_AVIINFO_DB11,
+		IT66121_HDMI_AVIINFO_DB12,
+		IT66121_HDMI_AVIINFO_DB13
+	};
 
 	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " \
 			DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
@@ -553,19 +570,38 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
 			adjusted_mode, false);
 	if (ret != 0) {
-		dev_err(bridge->dev->dev, "Cannot create AVI infoframe");
+		dev_err(bridge->dev->dev, "Cannot create AVI infoframe (%d)",
+				ret);
 		return;
 	}
 
-	frame_size = hdmi_avi_infoframe_pack(&priv->hdmi_avi_infoframe,
-			priv->hdmi_avi_infoframe_raw, HDMI_INFOFRAME_SIZE(AVI));
+	frame_size = hdmi_avi_infoframe_pack(&priv->hdmi_avi_infoframe, buf,
+			sizeof(buf));
 	if (frame_size < 0) {
 		dev_err(bridge->dev->dev, "Cannot pack AVI infoframe (%ld)",
 				frame_size);
 		return;
 	}
 
-	/* TODO: send raw avi info frame to it66121 */
+	/* Write new AVI infoframe packet */
+	for (i = 0; i < HDMI_AVI_INFOFRAME_SIZE; i++) {
+		ret = regmap_write(priv->regmap, aviinfo_reg[i],
+				buf[i + HDMI_INFOFRAME_HEADER_SIZE]);
+		if (ret != 0) {
+			dev_err(bridge->dev->dev, "Cannot write AVI " \
+					"infoframe byte %d (%d)", i, ret);
+			return;
+		}
+	}
+	ret = regmap_write(priv->regmap, IT66121_HDMI_AVIINFO_CSUM, buf[3]);
+	if (ret != 0) {
+		dev_err(bridge->dev->dev, "Cannot write AVI infoframe " \
+				"checksum (%d)", ret);
+		return;
+	}
+
+	/* Enable AVI infoframe */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_AVI_INFO_PACKET, 3);
 }
 
 static const struct drm_bridge_funcs it66121_bridge_funcs = {
@@ -587,14 +623,6 @@ static int it66121_probe(struct i2c_client *client)
 	if (IS_ERR_OR_NULL(priv)) {
 		dev_err(&client->dev, "Cannot allocate IT66121 client " \
 				"private structure");
-		return PTR_ERR(priv);
-	}
-
-	priv->hdmi_avi_infoframe_raw = devm_kzalloc(&client->dev,
-			HDMI_INFOFRAME_SIZE(AVI), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(priv)) {
-		dev_err(&client->dev, "Cannot allocate IT66121 AVI " \
-				"infoframe buffer");
 		return PTR_ERR(priv);
 	}
 
