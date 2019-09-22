@@ -503,6 +503,8 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 		return ret;
 	}
 
+	drm_connector_register(&priv->connector);
+
 	/* Start interrupts */
 	/* TODO: rewrite properly */
 	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
