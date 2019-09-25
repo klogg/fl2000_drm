@@ -841,7 +841,7 @@ I2C RD IT66121: 0x04 : 0x00006001
 I2C WR IT66121: 0x04 : 0x00006001
 ```
 **fl2000_hdmi_setup_afe**
-0x0F: Switch bank 0, also by chance clear pending interrupt in bit 7
+0x0F: Power up TxCLK, also by chance clear pending interrupt in bit 7
 ```
 I2C RD IT66121: 0x0C : 0x106C0000
 I2C WR IT66121: 0x0C : 0x006C0000
