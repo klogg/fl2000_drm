@@ -25,7 +25,6 @@ enum it66121_intr_state {
 
 struct it66121_priv {
 	struct regmap *regmap;
-	struct drm_display_mode curr_mode;
 	struct drm_bridge bridge;
 	struct drm_connector connector;
 	enum drm_connector_status status;
@@ -57,7 +56,7 @@ static const struct regmap_range_cfg it66121_regmap_banks[] = {
 		.range_min = IT66121_BANK_START,
 		.range_max = IT66121_BANK_END,
 		.selector_reg = IT66121_SYS_CONTROL,
-		.selector_mask = 3,
+		.selector_mask = IT66121_SYS_BANK_MASK,
 		.selector_shift = 0,
 		.window_start = IT66121_BANK_START,
 		.window_len = IT66121_BANK_SIZE,
@@ -107,6 +106,93 @@ enum {
 	DDC_CMD_SCL_PULSE = 0xA,
 	DDC_CMD_ABORT = 0xF,
 } ddc_cmd;
+
+/* XXX: mode, adjusted_mode can be used here for transformation configuration */
+static int it66121_configure_input(struct it66121_priv *priv)
+{
+	int ret;
+
+	/* XXX: This configures bridge IC connection to encoder IC. In our case
+	 * this is the interface between IT66121 and FL2000. Of course it is
+	 * static so shall be read from device's EEPROM (not sure if there is
+	 * EEPROM on our HW), or at least to be set by driver's parameters. For
+	 * now, let's keep it simple - hardcode it:
+	 *   - input mode RGB
+	 *   - IO latch clock = TXCLK
+	 *   - CCIR656 disabled
+	 *   - embedded sync disabled
+	 *   - DDR mode disabled
+	 *   - 1 cycle input PCLK delay
+	 * NOTE: some flexible encoders may support non-static mode on the bus,
+	 * for those we may need to also use modeset parameters */
+	ret = regmap_write(priv->regmap, IT66121_INPUT_MODE,
+			IT66121_INPUT_MODE_RGB |
+			IT66121_INPUT_PCLKDELAY1);
+	if (ret != 0)
+		return ret;
+
+	/* XXX: Also we can change some parameters of IT66121_INPUT_IO_CONTROL
+	 * related to TX FIFO reseting, 10/12bit YCbCr422 sequential IO mode */
+
+	/* XXX: This configures transformation needed in order to properly
+	 * convert input signal to output. For now we hardcode "bypassing".
+	 * In case when conversion is needed we have to also to set Color Space
+	 * Conversion Matrix and RGB or YUV blank levels */
+	ret = regmap_write(priv->regmap, IT66121_INPUT_COLOR_CONV,
+			IT66121_INPUT_NO_CONV);
+	if (ret != 0)
+		return ret;
+
+	return 0;
+}
+
+static int it66121_configure_afe(struct it66121_priv *priv,
+		struct drm_display_mode *mode)
+{
+	int ret;
+
+	ret = regmap_write(priv->regmap, IT66121_AFE_DRV_CONTROL,
+			IT66121_AFE_RST);
+	if (ret != 0)
+		return ret;
+
+	/* TODO: Rewrite with proper bit names */
+	if (KHZ2PICOS(mode->clock) > 80000000UL) {
+		ret = regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, 0x90, 0x80);
+		if (ret != 0)
+			return ret;
+		ret = regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, 0x89, 0x80);
+		if (ret != 0)
+			return ret;
+		ret = regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_3, 0x10, 0x80);
+		if (ret != 0)
+			return ret;
+	} else {
+		ret = regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, 0x90, 0x10);
+		if (ret != 0)
+			return ret;
+		ret = regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, 0x89, 0x09);
+		if (ret != 0)
+			return ret;
+		ret = regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_3, 0x10, 0x10);
+		if (ret != 0)
+			return ret;
+	}
+
+	/* Clear reset flags */
+	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST,
+			~(IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST));
+	if (ret != 0)
+		return ret;
+
+	/* Fire AFE */
+	ret = regmap_write(priv->regmap, IT66121_AFE_DRV_CONTROL, 0);
+	if (ret != 0)
+		return ret;
+
+	return 0;
+}
 
 static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
 {
@@ -258,7 +344,6 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 	int i, ret, remain = len, offset = 0;
 	unsigned int rd_fifo_val;
 	static u8 header[EDID_LOSS_LEN] = {0x00, 0xFF, 0xFF};
-
 	struct it66121_priv *priv = context;
 	struct device *dev = priv->bridge.dev->dev;
 
@@ -290,13 +375,17 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 			return ret;
 
 		/* Power up CRCLK */
-		regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (1<<3), (1<<3));
+		regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
+				IT66121_SYS_CRCLK_OFF,
+				IT66121_SYS_CRCLK_OFF);
 		if (ret != 0)
 			return ret;
 
 		/* Do abort DDC twice - HW defect */
 		for (i = 0; i < 2; i++) {
-			ret = regmap_write_bits(priv->regmap, IT66121_DDC_CONTROL, (3<<0), (3<<0));
+			ret = regmap_write_bits(priv->regmap, IT66121_DDC_CONTROL,
+					IT66121_DDC_MASTER_ROM | IT66121_DDC_MASTER_HOST,
+					IT66121_DDC_MASTER_ROM | IT66121_DDC_MASTER_HOST);
 			if (ret != 0)
 				return ret;
 
@@ -455,7 +544,9 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	}
 
 	/* Reset according to IT66121 manual */
-	ret = regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
+	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+			IT66121_SW_REF_RST_HDMITX,
+			IT66121_SW_REF_RST_HDMITX);
 	msleep(50);
 
 	/* Power up GRCLK & power down IACLK, TxCLK, CRCLK */
@@ -483,7 +574,9 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (3<<4), (0<<4));
 
 	/* Reset according to IT66121 manual */
-	ret = regmap_write_bits(priv->regmap, IT66121_SW_RESET, (1<<5), (1<<5));
+	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+			IT66121_SW_REF_RST_HDMITX,
+			IT66121_SW_REF_RST_HDMITX);
 	msleep(50);
 
 	ret = drm_connector_init(bridge->dev, &priv->connector,
@@ -528,14 +621,48 @@ static void it66121_bridge_detach(struct drm_bridge *bridge)
 
 static void it66121_bridge_enable(struct drm_bridge *bridge)
 {
-	/* TODO: Enable HW */
+	int ret;
+	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
+			bridge);
+
 	dev_info(bridge->dev->dev, "it66121_bridge_enable");
+
+	/* Unmute AV */
+	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
+			IT66121_HDMI_AV_MUTE_ON,
+			~IT66121_HDMI_AV_MUTE_ON);
+	if (ret != 0)
+		return;
+
+	/* XXX: Why we need it in every mute/umute? */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
+			IT66121_HDMI_GEN_CTRL_PKT_ON |
+			IT66121_HDMI_GEN_CTRL_PKT_RPT);
+	if (ret != 0)
+		return;
 }
 
 static void it66121_bridge_disable(struct drm_bridge *bridge)
 {
-	/* TODO: Disable HW */
+	int ret;
+	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
+			bridge);
+
 	dev_info(bridge->dev->dev, "it66121_bridge_disable");
+
+	/* Mute AV */
+	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
+			IT66121_HDMI_AV_MUTE_ON,
+			IT66121_HDMI_AV_MUTE_ON);
+	if (ret != 0)
+		return;
+
+	/* XXX: Why we need it in every mute/umute? */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
+			IT66121_HDMI_GEN_CTRL_PKT_ON |
+			IT66121_HDMI_GEN_CTRL_PKT_RPT);
+	if (ret != 0)
+		return;
 }
 
 static void it66121_bridge_mode_set(struct drm_bridge *bridge,
@@ -563,6 +690,9 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		IT66121_HDMI_AVIINFO_DB12,
 		IT66121_HDMI_AVIINFO_DB13
 	};
+
+	/* TODO: We are explicitly configuring HDMI here while actually it can
+	 * be also DVI */
 
 	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " \
 			DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
@@ -603,7 +733,52 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	}
 
 	/* Enable AVI infoframe */
-	ret = regmap_write(priv->regmap, IT66121_HDMI_AVI_INFO_PACKET, 3);
+	ret = regmap_write(priv->regmap, IT66121_HDMI_AVI_INFO_PKT,
+			IT66121_HDMI_AVI_INFO_PKT_ON |
+			IT66121_HDMI_AVI_INFO_RPT);
+	if (ret != 0) {
+		dev_err(bridge->dev->dev, "Cannot enable AVI infoframe " \
+				"(%d)", ret);
+		return;
+	}
+
+	/* Set TX mode to HDMI */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
+			IT66121_HDMI_MODE_HDMI);
+	if (ret != 0) {
+		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
+				"(%d)", ret);
+		return;
+	}
+
+	/* Disable TXCLK prior to configuration */
+	ret = regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
+			IT66121_SYS_TXCLK_OFF,
+			IT66121_SYS_TXCLK_OFF);
+	if (ret != 0)
+		return;
+
+	/* Configure connection, conversions, etc. */
+	ret = it66121_configure_input(priv);
+	if (ret != 0) {
+		dev_err(bridge->dev->dev, "Cannot configure input bus " \
+				"(%d)", ret);
+		return;
+	}
+
+	/* Configure AFE */
+	ret = it66121_configure_afe(priv, adjusted_mode);
+	if (ret != 0) {
+		dev_err(bridge->dev->dev, "Cannot configure AFE (%d)", ret);
+		return;
+	}
+
+	/* Enable TXCLK */
+	ret = regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
+			IT66121_SYS_TXCLK_OFF,
+			~IT66121_SYS_TXCLK_OFF);
+	if (ret != 0)
+		return;
 }
 
 static const struct drm_bridge_funcs it66121_bridge_funcs = {
