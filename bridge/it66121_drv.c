@@ -361,16 +361,8 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		int size = ((remain + EDID_LOSS_LEN) > EDID_FIFO_SIZE) ?
 				EDID_FIFO_SIZE : (remain + EDID_LOSS_LEN);
 
-		/* Switch port to PC */
-		ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
-				IT66121_DDC_MASTER_DDC |
-				IT66121_DDC_MASTER_HOST);
-		if (ret != 0)
-			return ret;
-
 		/* Clear DDC FIFO */
-		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
-				DDC_CMD_FIFO_CLEAR);
+		ret = it66121_clear_ddc_fifo(priv);
 		if (ret != 0)
 			return ret;
 
@@ -381,23 +373,13 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		if (ret != 0)
 			return ret;
 
-		/* Do abort DDC twice - HW defect */
-		for (i = 0; i < 2; i++) {
-			ret = regmap_write_bits(priv->regmap, IT66121_DDC_CONTROL,
-					IT66121_DDC_MASTER_ROM | IT66121_DDC_MASTER_HOST,
-					IT66121_DDC_MASTER_ROM | IT66121_DDC_MASTER_HOST);
-			if (ret != 0)
-				return ret;
-
-			ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
-					DDC_CMD_ABORT);
-			if (ret != 0)
-				return ret;
-		}
+		/* Abort DDC */
+		ret = it66121_abort_ddc_ops(priv);
+		if (ret != 0)
+			return ret;
 
 		/* Clear DDC FIFO */
-		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
-				DDC_CMD_FIFO_CLEAR);
+		ret = it66121_clear_ddc_fifo(priv);
 		if (ret != 0)
 			return ret;
 
@@ -599,10 +581,11 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	drm_connector_register(&priv->connector);
 
 	/* Start interrupts */
-	/* TODO: rewrite properly */
 	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
-			IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG,
-			~(IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG));
+			IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR |
+				IT66121_MASK_DDC_BUSHANG,
+			~(IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR |
+				IT66121_MASK_DDC_BUSHANG));
 	atomic_set(&priv->state, RUN);
 	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 	queue_delayed_work(priv->work_queue, &priv->work,
