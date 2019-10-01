@@ -62,7 +62,14 @@ Original FL2000 Linux driver implements array of hardcoded register values to pr
 Pixel clock is acheived with PLL connected to main XTAL (10MHz in our case)
 * Pixel clock = XTAL clock / (VGA_PLL_REG.pll_pre_div & 0xF) * VGA_PLL_REG.pll_multi / VGA_PLL_REG.pll_post_div
 
-It is unclear though what is the purpose of the high 4 bits of VGA_PLL_REG.pll_pre_div. In the table they wary 0-1-2-3 so this seem to be some sort of mask (or skew?)
+It is unclear though what is the purpose of the high 4 bits of VGA_PLL_REG.pll_pre_div. In the table values for these 4 bits are 0, 1, 2 or 3 and this is somehow aligned with "intermediate" clock order (after pre divisor and multiplier). With minimum-maximum clock distribution we can gate to some empirical rules setting values 0-3:
+
+| x | min | max  | rule |
+|---|-----|------|------|
+| 0 | 80  | 100  | -    |
+| 1 | 130 | 150  | >100 |
+| 2 | 270 | 490  | >250 |
+| 3 | 515 | 1000 | >500 |
 
 Timings are set according to mode structure:
 * H_SYNC_REG_1.hactive = hdisplay
