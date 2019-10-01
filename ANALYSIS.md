@@ -29,7 +29,7 @@ See parsed stream dump and register access statistics below.
 * All video frames are transmitted in RGB24 which is confirmed by USB data frame size:<br>
 800x480 (resolution) x3 (bytes per pixel) = 1152000
 * EO frame signaled by zero-sized BULK packet
-* First BULK frame has timestamp of 40.036560, last BULK packet has timestamp 50.371687, with total 681 ob non-zero BULK frames transmitted - this give us 65.9 FPS which seem to be a strange number.
+* First BULK frame has timestamp of 40.036560, last BULK packet has timestamp 50.371687, with total 681 ob non-zero BULK frames transmitted - this give us 65.9 FPS which seem to be correct
 * Display connect occur on sequence 1530
   * receive interrupt (1) with status 0x680000E1
     - External monitor event: external monitor connected
@@ -41,7 +41,7 @@ See parsed stream dump and register access statistics below.
   * receive interrupt (1) with status 0xA8087EE1
     - EDID event: VGA monitor disconnected
 * VGA connect status and VGA DAC power up status correctly follow connection status
-* No errors observed during operation except LBUF overflow - but probably this is due too high FPS (66 vs expected 30)
+* No errors observed during operation except LBUF overflow
 * It is interesting to note that on disconnect amount of frames transmitted is 680 which is 1 less than BULK frames on USB bus - probably disconnect circuitry took some time to raise interrupt so 1 extra frame got transmitted and lost
 * There is (seemingly) concurrent access to registers happened leading to some sort of mixup when forcing VGA connect and starting IT66121 I2C register access. Linux implementation is different and does not have this issue.
 * There are 2 extra application resets besides the one on the start of the driver
