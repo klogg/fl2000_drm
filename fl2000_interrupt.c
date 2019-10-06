@@ -55,7 +55,10 @@ static int fl2000_debugfs_intr_init(void)
 #define fl2000_debugfs_intr_status(status)
 #endif /* CONFIG_DEBUG_FS */
 
+
 static void fl2000_intr_completion(struct urb *urb);
+
+int fl2000_inter_check(struct usb_device *usb_dev, u32 status);
 
 static inline int fl2000_intr_submit_urb(struct fl2000_intr *intr)
 {
@@ -95,10 +98,10 @@ static void fl2000_intr_work(struct work_struct *work_item)
 		} else {
 			dev_info(&intr->interface->dev, "FL2000 interrupt" \
 					" status = 0x%X", status);
+
 			fl2000_debugfs_intr_status(status);
-			/* TODO:
-			 * drm_kms_helper_hotplug_event();
-			 * */
+
+			ret = fl2000_inter_check(usb_dev, status);
 		}
 	}
 
