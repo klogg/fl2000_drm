@@ -97,11 +97,13 @@ static void fl2000_intr_work(struct work_struct *work_item)
 			dev_err(&usb_dev->dev, "Cannot read interrupt " \
 					"register (%d)", ret);
 		} else {
-			dev_info(&intr->interface->dev, "FL2000 interrupt" \
-					" status = 0x%X", status);
+			dev_info(&intr->interface->dev, "FL2000 interrupt 0x%X",
+					status);
 
 			fl2000_debugfs_intr_status(status);
 
+			/* TODO: This shall be called only for relevant
+			 * interrupts, others shall be processed differently */
 			ret = fl2000_inter_check(usb_dev, status);
 		}
 	}
