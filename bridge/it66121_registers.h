@@ -20,7 +20,15 @@
 #define IT66121_VENDOR_ID_2		0x01
 #define IT66121_DEVICE_ID_1		0x02
 #define IT66121_DEVICE_ID_2		0x03
-#define IT66121_SW_RESET		0x04
+#define IT66121_SW_RST			0x04
+#define IT66121_SW_ENTEST		(1<<7)
+#define IT66121_SW_REF_RST_HDMITX	(1<<5)
+#define IT66121_SW_AREF_RST		(1<<4)
+#define IT66121_SW_HDMI_VID_RST		(1<<3)
+#define IT66121_SW_HDMI_AUD_RST		(1<<2)
+#define IT66121_SW_HDMI_RST		(1<<1)
+#define IT66121_SW_HDCP_RST		(1<<0)
+
 #define IT66121_INT_CONTROL		0x05
 #define IT66121_INT_STATUS_1		0x06
 typedef union {
@@ -58,6 +66,11 @@ static const struct reg_field IT66121_SYS_STATUS_clr_irq =
 		REG_FIELD(IT66121_SYS_STATUS, 0, 0);
 
 #define IT66121_SYS_CONTROL		0x0F
+#define IT66121_SYS_RCLK_OFF		(1<<6)
+#define IT66121_SYS_IACLK_OFF		(1<<5)
+#define IT66121_SYS_TXCLK_OFF		(1<<4)
+#define IT66121_SYS_CRCLK_OFF		(1<<3)
+#define IT66121_SYS_BANK_MASK		0x03
 
 #define IT66121_DDC_CONTROL		0x10
 #define IT66121_DDC_MASTER_ROM		(1<<1)
@@ -100,6 +113,10 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 #define IT66121_PLL_LOCK_STATUS		0x05F
 #define IT66121_AUDIO_FREQ_COUNT	0x060
 #define IT66121_AFE_DRV_CONTROL		0x061
+#define IT66121_AFE_DRV_PWD		(1<<5)
+#define IT66121_AFE_RST			(1<<4)
+
+
 #define IT66121_AFE_XP_CONTROL		0x062
 #define IT66121_AFE_IP_CONTROL_2	0x063
 #define IT66121_AFE_IP_CONTROL_1	0x064
@@ -115,8 +132,27 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 /* reserved */
 /* reserved */
 #define IT66121_INPUT_MODE		0x070
+#define IT66121_INPUT_MODE_RGB		(0<<6)
+#define IT66121_INPUT_MODE_YUV422	(1<<6)
+#define IT66121_INPUT_MODE_YUV444	(2<<6)
+#define IT66121_INPUT_MODE_TXCLKDIV2	(1<<5)
+#define IT66121_INPUT_MODE_CCIR656	(1<<4)
+#define IT66121_INPUT_MODE_SYNCEMB	(1<<3)
+#define IT66121_INPUT_MODE_DDR		(1<<2)
+#define IT66121_INPUT_PCLKDELAY1	(1<<0)
+#define IT66121_INPUT_PCLKDELAY2	(2<<0)
+#define IT66121_INPUT_PCLKDELAY3	(3<<0)
+
 #define IT66121_INPUT_IO_CONTROL	0x071
 #define IT66121_INPUT_COLOR_CONV	0x072
+#define IT66121_INPUT_DITHER		(1<<7)
+#define IT66121_INPUT_UDFILTER		(1<<6)
+#define IT66121_INPUT_DNFREE_GO 	(1<<5)
+#define IT66121_INPUT_BTAT1004		(1<<2)
+#define IT66121_INPUT_RGB_TO_YUV	0x2
+#define IT66121_INPUT_YUV_TO_RGB	0x3
+#define IT66121_INPUT_NO_CONV		0x0
+
 #define IT66121_Y_BLANK_LEVEL		0x073
 #define IT66121_C_BLANK_LEVEL		0x074
 #define IT66121_RGB_BLANK_LEVEL		0x075
@@ -148,24 +184,35 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 /* reserved */
 /* 090 - 0BF Pattern generation registers, ignored */
 #define IT66121_HDMI_MODE		0x0C0
+#define IT66121_HDMI_MODE_HDMI		(1<<0)
+#define IT66121_HDMI_MODE_DVI		(0<<0)
+
 #define IT66121_HDMI_AV_MUTE		0x0C1
+#define IT66121_HDMI_AV_MUTE_ON		(1<<0)
+
 #define IT66121_HDMI_BLACK_SRC		0x0C2
 #define IT66121_HDMI_OESS_PREIOD	0x0C3
 /* reserved */
 #define IT66121_HDMI_AUDIO_CTS		0x0C5
-#define IT66121_HDMI_GEN_CTRL_PACKET	0x0C6
+#define IT66121_HDMI_GEN_CTRL_PKT	0x0C6
+#define IT66121_HDMI_GEN_CTRL_PKT_ON	(1<<0)
+#define IT66121_HDMI_GEN_CTRL_PKT_RPT	(1<<1)
+
 /* reserved */
 /* reserved */
-#define IT66121_HDMI_NULL_PACKET	0x0C9
-#define IT66121_HDMI_ACP_PACKET		0x0CA
+#define IT66121_HDMI_NULL_PKT		0x0C9
+#define IT66121_HDMI_ACP_PKT		0x0CA
 /* reserved */
 /* reserved */
-#define IT66121_HDMI_AVI_INFO_PACKET	0x0CD
-#define IT66121_HDMI_AUDIO_INFO_PACKET	0x0CE
+#define IT66121_HDMI_AVI_INFO_PKT	0x0CD
+#define IT66121_HDMI_AVI_INFO_PKT_ON	(1<<0)
+#define IT66121_HDMI_AVI_INFO_RPT	(1<<1)
+
+#define IT66121_HDMI_AUD_INFO_PKT	0x0CE
 /* reserved */
-#define IT66121_HDMI_MPEG_INFO_PACKET	0x0D0
+#define IT66121_HDMI_MPEG_INFO_PKT	0x0D0
 #define IT66121_HDMI_VIDEO_PARAM_STATUS	0x0D1
-#define IT66121_HDMI_3D_INFO_PACKET	0x0D2
+#define IT66121_HDMI_3D_INFO_PKT	0x0D2
 /* reserved */
 /* reserved */
 /* reserved */
@@ -195,7 +242,22 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 /* 0F9 - 0FF undefined*/
 
 /* 130 - 1BF Bank 1 */
-/* 130 - 18F HDMI packet content registers, ignored */
+/* 130 - 18F HDMI packet content registers, ignored except AVI InfoFrame */
+#define IT66121_HDMI_AVIINFO_DB1	0x158
+#define IT66121_HDMI_AVIINFO_DB2	0x159
+#define IT66121_HDMI_AVIINFO_DB3	0x15A
+#define IT66121_HDMI_AVIINFO_DB4	0x15B
+#define IT66121_HDMI_AVIINFO_DB5	0x15C
+#define IT66121_HDMI_AVIINFO_CSUM	0x15D
+#define IT66121_HDMI_AVIINFO_DB6	0x15E
+#define IT66121_HDMI_AVIINFO_DB7	0x15F
+#define IT66121_HDMI_AVIINFO_DB8	0x160
+#define IT66121_HDMI_AVIINFO_DB9	0x161
+#define IT66121_HDMI_AVIINFO_DB10	0x162
+#define IT66121_HDMI_AVIINFO_DB11	0x163
+#define IT66121_HDMI_AVIINFO_DB12	0x164
+#define IT66121_HDMI_AVIINFO_DB13	0x165
+
 /* 190 - 1BF Audio channel status registers, ignored */
 
 #define IT66121_BANK_END		0x1FF

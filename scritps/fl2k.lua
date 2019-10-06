@@ -170,13 +170,13 @@ local function count_i2c_regs(i2c_device, reg_addr, reg_op)
 end
 
 local function analyze_i2c(op)
-    local res
+    local ret
     local i2c_done = bit.band(op.reg_value, 0x80000000)
     if op.reg_addr == 0x8020 and op.reg_op == "RD" then
         if i2c_state == I2C_STATE.IDLE and i2c_done ~= 0 then
             i2c[i2c_idx] = {} -- start read operation
             i2c_state = I2C_STATE.READ1
-            res = 0 -- suspected i2c flow
+            ret = 0 -- suspected i2c flow
         elseif i2c_state == I2C_STATE.READ2 and i2c_done == 0 then
             -- do nothing, we are still waiting for i2c to complete
         elseif i2c_state == I2C_STATE.READ2 and i2c_done ~= 0 then
@@ -187,7 +187,7 @@ local function analyze_i2c(op)
             -- do nothing, we are still waiting for i2c to complete
         elseif i2c_state == I2C_STATE.WRITE3 and i2c_done ~= 0 then
             i2c_state = I2C_STATE.IDLE
-            res = i2c_idx -- full i2c flow recovered
+            ret = i2c_idx -- full i2c flow recovered
             i2c_idx = i2c_idx + 1 -- finish write operation
         else
             i2c_state = I2C_STATE.IDLE
@@ -215,17 +215,17 @@ local function analyze_i2c(op)
     elseif op.reg_addr == 0x8024 and op.reg_op == "RD" and i2c_state == I2C_STATE.READ3 then
         i2c[i2c_idx].i2c_data = op.reg_value
         i2c_state = I2C_STATE.IDLE
-        res = i2c_idx -- full i2c flow recovered
+        ret = i2c_idx -- full i2c flow recovered
         i2c_idx = i2c_idx + 1 -- finish read operation
     elseif op.reg_addr == 0x8028 and op.reg_op == "WR" and i2c_state == I2C_STATE.IDLE then
         i2c[i2c_idx] = {} -- start write operation
         i2c[i2c_idx].i2c_data = op.reg_value
         i2c_state = I2C_STATE.WRITE1
-        res = 0 -- suspected i2c flow
+        ret = 0 -- suspected i2c flow
     else
         i2c_state = I2C_STATE.IDLE
     end
-    return res
+    return ret
 end
 
 local function count_regs(reg_addr, reg_op)
