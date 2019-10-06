@@ -162,11 +162,11 @@ int fl2000_start(struct usb_device *usb_dev)
 		return -ENOMEM;
 	}
 
-	ret = regmap_field_write(usb_dev_data->u1_reject, false);
+	ret = regmap_field_write(usb_dev_data->u1_reject, true);
 	if (ret != 0) return -EIO;
-	ret = regmap_field_write(usb_dev_data->u2_reject, false);
+	ret = regmap_field_write(usb_dev_data->u2_reject, true);
 	if (ret != 0) return -EIO;
-	ret = regmap_field_write(usb_dev_data->wake_nrdy, true);
+	ret = regmap_field_write(usb_dev_data->wake_nrdy, false);
 	if (ret != 0) return -EIO;
 
 	return 0;
