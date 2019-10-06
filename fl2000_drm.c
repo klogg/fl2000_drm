@@ -338,3 +338,17 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 
 	return 0;
 }
+
+int fl2000_inter_check(struct usb_device *usb_dev, u32 status)
+{
+	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
+			fl2000_drm_release, NULL, NULL);
+	if (drm_if == NULL) {
+		dev_err(&usb_dev->dev, "Cannot find DRM private structure");
+		return -ENODEV;
+	}
+
+	drm_kms_helper_hotplug_event(&drm_if->drm);
+
+	return 0;
+}
