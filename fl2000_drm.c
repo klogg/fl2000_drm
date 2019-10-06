@@ -211,7 +211,8 @@ static int fl2000_bind(struct device *master)
 			&fl2000_display_funcs, fl2000_pixel_formats,
 			ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
 	if (ret != 0) {
-		dev_err(drm->dev, "Cannot configure simple display pipe (%d)", ret);
+		dev_err(drm->dev, "Cannot configure simple display pipe (%d)",
+				ret);
 		return ret;
 	}
 
@@ -234,7 +235,8 @@ static int fl2000_bind(struct device *master)
 
 	ret = drm_fb_cma_fbdev_init(drm, BPP, 0);
 	if (ret != 0) {
-		dev_err(drm->dev, "Cannot initialize CMA framebuffer (%d)", ret);
+		dev_err(drm->dev, "Cannot initialize CMA framebuffer (%d)",
+				ret);
 		return ret;
 	}
 
@@ -316,7 +318,8 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 	drm_if = devres_alloc(&fl2000_drm_release, sizeof(*drm_if), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(drm_if)) {
 		ret = IS_ERR(drm_if) ? PTR_ERR(drm_if) : -ENOMEM;
-		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure (%d)", ret);
+		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure" \
+				" (%d)", ret);
 		return ret;
 	}
 	devres_add(&usb_dev->dev, drm_if);
@@ -328,7 +331,8 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 	ret = component_master_add_with_match(&usb_dev->dev,
 			&fl2000_drm_master_ops, match);
 	if (ret != 0) {
-		dev_err(&usb_dev->dev, "Cannot register component master (%d)", ret);
+		dev_err(&usb_dev->dev, "Cannot register component master" \
+				" (%d)", ret);
 		return ret;
 	}
 
