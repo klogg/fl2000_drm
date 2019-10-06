@@ -58,7 +58,7 @@ static int fl2000_debugfs_intr_init(void)
 
 static void fl2000_intr_completion(struct urb *urb);
 
-int fl2000_inter_check(struct usb_device *usb_dev, u32 status);
+void fl2000_inter_check(struct usb_device *usb_dev, u32 status);
 
 static inline int fl2000_intr_submit_urb(struct fl2000_intr *intr)
 {
@@ -97,14 +97,14 @@ static void fl2000_intr_work(struct work_struct *work_item)
 			dev_err(&usb_dev->dev, "Cannot read interrupt " \
 					"register (%d)", ret);
 		} else {
-			dev_info(&intr->interface->dev, "FL2000 interrupt 0x%X",
+			dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X",
 					status);
 
 			fl2000_debugfs_intr_status(status);
 
 			/* TODO: This shall be called only for relevant
 			 * interrupts, others shall be processed differently */
-			ret = fl2000_inter_check(usb_dev, status);
+			fl2000_inter_check(usb_dev, status);
 		}
 	}
 
