@@ -20,10 +20,12 @@ See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) fo
 
 ## Limitations
  * D-sub is not supported
+ * DVI is not supported
  * HDMI CEC is not supported
  * HDMI Audio is not supported
  * HDCP is not supported
  * USB2.0 is not supported
+ * Color/format conversion is not supported (limited to RGB)
  * Dongle onboard SPI EEPROM access via USB Mass Storage not implemented
 
 ## Known issues

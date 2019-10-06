@@ -123,12 +123,12 @@ static unsigned int reg_debug_address;
 
 static int fl2000_debugfs_reg_read(void *data, u64 *value)
 {
-	int res;
+	int ret;
 	unsigned int int_value;
 	struct usb_device *usb_dev = data;
-	res = fl2000_reg_read(usb_dev, reg_debug_address, &int_value);
+	ret = fl2000_reg_read(usb_dev, reg_debug_address, &int_value);
 	*value = int_value;
-	return res;
+	return ret;
 }
 
 static int fl2000_debugfs_reg_write(void *data, u64 value)

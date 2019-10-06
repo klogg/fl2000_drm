@@ -76,38 +76,28 @@ static int fl2000_create_controls(struct usb_device *usb_dev)
 
 	usb_dev_data->u1_reject = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_USB_LPM_u1_reject);
-	if (IS_ERR(usb_dev_data->u1_reject))
-		return PTR_ERR(usb_dev_data->u1_reject);
-
 	usb_dev_data->u2_reject = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_USB_LPM_u2_reject);
-	if (IS_ERR(usb_dev_data->u2_reject))
-		return PTR_ERR(usb_dev_data->u2_reject);
-
 	usb_dev_data->wake_nrdy = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_USB_CTRL_wake_nrdy);
-	if (IS_ERR(usb_dev_data->wake_nrdy))
-		return PTR_ERR(usb_dev_data->wake_nrdy);
-
 	usb_dev_data->app_reset = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_RST_CTRL_REG_app_reset);
-	if (IS_ERR(usb_dev_data->app_reset))
-		return PTR_ERR(usb_dev_data->app_reset);
-
 	usb_dev_data->wakeup_clear_en = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_VGA_CTRL_REG_3_wakeup_clear_en);
-	if (IS_ERR(usb_dev_data->wakeup_clear_en))
-		return PTR_ERR(usb_dev_data->wakeup_clear_en);
-
 	usb_dev_data->edid_detect = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_VGA_I2C_SC_REG_edid_detect);
-	if (IS_ERR(usb_dev_data->edid_detect))
-		return PTR_ERR(usb_dev_data->edid_detect);
-
 	usb_dev_data->monitor_detect = devm_regmap_field_alloc(&usb_dev->dev,
 			regmap, FL2000_VGA_I2C_SC_REG_monitor_detect);
-	if (IS_ERR(usb_dev_data->monitor_detect))
-		return PTR_ERR(usb_dev_data->monitor_detect);
+
+	/* Dont really care which one failed */
+	if (IS_ERR(usb_dev_data->u1_reject) ||
+			IS_ERR(usb_dev_data->u2_reject) ||
+			IS_ERR(usb_dev_data->wake_nrdy) ||
+			IS_ERR(usb_dev_data->app_reset) ||
+			IS_ERR(usb_dev_data->wakeup_clear_en) ||
+			IS_ERR(usb_dev_data->edid_detect) ||
+			IS_ERR(usb_dev_data->monitor_detect))
+		return -1;
 
 	return 0;
 }
@@ -292,7 +282,8 @@ static int fl2000_suspend(struct usb_interface *interface,
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	dev_dbg(&usb_dev->dev, "resume");
 
-	/* TODO: suspend */
+	/* TODO: suspend
+	 * drm_mode_config_helper_suspend() */
 
 	return 0;
 }
@@ -302,7 +293,8 @@ static int fl2000_resume(struct usb_interface *interface)
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	dev_dbg(&usb_dev->dev, "suspend");
 
-	/* TODO: resume */
+	/* TODO: resume
+	 * drm_mode_config_helper_resume() */
 
 	return 0;
 }
