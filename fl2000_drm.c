@@ -100,7 +100,8 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		struct drm_crtc_state *cstate,
 		struct drm_plane_state *plane_state)
 {
-	/* TODO: enable HW */
+	/* TODO: enable HW
+	 * Here goes all HW configuration for PLLs, timings and so on */
 
 	dev_info(pipe->crtc.dev->dev, "fl2000_display_enable");
 }
@@ -152,6 +153,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	}
 }
 
+/* TODO: Possibly we need .check callback as well */
 static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_mode_valid,
 	.enable = fl2000_display_enable,
@@ -318,8 +320,8 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 	drm_if = devres_alloc(&fl2000_drm_release, sizeof(*drm_if), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(drm_if)) {
 		ret = IS_ERR(drm_if) ? PTR_ERR(drm_if) : -ENOMEM;
-		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure" \
-				" (%d)", ret);
+		dev_err(&usb_dev->dev, "Cannot allocate DRM private " \
+				"structure (%d)", ret);
 		return ret;
 	}
 	devres_add(&usb_dev->dev, drm_if);
@@ -331,8 +333,8 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 	ret = component_master_add_with_match(&usb_dev->dev,
 			&fl2000_drm_master_ops, match);
 	if (ret != 0) {
-		dev_err(&usb_dev->dev, "Cannot register component master" \
-				" (%d)", ret);
+		dev_err(&usb_dev->dev, "Cannot register component master (%d)",
+				ret);
 		return ret;
 	}
 

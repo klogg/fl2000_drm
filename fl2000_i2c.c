@@ -51,13 +51,13 @@ static u8 i2c_debug_offset;	/* Offset of the register within I2C address */
 
 static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 {
-	int res;
+	int ret;
 	u32 u32_value;
 	struct i2c_adapter *i2c_adapter = data;
-	res = fl2000_i2c_read_dword(i2c_adapter, i2c_debug_address,
+	ret = fl2000_i2c_read_dword(i2c_adapter, i2c_debug_address,
 			i2c_debug_offset, &u32_value);
 	*value = u32_value;
-	return res;
+	return ret;
 }
 
 static int fl2000_debugfs_i2c_write(void *data, u64 value)
@@ -197,14 +197,10 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		} else if ((msgs[0].len == 1) && (msgs[0].flags & I2C_M_RD)) {
 			msgs[0].buf[0] = 0xAA; /* poison buffer */
 			return num;
-		} else {
-			ret = -ENOTSUPP;
-			goto error;
-		}
-	} else {
-		ret = -ENOTSUPP;
-		goto error;
-	}
+		} else
+			return -ENOTSUPP;
+	} else
+		return -ENOTSUPP;
 
 	/* Somehow the original FL2000 driver forces offset to be bound to
 	 * 4-byte margin. This is really strange because i2c operation shall not
@@ -212,7 +208,8 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	 * Oh, yes, it is crippled :( */
 	if (read) {
 		ret = fl2000_i2c_read_dword(adapter, addr, offset, &data.w);
-		if (ret != 0) goto error;
+		if (ret != 0)
+			return ret;
 
 		msgs[1].buf[0] = data.b[idx];
 
@@ -224,21 +221,20 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		 * corrupt unrelated registers in case if we do not write whole
 		 * dword */
 		ret = fl2000_i2c_read_dword(adapter, addr, offset, &data.w);
-		if (ret != 0) goto error;
+		if (ret != 0)
+			return ret;
 
 		data.b[idx] = msgs[0].buf[1];
 
 		ret = fl2000_i2c_write_dword(adapter, addr, offset, &data.w);
-		if (ret != 0) goto error;
+		if (ret != 0)
+			return ret;
 
 		dev_dbg(&adapter->dev, "I2C WR: 0x%02X - 0x%02X", offset + idx,
 				data.b[idx]);
 	}
 
 	return num;
-error:
-	dev_err(&adapter->dev, "USB I2C operation failed (%d)", ret);
-	return ret;
 }
 
 static u32 fl2000_i2c_func(struct i2c_adapter *adap)

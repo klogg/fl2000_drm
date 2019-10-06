@@ -29,19 +29,19 @@ See parsed stream dump and register access statistics below.
 * All video frames are transmitted in RGB24 which is confirmed by USB data frame size:<br>
 800x480 (resolution) x3 (bytes per pixel) = 1152000
 * EO frame signaled by zero-sized BULK packet
-* First BULK frame has timestamp of 40.036560, last BULK packet has timestamp 50.371687, with total 681 ob non-zero BULK frames transmitted - this give us 65.9 FPS which seem to be a strange number.
+* First BULK frame has timestamp of 40.036560, last BULK packet has timestamp 50.371687, with total 681 ob non-zero BULK frames transmitted - this give us 65.9 FPS which seem to be correct
 * Display connect occur on sequence 1530
   * receive interrupt (1) with status 0x680000E1
     - External monitor event: external monitor connected
 * Display disconnect occur on sequence 8830
   * receive interrupt (1) with status 0x480AA260
     - External monitor event: external monitor disconnected
-* Something happens starting sequence 8533 - driver stops forcing VGA connect and receives corresponding interrupt from EDID VGA detection circuitry. This does not seem to be correct because we use HDMI monitor, not VGA
-  * set bit 25 in register 0x803C (0xD701084D -> 0xD501084D): Force VGA Connect
+* Not clear what "Force VGA Connect" bit is responsible for. In Linux implementation this bit is set on reconfiguring IT66121 (infoframes, AFE, etc.) and immediately reset after reconfiguration. In Windows it is reset after 537 operational frames were sent (see sequence 8533). When this bit reset, FL2000 shoots interrupt from EDID VGA detection circuitry.
+  * reset bit 25 in register 0x803C (0xD701084D -> 0xD501084D): Force VGA Connect
   * receive interrupt (1) with status 0xA8087EE1
     - EDID event: VGA monitor disconnected
 * VGA connect status and VGA DAC power up status correctly follow connection status
-* No errors observed during operation except LBUF overflow - but probably this is due too high FPS (66 vs expected 30)
+* No errors observed during operation except LBUF overflow
 * It is interesting to note that on disconnect amount of frames transmitted is 680 which is 1 less than BULK frames on USB bus - probably disconnect circuitry took some time to raise interrupt so 1 extra frame got transmitted and lost
 * There is (seemingly) concurrent access to registers happened leading to some sort of mixup when forcing VGA connect and starting IT66121 I2C register access. Linux implementation is different and does not have this issue.
 * There are 2 extra application resets besides the one on the start of the driver
@@ -54,6 +54,37 @@ See parsed stream dump and register access statistics below.
   * Read 9 bytes from offset 119
 * When reading EDID original driver seem to reset 2 high bytes (readonly as per doc) to 0, in capture we see that windows driver just keeps them 'dirty' with previous operation result
 * DDC Abort issued twice during EDID, with EDID_ROM flag enabled (flag setting is absent in original driver)
+
+## The "BIG TABLE"
+
+Original FL2000 Linux driver implements array of hardcoded register values to properly configure timings and pixel clock for different video modes. All this can be dynamically calculated, and most probably is done in Windows driver that provide configuration for 800x480 display which is unavailable in Linux. Full dump of big_table and analysis is [available on Dropbox](https://www.dropbox.com/s/2xb9j8pz4yjyrsb/big_table_analysis.ods?dl=0)
+
+Pixel clock is acheived with PLL connected to main XTAL (10MHz in our case)
+* Pixel clock = XTAL clock / (VGA_PLL_REG.pll_pre_div & 0xF) * VGA_PLL_REG.pll_multi / VGA_PLL_REG.pll_post_div
+
+Lower bits of VGA_PLL_REG.pll_pre_div has possible values of 1 or 2. Not sure if other values are allowed
+
+It is unclear though what is the purpose of the high 4 bits of VGA_PLL_REG.pll_pre_div. In the table values for these 4 bits are 0, 1, 2 or 3 and this is somehow aligned with "intermediate" clock order (after pre divisor and multiplier). With minimum-maximum clock distribution we can gate to some empirical rules setting values 0-3:
+
+| x | min | max  | rule |
+|---|-----|------|------|
+| 0 | 80  | 100  | -    |
+| 1 | 130 | 150  | >100 |
+| 2 | 270 | 490  | >250 |
+| 3 | 515 | 1000 | >500 |
+
+Not sure if other values are possible. Also it seems that maximum "intermediate" clock in the table is 1GHz
+
+Timings are set according to mode structure:
+* H_SYNC_REG_1.hactive = hdisplay
+* V_SYNC_REG_1.vactive = vdisplay
+* H_SYNC_REG_1.htotal = htotal
+* H_SYNC_REG_1.vtotal = vtotal
+* H_SYNC_REG_2.hsync_width = hsync_end - hsync_start
+* V_SYNC_REG_2.vsync_width = vsync_end - vsync_start
+* H_SYNC_REG_2.hstart = (htotal - hsync_start + 1)
+* V_SYNC_REG_2.vstart = (vtotal - vsync_start + 1)
+* V_SYNC_REG_2.frame start latency = vstart
 
 ## Register access statistics
 
@@ -706,9 +737,8 @@ REG WR 0x801C : 0x00000000
 REG RD 0x0070 : 0x04186085
 REG WR 0x0070 : 0x04186085
 ```
-**fl2000_hdmi_init - total mixup (reordered)**
-VGA_CTRL_REG_ACLK: Force VGA connect (probably useless, at least disabled in the FL2000 linux port)<br>
-Linux implementation also disable interrupts here
+**fl2000_hdmi_init (reordered)**
+VGA_CTRL_REG_ACLK: Set "Force VGA Connect"
 ```
 REG RD 0x803C : 0xD501084D
 REG WR 0x803C : 0xD701084D
@@ -842,7 +872,7 @@ I2C RD IT66121: 0x04 : 0x00006001
 I2C WR IT66121: 0x04 : 0x00006001
 ```
 **fl2000_hdmi_setup_afe**
-0x0F: Switch bank 0, also by chance clear pending interrupt in bit 7
+0x0F: Power up TxCLK, also by chance clear pending interrupt in bit 7
 ```
 I2C RD IT66121: 0x0C : 0x106C0000
 I2C WR IT66121: 0x0C : 0x006C0000
@@ -1092,7 +1122,7 @@ I2C WR IT66121: 0xC4 : 0xFF0304C0
 **Strange sequence of NOT forcing "monitor connected" status**
 
 *537 frames of 1152000 bytes each skipped*<br>
-VGA_CTRL_REG_ACLK: Do not force VGA connect
+VGA_CTRL_REG_ACLK: Reset "Force VGA Connect"
 ```
 REG RD 0x803C : 0xD701084D
 REG WR 0x803C : 0xD501084D
