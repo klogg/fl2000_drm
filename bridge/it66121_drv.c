@@ -463,9 +463,22 @@ static int it66121_connector_detect_ctx(struct drm_connector *connector,
 			connector_status_connected;
 }
 
+static enum drm_mode_status it66121_connector_mode_valid(
+		struct drm_connector *connector,
+		struct drm_display_mode *mode)
+{
+	struct drm_device *drm = connector->dev;
+	dev_info(drm->dev, "it66121_connector_mode_valid");
+
+	/* TODO: validate mode */
+
+	return MODE_OK;
+}
+
 static struct drm_connector_helper_funcs it66121_connector_helper_funcs = {
 	.get_modes = it66121_connector_get_modes,
 	.detect_ctx = it66121_connector_detect_ctx,
+	.mode_valid = it66121_connector_mode_valid,
 };
 
 static enum drm_connector_status it66121_connector_detect(
