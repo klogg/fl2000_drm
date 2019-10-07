@@ -54,6 +54,7 @@ struct usb_dev_data {
 
 static void fl2000_usb_dev_data_release(struct device *dev, void *res)
 {
+	/* Noop */
 }
 
 static int fl2000_create_controls(struct usb_device *usb_dev)
