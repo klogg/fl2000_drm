@@ -684,7 +684,6 @@ VGA_PLL_REG: confirm PLL parameters setting
 ```
 REG RD 0x802C : 0x0020410A
 ```
-**_fl2000_set_intrl_ctrl**
 VGA_CTRL_REG_ACLK: Do not use packet pending
 ```
 REG RD 0x803C : 0xE401084D
@@ -695,7 +694,6 @@ VGA_CTRL_REG_ACLK: Use zero-length packet, VGA error interrupt enable
 REG RD 0x803C : 0xC401084D
 REG WR 0x803C : 0xD501084D
 ```
-**_fl2000_set_video_mode**
 VGA_CTRL_REG_PXCLK: Disable DAC output, disable continuous drop count
 ```
 REG RD 0x8004 : 0x0010239C
@@ -706,7 +704,6 @@ VGA_CTRL_REG_PXCLK: Enable DAC output, Clear watermark
 REG RD 0x8004 : 0x0010031C
 REG WR 0x8004 : 0x0010039D
 ```
-**_fl2000_set_video_timing**
 VGA_HSYNC_REG1: value
 ```
 REG WR 0x8008 : 0x032003A0
