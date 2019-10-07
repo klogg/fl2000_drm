@@ -138,7 +138,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	struct drm_plane_state *pstate = plane->state;
 	struct drm_framebuffer *fb = pstate->fb;
 
-	dev_info(pipe->crtc.dev->dev, "fl2000_display_update");
+	dev_info(drm->dev, "fl2000_display_update");
 
 	if (fb) {
 		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
@@ -168,6 +168,15 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	}
 }
 
+static void fl2000_mode_set(struct drm_encoder *encoder,
+		 struct drm_display_mode *mode,
+		 struct drm_display_mode *adjusted_mode)
+{
+	struct drm_device *drm = encoder->dev;
+
+	dev_info(drm->dev, "fl2000_atomic_mode_set");
+}
+
 /* TODO: Possibly we need .check callback as well */
 static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_mode_valid,
@@ -175,6 +184,10 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.disable = fl2000_display_disable,
 	.update = fl2000_display_update,
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
+};
+
+static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
+	.mode_set = fl2000_mode_set,
 };
 
 static void fl2000_drm_release(struct device *dev, void *res)
@@ -238,6 +251,9 @@ static int fl2000_bind(struct device *master)
 				ret);
 		return ret;
 	}
+
+	/* Register 'mode_set' function to operate prior to bridge */
+	drm_encoder_helper_add(&drm_if->pipe.encoder, &fl2000_encoder_funcs);
 
 	/* Attach bridge */
 	ret = component_bind_all(master, &drm_if->pipe);
