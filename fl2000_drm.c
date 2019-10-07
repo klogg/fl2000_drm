@@ -194,11 +194,14 @@ static int fl2000_bind(struct device *master)
 
 	dev_info(master, "Binding FL2000 master component");
 
-	drm_if = devres_find(master, fl2000_drm_release, NULL, NULL);
-	if (drm_if == NULL) {
-		dev_err(master, "Cannot find DRM private structure");
-		return -ENODEV;
+	drm_if = devres_alloc(&fl2000_drm_release, sizeof(*drm_if), GFP_KERNEL);
+	if (IS_ERR_OR_NULL(drm_if)) {
+		ret = IS_ERR(drm_if) ? PTR_ERR(drm_if) : -ENOMEM;
+		dev_err(&usb_dev->dev, "Cannot allocate DRM private " \
+				"structure (%d)", ret);
+		return ret;
 	}
+	devres_add(master, drm_if);
 
 	drm = &drm_if->drm;
 
@@ -289,6 +292,8 @@ static void fl2000_unbind(struct device *master)
 	drm_mode_config_cleanup(drm);
 
 	drm_dev_put(drm);
+
+	devm_kfree(master, drm_if);
 }
 
 static struct component_master_ops fl2000_drm_master_ops = {
@@ -326,7 +331,6 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 {
 	int ret = 0;
 	struct component_match *match = NULL;
-	struct fl2000_drm_if *drm_if;
 	struct i2c_adapter *adapter;
 
 	adapter = fl2000_get_i2c_adapter(usb_dev);
@@ -334,15 +338,6 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 		dev_err(&usb_dev->dev, "Cannot find I2C adapter");
 		return -ENODEV;
 	}
-
-	drm_if = devres_alloc(&fl2000_drm_release, sizeof(*drm_if), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(drm_if)) {
-		ret = IS_ERR(drm_if) ? PTR_ERR(drm_if) : -ENOMEM;
-		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure \"
-				"(%d)", ret);
-		return ret;
-	}
-	devres_add(&usb_dev->dev, drm_if);
 
 	/* Make USB interface master */
 	component_match_add_release(&usb_dev->dev, &match,
@@ -357,4 +352,13 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 	}
 
 	return 0;
+}
+
+void fl2000_inter_check(struct usb_device *usb_dev, u32 status)
+{
+	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
+			fl2000_drm_release, NULL, NULL);
+	if (drm_if != NULL) {
+		drm_kms_helper_hotplug_event(&drm_if->drm);
+	}
 }
