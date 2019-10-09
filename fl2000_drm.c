@@ -168,9 +168,9 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	}
 }
 
-static void fl2000_atomic_mode_set(struct drm_encoder *encoder,
-		struct drm_crtc_state *crtc_state,
-		struct drm_connector_state *conn_state)
+static void fl2000_mode_set(struct drm_encoder *encoder,
+		 struct drm_display_mode *mode,
+		 struct drm_display_mode *adjusted_mode)
 {
 	struct drm_device *drm = encoder->dev;
 
@@ -187,7 +187,7 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 };
 
 static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
-	.atomic_mode_set = fl2000_atomic_mode_set,
+	.mode_set = fl2000_mode_set,
 };
 
 static void fl2000_drm_release(struct device *dev, void *res)
