@@ -8,6 +8,8 @@ compiler: gcc
 
 addons:
    apt:
+      sources:
+         - ubuntu-toolchain-r-test
       packages:
          - build-essential
          - kernel-headers-$(uname -r)
