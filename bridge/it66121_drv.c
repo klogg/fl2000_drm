@@ -128,7 +128,7 @@ static int it66121_configure_input(struct it66121_priv *priv)
 	ret = regmap_write(priv->regmap, IT66121_INPUT_MODE,
 			IT66121_INPUT_MODE_RGB |
 			IT66121_INPUT_PCLKDELAY1);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	/* XXX: Also we can change some parameters of IT66121_INPUT_IO_CONTROL
@@ -140,7 +140,7 @@ static int it66121_configure_input(struct it66121_priv *priv)
 	 * Conversion Matrix and RGB or YUV blank levels */
 	ret = regmap_write(priv->regmap, IT66121_INPUT_COLOR_CONV,
 			IT66121_INPUT_NO_CONV);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	return 0;
@@ -153,29 +153,29 @@ static int it66121_configure_afe(struct it66121_priv *priv,
 
 	ret = regmap_write(priv->regmap, IT66121_AFE_DRV_CONTROL,
 			IT66121_AFE_RST);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	/* TODO: Rewrite with proper bit names */
 	if (KHZ2PICOS(mode->clock) > 80000000UL) {
 		ret = regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, 0x90, 0x80);
-		if (ret != 0)
+		if (ret)
 			return ret;
 		ret = regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, 0x89, 0x80);
-		if (ret != 0)
+		if (ret)
 			return ret;
 		ret = regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_3, 0x10, 0x80);
-		if (ret != 0)
+		if (ret)
 			return ret;
 	} else {
 		ret = regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, 0x90, 0x10);
-		if (ret != 0)
+		if (ret)
 			return ret;
 		ret = regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_1, 0x89, 0x09);
-		if (ret != 0)
+		if (ret)
 			return ret;
 		ret = regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_3, 0x10, 0x10);
-		if (ret != 0)
+		if (ret)
 			return ret;
 	}
 
@@ -183,12 +183,12 @@ static int it66121_configure_afe(struct it66121_priv *priv,
 	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
 			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST,
 			~(IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST));
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	/* Fire AFE */
 	ret = regmap_write(priv->regmap, IT66121_AFE_DRV_CONTROL, 0);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	return 0;
@@ -200,13 +200,13 @@ static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
 
 	ret = regmap_field_read_poll_timeout(priv->ddc_done, val, true,
 			EDID_SLEEP, EDID_TIMEOUT);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	ret = regmap_field_read(priv->ddc_error, &val);
-	if (ret != 0)
+	if (ret)
 		return ret;
-	if (val != 0)
+	if (val)
 		return -EIO;
 
 	return 0;
@@ -221,22 +221,22 @@ static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 	dev_info(dev, "Clear DDC FIFO");
 
 	ret = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
 			IT66121_DDC_MASTER_DDC |
 			IT66121_DDC_MASTER_HOST);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 			DDC_CMD_FIFO_CLEAR);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	return 0;
@@ -258,7 +258,7 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	 * removed since HDCP is not supported */
 
 	ret = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	/* According to 2009/01/15 modification by Jau-Chih.Tseng@ite.com.tw
@@ -267,21 +267,21 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 		ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
 				IT66121_DDC_MASTER_DDC |
 				IT66121_DDC_MASTER_HOST);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_ABORT);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		ret = it66121_wait_ddc_ready(priv);
-		if (ret != 0)
+		if (ret)
 			return ret;
 	}
 
 	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	return 0;
@@ -300,7 +300,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 	/* TODO: use mutex */
 
 	ret = regmap_field_read(priv->irq_pending, &val);
-	if (ret < 0) {
+	if (ret) {
 		dev_err(dev, "Cannot read interrupt status (%d)", ret);
 	}
 	/* XXX: There are at least 5 registers that can source interrupt:
@@ -316,7 +316,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 		ret = regmap_read(priv->regmap, IT66121_INT_STATUS_1,
 				&status_1.val);
-		if (ret < 0) {
+		if (ret) {
 			dev_err(dev, "Cannot read IT66121_INT_STATUS_1 (%d)",
 					ret);
 		} else {
@@ -363,51 +363,51 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 
 		/* Clear DDC FIFO */
 		ret = it66121_clear_ddc_fifo(priv);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		/* Power up CRCLK */
 		regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
 				IT66121_SYS_CRCLK_OFF,
 				IT66121_SYS_CRCLK_OFF);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		/* Abort DDC */
 		ret = it66121_abort_ddc_ops(priv);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		/* Clear DDC FIFO */
 		ret = it66121_clear_ddc_fifo(priv);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		/* Start reading */
 		ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
 				IT66121_DDC_MASTER_DDC |
 				IT66121_DDC_MASTER_HOST);
-		if (ret != 0)
+		if (ret)
 			return ret;
 		ret = regmap_write(priv->regmap, IT66121_DDC_ADDRESS,
 				EDID_DDC_ADDR);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		/* Account 3 bytes that will be lost */
 		ret = regmap_write(priv->regmap, IT66121_DDC_OFFSET,
 				offset - EDID_LOSS_LEN);
-		if (ret != 0)
+		if (ret)
 			return ret;
 		ret = regmap_write(priv->regmap, IT66121_DDC_SIZE, size);
-		if (ret != 0)
+		if (ret)
 			return ret;
 		ret = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, block);
-		if (ret != 0)
+		if (ret)
 			return ret;
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_EDID_READ);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		/* Deduct lost bytes when reading from FIFO */
@@ -416,7 +416,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		for (i = 0; i < size; i++) {
 			ret = regmap_read(priv->regmap, IT66121_DDC_RD_FIFO,
 					&rd_fifo_val);
-			if (ret != 0)
+			if (ret)
 				return ret;
 
 			*(buf++) = rd_fifo_val & 0xFF;
@@ -437,15 +437,15 @@ static int it66121_connector_get_modes(struct drm_connector *connector)
 			connector);
 
 	edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
-	if (edid == NULL)
+	if (!edid)
 		return -ENOMEM;
 
 	ret = drm_add_edid_modes(connector, edid);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	ret = drm_connector_update_edid_property(connector, edid);
-	if (ret != 0)
+	if (ret)
 		return ret;
 
 	return 0;
@@ -508,7 +508,7 @@ static int it66121_bind(struct device *comp, struct device *master,
 	/* TODO: Do some checks? */
 
 	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
-	if (ret != 0)
+	if (ret)
 		dev_err(comp, "Cannot attach IT66121 bridge");
 
 	return ret;
@@ -577,7 +577,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	ret = drm_connector_init(bridge->dev, &priv->connector,
 					 &it66121_connector_funcs,
 					 DRM_MODE_CONNECTOR_HDMIA);
-	if (ret != 0) {
+	if (ret) {
 		DRM_ERROR("Cannot initialize bridge connector");
 		return ret;
 	}
@@ -586,7 +586,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 			&it66121_connector_helper_funcs);
 
 	ret = drm_connector_attach_encoder(&priv->connector, bridge->encoder);
-	if (ret != 0) {
+	if (ret) {
 		DRM_ERROR("Cannot attach bridge");
 		return ret;
 	}
@@ -627,14 +627,14 @@ static void it66121_bridge_enable(struct drm_bridge *bridge)
 	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
 			IT66121_HDMI_AV_MUTE_ON,
 			~IT66121_HDMI_AV_MUTE_ON);
-	if (ret != 0)
+	if (ret)
 		return;
 
 	/* XXX: Why we need it in every mute/umute? */
 	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
 			IT66121_HDMI_GEN_CTRL_PKT_ON |
 			IT66121_HDMI_GEN_CTRL_PKT_RPT);
-	if (ret != 0)
+	if (ret)
 		return;
 }
 
@@ -650,14 +650,14 @@ static void it66121_bridge_disable(struct drm_bridge *bridge)
 	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
 			IT66121_HDMI_AV_MUTE_ON,
 			IT66121_HDMI_AV_MUTE_ON);
-	if (ret != 0)
+	if (ret)
 		return;
 
 	/* XXX: Why we need it in every mute/umute? */
 	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
 			IT66121_HDMI_GEN_CTRL_PKT_ON |
 			IT66121_HDMI_GEN_CTRL_PKT_RPT);
-	if (ret != 0)
+	if (ret)
 		return;
 }
 
@@ -697,7 +697,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
 			adjusted_mode, false);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot create AVI infoframe (%d)",
 				ret);
 		return;
@@ -715,14 +715,14 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	for (i = 0; i < HDMI_AVI_INFOFRAME_SIZE; i++) {
 		ret = regmap_write(priv->regmap, aviinfo_reg[i],
 				buf[i + HDMI_INFOFRAME_HEADER_SIZE]);
-		if (ret != 0) {
+		if (ret) {
 			dev_err(bridge->dev->dev, "Cannot write AVI " \
 					"infoframe byte %d (%d)", i, ret);
 			return;
 		}
 	}
 	ret = regmap_write(priv->regmap, IT66121_HDMI_AVIINFO_CSUM, buf[3]);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot write AVI infoframe " \
 				"checksum (%d)", ret);
 		return;
@@ -732,7 +732,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	ret = regmap_write(priv->regmap, IT66121_HDMI_AVI_INFO_PKT,
 			IT66121_HDMI_AVI_INFO_PKT_ON |
 			IT66121_HDMI_AVI_INFO_RPT);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot enable AVI infoframe " \
 				"(%d)", ret);
 		return;
@@ -741,7 +741,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	/* Set TX mode to HDMI */
 	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
 			IT66121_HDMI_MODE_HDMI);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
 				"(%d)", ret);
 		return;
@@ -751,12 +751,12 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	ret = regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
 			IT66121_SYS_TXCLK_OFF,
 			IT66121_SYS_TXCLK_OFF);
-	if (ret != 0)
+	if (ret)
 		return;
 
 	/* Configure connection, conversions, etc. */
 	ret = it66121_configure_input(priv);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot configure input bus " \
 				"(%d)", ret);
 		return;
@@ -764,7 +764,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 
 	/* Configure AFE */
 	ret = it66121_configure_afe(priv, adjusted_mode);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot configure AFE (%d)", ret);
 		return;
 	}
@@ -773,7 +773,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	ret = regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
 			IT66121_SYS_TXCLK_OFF,
 			~IT66121_SYS_TXCLK_OFF);
-	if (ret != 0)
+	if (ret)
 		return;
 }
 
@@ -793,10 +793,10 @@ static int it66121_probe(struct i2c_client *client)
 	dev_info(&client->dev, "Probing IT66121 client");
 
 	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(priv)) {
+	if (!priv) {
 		dev_err(&client->dev, "Cannot allocate IT66121 client " \
 				"private structure");
-		return PTR_ERR(priv);
+		return -ENOMEM;
 	}
 
 	priv->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
@@ -830,10 +830,10 @@ static int it66121_probe(struct i2c_client *client)
 
 	/* Setup work queue for interrupt processing work */
 	priv->work_queue = create_workqueue("work_queue");
-	if (IS_ERR_OR_NULL(priv->work_queue)) {
+	if (!priv->work_queue) {
 		dev_err(&client->dev, "Create interrupt workqueue failed");
 		drm_bridge_remove(&priv->bridge);
-		return PTR_ERR(priv->work_queue);
+		return -ENOMEM;
 	}
 
 	/* Important and somewhat unsafe - bridge pointer is in device structure
@@ -842,7 +842,7 @@ static int it66121_probe(struct i2c_client *client)
 	i2c_set_clientdata(client, &priv->bridge);
 
 	ret = component_add(&client->dev, &it66121_component_ops);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&client->dev, "Cannot register IT66121 component");
 		destroy_workqueue(priv->work_queue);
 		drm_bridge_remove(&priv->bridge);
@@ -857,12 +857,12 @@ static int it66121_remove(struct i2c_client *client)
 	struct drm_bridge *bridge = i2c_get_clientdata(client);
 	struct it66121_priv *priv;
 
-	if (IS_ERR_OR_NULL(bridge))
+	if (!bridge)
 		return 0;
 
 	priv = container_of(bridge, struct it66121_priv, bridge);
 
-	if (IS_ERR_OR_NULL(priv))
+	if (!priv)
 		return 0;
 
 	atomic_set(&priv->state, STOP);
