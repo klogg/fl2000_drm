@@ -7,18 +7,14 @@ os:
 compiler: gcc
 
 dist: bionic
+sudo: required
 
-env:
-   global:
-      - KVER="5.0.0-1011-gcp"
-      - KSRC="/usr/src/linux-headers-$(KVER)"
-
-addons:
-   apt:
-      packages:
-         - build-essential
-         - linux-headers-$(KVER)
-         - gcc-8
+before_install:
+   - export KVER="5.0.0-1011-gcp"
+   - export KSRC="/usr/src/linux-headers-$KVER"
+   - sudo apt-get update
+   - sudo apt-get install -y build-essential linux-headers-$KVER gcc-8
+   - sudo update-alternatives --set gcc /usr/bin/gcc-8
 
 script:
    - make
