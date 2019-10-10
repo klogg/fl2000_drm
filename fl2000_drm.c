@@ -145,7 +145,8 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		int idx;
 
 		/* TODO: Do we really need this? What if it fails? */
-		if (!drm_dev_enter(drm, &idx)) return;
+		if (!drm_dev_enter(drm, &idx))
+			return;
 
 		/* TODO:
 		 * Calculate & validate real buffer area for transmission
@@ -208,18 +209,16 @@ static int fl2000_bind(struct device *master)
 	dev_info(master, "Binding FL2000 master component");
 
 	drm_if = devres_alloc(&fl2000_drm_release, sizeof(*drm_if), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(drm_if)) {
-		ret = IS_ERR(drm_if) ? PTR_ERR(drm_if) : -ENOMEM;
-		dev_err(&usb_dev->dev, "Cannot allocate DRM private " \
-				"structure (%d)", ret);
-		return ret;
+	if (!drm_if) {
+		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure");
+		return -ENOMEM;
 	}
 	devres_add(master, drm_if);
 
 	drm = &drm_if->drm;
 
 	ret = drm_dev_init(drm, &fl2000_drm_driver, master);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(master, "Cannot initialize DRM device (%d)", ret);
 		return ret;
 	}
@@ -238,7 +237,7 @@ static int fl2000_bind(struct device *master)
 	mode_config->max_height = MAX_HEIGHT;
 
 	ret = dma_set_coherent_mask(drm->dev, mask);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(drm->dev, "Cannot set DRM device DMA mask (%d)", ret);
 		return ret;
 	}
@@ -246,7 +245,7 @@ static int fl2000_bind(struct device *master)
 	ret = drm_simple_display_pipe_init(drm, &drm_if->pipe,
 			&fl2000_display_funcs, fl2000_pixel_formats,
 			ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(drm->dev, "Cannot configure simple display pipe (%d)",
 				ret);
 		return ret;
@@ -257,7 +256,7 @@ static int fl2000_bind(struct device *master)
 
 	/* Attach bridge */
 	ret = component_bind_all(master, &drm_if->pipe);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(drm->dev, "Cannot attach bridge (%d)", ret);
 		return ret;
 	}
@@ -267,13 +266,13 @@ static int fl2000_bind(struct device *master)
 	drm_kms_helper_poll_init(drm);
 
 	ret = drm_dev_register(drm, 0);
-	if (ret < 0) {
+	if (ret) {
 		dev_err(drm->dev, "Cannot register DRM device (%d)", ret);
 		return ret;
 	}
 
 	ret = drm_fb_cma_fbdev_init(drm, BPP, 0);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(drm->dev, "Cannot initialize CMA framebuffer (%d)",
 				ret);
 		return ret;
@@ -293,10 +292,12 @@ static void fl2000_unbind(struct device *master)
 	dev_info(master, "Unbinding FL2000 master component");
 
 	drm_if = devres_find(master, fl2000_drm_release, NULL, NULL);
-	if (drm_if == NULL) return;
+	if (!drm_if)
+		return;
 
 	drm = &drm_if->drm;
-	if (drm == NULL) return;
+	if (!drm)
+		return;
 
 	drm_dev_unregister(drm);
 
@@ -361,7 +362,7 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 
 	ret = component_master_add_with_match(&usb_dev->dev,
 			&fl2000_drm_master_ops, match);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot register component master (%d)",
 				ret);
 		return ret;
@@ -374,7 +375,7 @@ void fl2000_inter_check(struct usb_device *usb_dev, u32 status)
 {
 	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
 			fl2000_drm_release, NULL, NULL);
-	if (drm_if != NULL) {
+	if (drm_if) {
 		drm_kms_helper_hotplug_event(&drm_if->drm);
 	}
 }

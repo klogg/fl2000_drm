@@ -116,7 +116,8 @@ int fl2000_reset(struct usb_device *usb_dev)
 
 	ret = regmap_field_write(usb_dev_data->app_reset, true);
 	msleep(10);
-	if (ret != 0) return -EIO;
+	if (ret)
+		return -EIO;
 
 	return 0;
 }
@@ -133,11 +134,14 @@ int fl2000_wait(struct usb_device *usb_dev)
 	}
 
 	ret = regmap_field_write(usb_dev_data->edid_detect, true);
-	if (ret != 0) return -EIO;
+	if (ret)
+		return -EIO;
 	ret = regmap_field_write(usb_dev_data->monitor_detect, true);
-	if (ret != 0) return -EIO;
+	if (ret)
+		return -EIO;
 	ret = regmap_field_write(usb_dev_data->wakeup_clear_en, false);
-	if (ret != 0) return -EIO;
+	if (ret)
+		return -EIO;
 
 	return 0;
 }
@@ -154,11 +158,14 @@ int fl2000_start(struct usb_device *usb_dev)
 	}
 
 	ret = regmap_field_write(usb_dev_data->u1_reject, true);
-	if (ret != 0) return -EIO;
+	if (ret)
+		return -EIO;
 	ret = regmap_field_write(usb_dev_data->u2_reject, true);
-	if (ret != 0) return -EIO;
+	if (ret)
+		return -EIO;
 	ret = regmap_field_write(usb_dev_data->wake_nrdy, false);
-	if (ret != 0) return -EIO;
+	if (ret)
+		return -EIO;
 
 	return 0;
 }
@@ -169,35 +176,35 @@ static int fl2000_init(struct usb_device *usb_dev)
 
 	/* Create registers map */
 	ret = fl2000_regmap_create(usb_dev);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot create registers map (%d)", ret);
 		return ret;
 	}
 
 	/* Create controls */
 	ret = fl2000_create_controls(usb_dev);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot create controls (%d)", ret);
 		return ret;
 	}
 
 	/* Reset application logic */
 	ret = fl2000_reset(usb_dev);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&usb_dev->dev, "Initial device reset failed (%d)", ret);
 		return ret;
 	}
 
 	/* Create I2C adapter */
 	ret = fl2000_i2c_create(usb_dev);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot create I2C adapter (%d)", ret);
 		return ret;
 	}
 
 	/* Create DRM device */
 	ret = fl2000_drm_create(usb_dev);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot create DRM interface (%d)", ret);
 		return ret;
 	}
@@ -210,6 +217,7 @@ static int fl2000_probe(struct usb_interface *interface,
 {
 	int ret;
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
+	u8 alt_setting = interface->cur_altsetting->desc.bAlternateSetting;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
 	switch (iface_num) {
@@ -227,9 +235,7 @@ static int fl2000_probe(struct usb_interface *interface,
 
 		/* TODO: create streaming structures */
 
-		ret = usb_set_interface(usb_dev,
-				interface->cur_altsetting->desc.bInterfaceNumber,
-				interface->cur_altsetting->desc.bAlternateSetting);
+		ret = usb_set_interface(usb_dev, iface_num, alt_setting);
 
 		break;
 
@@ -244,8 +250,7 @@ static int fl2000_probe(struct usb_interface *interface,
 
 	default:
 		/* Device does not have any other interfaces */
-		dev_warn(&interface->dev, "What interface %d?",
-				interface->cur_altsetting->desc.iInterface);
+		dev_warn(&interface->dev, "What interface %d?", iface_num);
 		ret = -ENODEV;
 
 		break;

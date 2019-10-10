@@ -106,7 +106,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 
 	if (!read) {
 		ret = regmap_write(regmap, FL2000_VGA_I2C_WR_REG, *data);
-		if (ret != 0) {
+		if (ret) {
 			dev_err(&adapter->dev, "FL2000_VGA_I2C_WR_REG write " \
 					"failed!");
 			return ret;
@@ -133,7 +133,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, i2c_done);
 
 	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, reg.val);
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&adapter->dev, "FL2000_VGA_I2C_SC_REG write failed!");
 		return ret;
 	}
@@ -144,7 +144,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 	/* This shouldn't normally happen: there's internal 256ms HW timeout on
 	 * I2C operations and USB must be always available so no I/O errors. But
 	 * if it happens we are probably in irreversible HW issue */
-	if (ret != 0) {
+	if (ret) {
 		dev_err(&adapter->dev, "FL2000_VGA_I2C_SC_REG poll failed!");
 		return ret;
 	}
@@ -159,7 +159,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 
 	if (read) {
 		ret = regmap_read(regmap, FL2000_VGA_I2C_RD_REG, data);
-		if (ret != 0) {
+		if (ret) {
 			dev_err(&adapter->dev, "FL2000_VGA_I2C_RD_REG read "\
 					"failed!");
 			return ret;
@@ -208,7 +208,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	 * Oh, yes, it is crippled :( */
 	if (read) {
 		ret = fl2000_i2c_read_dword(adapter, addr, offset, &data.w);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		msgs[1].buf[0] = data.b[idx];
@@ -221,13 +221,13 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		 * corrupt unrelated registers in case if we do not write whole
 		 * dword */
 		ret = fl2000_i2c_read_dword(adapter, addr, offset, &data.w);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		data.b[idx] = msgs[0].buf[1];
 
 		ret = fl2000_i2c_write_dword(adapter, addr, offset, &data.w);
-		if (ret != 0)
+		if (ret)
 			return ret;
 
 		dev_dbg(&adapter->dev, "I2C WR: 0x%02X - 0x%02X", offset + idx,
@@ -277,18 +277,18 @@ int fl2000_i2c_create(struct usb_device *usb_dev)
 	/* Adapter must be allocated before anything else */
 	adapter = devres_alloc(fl2000_i2c_algo_data_release, sizeof(*adapter),
 			GFP_KERNEL);
-	if (IS_ERR_OR_NULL(adapter)) {
+	if (!adapter) {
 		dev_err(&usb_dev->dev, "I2C adapter allocation failed");
-		return IS_ERR(adapter) ? PTR_ERR(adapter) : -ENOMEM;
+		return -ENOMEM;
 	}
 	devres_add(&usb_dev->dev, adapter);
 
 	/* On de-initialization of algo_data i2c adapter will be unregistered */
 	i2c_algo_data = devm_kzalloc(&usb_dev->dev, sizeof(*i2c_algo_data),
 			GFP_KERNEL);
-	if (IS_ERR_OR_NULL(i2c_algo_data)) {
+	if (!i2c_algo_data) {
 		dev_err(&usb_dev->dev, "I2C algo data allocation failed");
-		return IS_ERR(i2c_algo_data) ? PTR_ERR(i2c_algo_data) : -ENOMEM;
+		return -ENOMEM;
 	}
 
 	i2c_algo_data->usb_dev = usb_dev;
@@ -305,7 +305,8 @@ int fl2000_i2c_create(struct usb_device *usb_dev)
 	usb_make_path(usb_dev, adapter->name, sizeof(adapter->name));
 
 	ret = i2c_add_adapter(adapter);
-	if (ret != 0) return ret;
+	if (ret)
+		return ret;
 
 	fl2000_debugfs_i2c_init(adapter);
 

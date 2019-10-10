@@ -29,21 +29,16 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 	u16 offset = (u16)reg;
 	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL | GFP_DMA);
 
-	BUG_ON(data == NULL);
+	BUG_ON(!data);
 
-	ret = usb_control_msg(
-		usb_dev,
-		usb_rcvctrlpipe(usb_dev, 0),
-		CONTROL_MSG_READ,
-		(USB_DIR_IN | USB_TYPE_VENDOR),
-		0,
-		offset,
-		data,
-		CONTROL_MSG_LEN,
-		USB_CTRL_GET_TIMEOUT);
+	ret = usb_control_msg(usb_dev, usb_rcvctrlpipe(usb_dev, 0),
+			CONTROL_MSG_READ, (USB_DIR_IN | USB_TYPE_VENDOR), 0,
+			offset, data, CONTROL_MSG_LEN, USB_CTRL_GET_TIMEOUT);
 	if (ret > 0) {
-		if (ret != CONTROL_MSG_LEN) ret = -1;
-		else ret = 0;
+		if (ret != CONTROL_MSG_LEN)
+			ret = -1;
+		else
+			ret = 0;
 	}
 
 	*val = *data;
@@ -64,7 +59,7 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	u16 offset = (u16)reg;
 	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL | GFP_DMA);
 
-	BUG_ON(data == NULL);
+	BUG_ON(!data);
 
 	*data = val;
 
@@ -73,19 +68,14 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 		dev_dbg(&usb_dev->dev, "WR: 0x%04X - 0x%08X", reg, *data);
 	}
 
-	ret = usb_control_msg(
-		usb_dev,
-		usb_sndctrlpipe(usb_dev, 0),
-		CONTROL_MSG_WRITE,
-		(USB_DIR_OUT | USB_TYPE_VENDOR),
-		0,
-		offset,
-		data,
-		CONTROL_MSG_LEN,
-		USB_CTRL_SET_TIMEOUT);
+	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
+			CONTROL_MSG_WRITE, (USB_DIR_OUT | USB_TYPE_VENDOR), 0,
+			offset, data, CONTROL_MSG_LEN, USB_CTRL_SET_TIMEOUT);
 	if (ret > 0) {
-		if (ret != CONTROL_MSG_LEN) ret = -1;
-		else ret = 0;
+		if (ret != CONTROL_MSG_LEN)
+			ret = -1;
+		else
+			ret = 0;
 	}
 
 	kfree(data);
