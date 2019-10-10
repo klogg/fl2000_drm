@@ -3,7 +3,7 @@
  * fl2000_drm_drm.c
  *
  * (C) Copyright 2012, Red Hat
- * (C) Copyright 2018, Artem Mygaiev
+ * (C) Copyright 2018-2019, Artem Mygaiev
  */
 
 #include "fl2000.h"
