@@ -8,11 +8,15 @@ compiler: gcc
 
 dist: bionic
 
+env:
+   - KVER="5.0.0-1011-gcp"
+   - KSRC="/usr/src/linux-headers-$(KVER)"
+
 addons:
    apt:
       packages:
          - build-essential
-         - linux-headers-$(uname -r)
+         - linux-headers-$(KVER)
          - gcc-8
 
 script:
