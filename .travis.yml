@@ -8,14 +8,11 @@ compiler: gcc
 
 dist: bionic
 
-sudo: required
-
 addons:
    apt:
-      update: true
       packages:
          - build-essential
-         - kernel-headers-$(uname -r)
+         - linux-headers-$(uname -r)
          - gcc-8
 
 script:
