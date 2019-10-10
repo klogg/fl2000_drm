@@ -12,8 +12,7 @@ sudo: required
 
 addons:
    apt:
-      sources:
-         - ubuntu-toolchain-r-test
+      update: true
       packages:
          - build-essential
          - kernel-headers-$(uname -r)
