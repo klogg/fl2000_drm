@@ -14,6 +14,7 @@ before_install:
    - export KSRC="/usr/src/linux-headers-$KVER"
    - sudo apt-get update
    - sudo apt-get install -y build-essential linux-headers-$KVER gcc-8
+   - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 10
    - sudo update-alternatives --set gcc /usr/bin/gcc-8
 
 script:
