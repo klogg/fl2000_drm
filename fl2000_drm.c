@@ -153,7 +153,6 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		 * Schedule transmission of 'addr' over USB */
 		printk("%lld", addr);
 
-
 		drm_dev_exit(idx);
 	}
 
@@ -271,9 +270,9 @@ static int fl2000_bind(struct device *master)
 		return ret;
 	}
 
-	ret = drm_fb_cma_fbdev_init(drm, BPP, 0);
+	ret = drm_fbdev_generic_setup(drm, BPP);
 	if (ret) {
-		dev_err(drm->dev, "Cannot initialize CMA framebuffer (%d)",
+		dev_err(drm->dev, "Cannot initialize framebuffer (%d)",
 				ret);
 		return ret;
 	}
@@ -300,8 +299,6 @@ static void fl2000_unbind(struct device *master)
 		return;
 
 	drm_dev_unregister(drm);
-
-	drm_fb_cma_fbdev_fini(drm);
 
 	/* Detach bridge */
 	component_unbind_all(master, drm);
