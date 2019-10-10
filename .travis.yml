@@ -2,7 +2,7 @@
 language: c
 
 os:
-   -linux
+   - linux
 
 compiler: gcc
 
@@ -17,6 +17,7 @@ addons:
       packages:
          - build-essential
          - kernel-headers-$(uname -r)
+         - gcc-8
 
 script:
    - make
