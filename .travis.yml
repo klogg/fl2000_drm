@@ -6,6 +6,12 @@ os:
 
 compiler: gcc
 
+addons:
+   apt:
+      packages:
+         - build-essential
+         - kernel-headers-$(uname -r)
+
 dist: bionic
 
 script:

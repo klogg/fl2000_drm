@@ -11,7 +11,8 @@ it66121-y := \
 
 obj-m := fl2000.o it66121.o
 
-KSRC = /lib/modules/$(shell uname -r)/build
+KVER ?= $(shell uname -r)
+KSRC ?= /lib/modules/$(KVER)/build
 
 all:	modules
 
