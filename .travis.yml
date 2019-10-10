@@ -9,8 +9,9 @@ compiler: gcc
 dist: bionic
 
 env:
-   - KVER="5.0.0-1011-gcp"
-   - KSRC="/usr/src/linux-headers-$(KVER)"
+   global:
+      - KVER="5.0.0-1011-gcp"
+      - KSRC="/usr/src/linux-headers-$(KVER)"
 
 addons:
    apt:
