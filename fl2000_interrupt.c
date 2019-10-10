@@ -8,22 +8,14 @@
 
 #include "fl2000.h"
 
-enum fl2000_intr_state {
-	RUN = (1U),
-	STOP = (0U),
-};
-
-#define INTR_BUFSIZE	4
+#define INTR_BUFSIZE	1
 
 struct fl2000_intr {
 	struct usb_interface *interface;
-	unsigned int pipe;
-	int interval;
 	struct urb *urb;
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
 	u8 *buf;
-	atomic_t state;
 };
 
 #if defined(CONFIG_DEBUG_FS)
@@ -60,24 +52,6 @@ static void fl2000_intr_completion(struct urb *urb);
 
 void fl2000_inter_check(struct usb_device *usb_dev, u32 status);
 
-static inline int fl2000_intr_submit_urb(struct fl2000_intr *intr)
-{
-	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
-
-	/* NOTE: always submit data, never set/process it, why? */
-	usb_fill_int_urb(
-		intr->urb,
-		usb_dev,
-		intr->pipe,
-		intr->buf,
-		INTR_BUFSIZE,
-		fl2000_intr_completion,
-		intr,
-		intr->interval);
-
-	return usb_submit_urb(intr->urb, GFP_KERNEL);
-}
-
 static void fl2000_intr_work(struct work_struct *work_item)
 {
 	int ret;
@@ -87,13 +61,10 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	u32 status;
 
-	if (atomic_read(&intr->state) != RUN)
-		return;
-
 	/* Process interrupt */
 	if (regmap) {
 		ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
-		if (ret != 0) {
+		if (ret) {
 			dev_err(&usb_dev->dev, "Cannot read interrupt " \
 					"register (%d)", ret);
 		} else {
@@ -109,11 +80,10 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	}
 
 	/* Restart urb */
-	ret = fl2000_intr_submit_urb(intr);
-	if (ret != 0) {
+	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
+	if (ret) {
 		/* TODO: WTF! Signal general failure, stop driver */
-		dev_err(&intr->interface->dev, "URB submission failed (%d)",
-				ret);
+		dev_err(&usb_dev->dev, "URB submission failed (%d)", ret);
 	}
 }
 
@@ -121,9 +91,7 @@ static void fl2000_intr_completion(struct urb *urb)
 {
 	int ret;
 	struct fl2000_intr *intr = urb->context;
-
-	if (intr == NULL || atomic_read(&intr->state) != RUN)
-		return;
+	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
 
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 
@@ -132,11 +100,11 @@ static void fl2000_intr_completion(struct urb *urb)
 	 * work was dequeued. In this case we just re-submit URB so we will get
 	 * it back hopefully with workqueue processing finished */
 	if (!queue_work(intr->work_queue, &intr->work)) {
-		ret = fl2000_intr_submit_urb(intr);
-		if (ret != 0) {
+		ret = usb_submit_urb(intr->urb, GFP_KERNEL);
+		if (ret) {
 			/* TODO: WTF! Signal general failure, stop driver */
-			dev_err(&intr->interface->dev, "URB submission " \
-					"failed (%d)", ret);
+			dev_err(&usb_dev->dev, "URB submission failed (%d)",
+					ret);
 		}
 	}
 }
@@ -145,68 +113,57 @@ void fl2000_intr_destroy(struct usb_interface *interface);
 
 int fl2000_intr_create(struct usb_interface *interface)
 {
-	int i, ret = 0;
+	int ret = 0;
 	struct fl2000_intr *intr;
 	struct usb_endpoint_descriptor *desc = NULL;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
 	/* There's only one altsetting (#0) and one endpoint (#3) in the
 	 * interrupt interface (#2) but lets try and "find" it anyway */
-	for (i = 0; i < interface->num_altsetting; i++) {
-		if (!usb_find_int_in_endpoint(&interface->altsetting[i],
-				&desc)) {
-			dev_info(&interface->dev, "Found interrupt endpoint " \
-					"%d in altsetting %d",
-					usb_endpoint_num(desc),
-					desc->bEndpointAddress);
-			break;
-		}
-	}
-	if (desc == NULL) {
-		dev_err(&interface->dev, "Cannot find altsetting containing " \
+	ret = usb_find_int_in_endpoint(interface->cur_altsetting, &desc);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot find altsetting containing " \
 				"interrupt endpoint");
-		return -ENXIO;
+		return ret;
 	}
 
-	intr = devm_kzalloc(&interface->dev, sizeof(*intr), GFP_KERNEL);
-	if (IS_ERR_OR_NULL(intr)) {
-		dev_err(&interface->dev, "Cannot allocate interrupt private " \
+	intr = devm_kzalloc(&usb_dev->dev, sizeof(*intr), GFP_KERNEL);
+	if (!intr) {
+		dev_err(&usb_dev->dev, "Cannot allocate interrupt private " \
 				"structure");
-		return PTR_ERR(intr);
+		return -ENOMEM;
 	}
 
-	intr->buf = devm_kzalloc(&interface->dev, INTR_BUFSIZE, GFP_DMA);
-	if (IS_ERR_OR_NULL(intr->buf)) {
-		dev_err(&interface->dev, "Cannot allocate interrupt data");
-		return PTR_ERR(intr->buf);
+	intr->buf = devm_kzalloc(&usb_dev->dev, INTR_BUFSIZE, GFP_DMA);
+	if (!intr->buf) {
+		dev_err(&usb_dev->dev, "Cannot allocate interrupt data");
+		return -ENOMEM;
 	}
 
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
-	if (IS_ERR_OR_NULL(intr->urb)) {
-		dev_err(&interface->dev, "Allocate interrupt URB failed");
-		return PTR_ERR(intr->urb);
+	if (!intr->urb) {
+		dev_err(&usb_dev->dev, "Allocate interrupt URB failed");
+		return -ENOMEM;
 	}
-
-	/* Mark interrupt as operation as soon as URB is allocated */
-	atomic_set(&intr->state, RUN);
 
 	intr->work_queue = create_workqueue("work_queue");
-	if (IS_ERR_OR_NULL(intr->work_queue)) {
-		dev_err(&interface->dev, "Create interrupt workqueue failed");
-		atomic_set(&intr->state, STOP);
+	if (!intr->work_queue) {
+		dev_err(&usb_dev->dev, "Create interrupt workqueue failed");
 		usb_free_urb(intr->urb);
-		return PTR_ERR(intr->work_queue);
+		return -ENOMEM;
 	}
 	intr->interface = interface;
-	intr->pipe = usb_rcvintpipe(usb_dev, usb_endpoint_num(desc));
-	intr->interval = desc->bInterval;
 
 	usb_set_intfdata(interface, intr);
 
-	ret = fl2000_intr_submit_urb(intr);
-	if (ret != 0) {
-		dev_err(&intr->interface->dev, "URB submission failed");
-		atomic_set(&intr->state, STOP);
+	usb_fill_int_urb(intr->urb, usb_dev,
+			usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)),
+			intr->buf, INTR_BUFSIZE, fl2000_intr_completion, intr,
+			desc->bInterval);
+
+	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
+	if (ret) {
+		dev_err(&usb_dev->dev, "URB submission failed");
 		destroy_workqueue(intr->work_queue);
 		usb_free_urb(intr->urb);
 		return ret;
@@ -221,12 +178,12 @@ void fl2000_intr_destroy(struct usb_interface *interface)
 {
 	struct fl2000_intr *intr = usb_get_intfdata(interface);
 
-	if (intr == NULL || atomic_read(&intr->state) != RUN)
+	if (intr == NULL)
 		return;
 
-	atomic_set(&intr->state, STOP);
-	usb_kill_urb(intr->urb);
-	drain_workqueue(intr->work_queue);
+	usb_poison_urb(intr->urb);
+
 	destroy_workqueue(intr->work_queue);
+
 	usb_free_urb(intr->urb);
 }
