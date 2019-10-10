@@ -6,6 +6,10 @@ os:
 
 compiler: gcc
 
+dist: bionic
+
+sudo: required
+
 addons:
    apt:
       sources:
@@ -13,8 +17,6 @@ addons:
       packages:
          - build-essential
          - kernel-headers-$(uname -r)
-
-dist: bionic
 
 script:
    - make
