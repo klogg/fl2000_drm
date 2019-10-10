@@ -114,7 +114,9 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		return;
 	}
 
-	/* TODO: Calculate PLL settings */
+	/* TODO: Enable HW
+	 * Also here we need to stop forcing VGA connect assuming bridge have
+	 * finished its configuration */
 
 }
 
@@ -175,9 +177,18 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	struct drm_device *drm = encoder->dev;
 
 	dev_info(drm->dev, "fl2000_atomic_mode_set");
+
+	/* TODO: Calculate PLL settings, timings, etc.
+	 * Also here we force VGA connect to allow bridge perform its setup */
 }
 
 /* TODO: Possibly we need .check callback as well */
+/* It is assumed that FL2000 has bridge either connected to its DPI or
+ * implementing analog D-SUB frontend. In this case initialization flow:
+ *  1. fl2k mode_set
+ *  2. bridge mode_set
+ *  3. fl2k enable
+ *  4. bridge enable */
 static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_mode_valid,
 	.enable = fl2000_display_enable,
