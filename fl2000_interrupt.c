@@ -16,21 +16,23 @@ struct fl2000_intr {
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
 	u8 *buf;
+#if defined(CONFIG_DEBUG_FS)
+	u32 intr_status;
+#endif
 };
+
+/* XXX: TBH the whole design of checking interrupt status in debugfs here is
+ * completely wrong. This part shall be rewritten considering interrupts
+ * happening all the time and statuses read and stored somewhere (ring?) */
 
 #if defined(CONFIG_DEBUG_FS)
 
-/* TODO: This shall not be static, and TBH the whole design of checking
- * in debugfs here is completely wrong. This part shall be rewritten considering
- * interrupts happening all the time and statuses read and stored somewhere */
-static u32 intr_status;
-
-static void fl2000_debugfs_intr_status(u32 status)
+static void fl2000_debugfs_intr_status(struct fl2000_intr *intr, u32 status)
 {
-	intr_status = status;
+	intr->intr_status = status;
 }
 
-static int fl2000_debugfs_intr_init(void)
+static int fl2000_debugfs_intr_init(struct fl2000_intr *intr)
 {
 	struct dentry *root_dir;
 	struct dentry *interrupt_file;
@@ -38,13 +40,16 @@ static int fl2000_debugfs_intr_init(void)
 	root_dir = debugfs_create_dir("fl2000_interrupt", NULL);
 
 	interrupt_file = debugfs_create_x32("intr_status", fl2000_debug_umode,
-			root_dir, &intr_status);
+			root_dir, &intr->intr_status);
 
 	return 0;
 }
+
 #else /* CONFIG_DEBUG_FS */
+
 #define fl2000_debugfs_intr_init()
 #define fl2000_debugfs_intr_status(status)
+
 #endif /* CONFIG_DEBUG_FS */
 
 static void fl2000_intr_completion(struct urb *urb);
@@ -70,7 +75,7 @@ static void fl2000_intr_work(struct work_struct *work_item)
 			dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X",
 					status);
 
-			fl2000_debugfs_intr_status(status);
+			fl2000_debugfs_intr_status(intr, status);
 
 			/* TODO: This shall be called only for relevant
 			 * interrupts, others shall be processed differently */
@@ -176,7 +181,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 		return ret;
 	}
 
-	fl2000_debugfs_intr_init();
+	fl2000_debugfs_intr_init(intr);
 
 	return 0;
 }

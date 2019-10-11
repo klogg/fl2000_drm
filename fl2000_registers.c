@@ -12,6 +12,13 @@
 #define CONTROL_MSG_READ	64
 #define CONTROL_MSG_WRITE	65
 
+struct fl2000_reg_data {
+	struct usb_device *usb_dev;
+#if defined(CONFIG_DEBUG_FS)
+	unsigned int reg_debug_address;
+#endif
+};
+
 static bool fl2000_reg_precious(struct device *dev, unsigned int reg)
 {
 	return FL2000_REG_PRECIOUS(reg);
@@ -25,7 +32,8 @@ static bool fl2000_reg_volatile(struct device *dev, unsigned int reg)
 static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 {
 	int ret;
-	struct usb_device *usb_dev = context;
+	struct fl2000_reg_data *reg_data = context;
+	struct usb_device *usb_dev = reg_data->usb_dev;
 	u16 offset = (u16)reg;
 	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL | GFP_DMA);
 
@@ -55,7 +63,8 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 {
 	int ret;
-	struct usb_device *usb_dev = context;
+	struct fl2000_reg_data *reg_data = context;
+	struct usb_device *usb_dev = reg_data->usb_dev;
 	u16 offset = (u16)reg;
 	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL | GFP_DMA);
 
@@ -108,55 +117,73 @@ static const struct regmap_config fl2000_regmap_config = {
 
 #if defined(CONFIG_DEBUG_FS)
 
-/* TODO: This shall not be static, allocate per usb_device instead */
-static unsigned int reg_debug_address;
-
 static int fl2000_debugfs_reg_read(void *data, u64 *value)
 {
 	int ret;
 	unsigned int int_value;
-	struct usb_device *usb_dev = data;
-	ret = fl2000_reg_read(usb_dev, reg_debug_address, &int_value);
+	struct fl2000_reg_data *reg_data = data;
+	struct usb_device *usb_dev = reg_data->usb_dev;
+
+	ret = fl2000_reg_read(usb_dev, reg_data->reg_debug_address, &int_value);
 	*value = int_value;
+
 	return ret;
 }
 
 static int fl2000_debugfs_reg_write(void *data, u64 value)
 {
-	struct usb_device *usb_dev = data;
-	return fl2000_reg_write(usb_dev, reg_debug_address, value);
+	struct fl2000_reg_data *reg_data = data;
+	struct usb_device *usb_dev = reg_data->usb_dev;
+
+	return fl2000_reg_write(usb_dev, reg_data->reg_debug_address, value);
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(reg_ops, fl2000_debugfs_reg_read,
 		fl2000_debugfs_reg_write, "%08llx\n");
 
-static void fl2000_debugfs_reg_init(struct usb_device *usb_dev)
+static void fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 {
 	struct dentry *root_dir;
 	struct dentry *reg_address_file, *reg_data_file;
+	struct usb_device *usb_dev = reg_data->usb_dev;
 
 	root_dir = debugfs_create_dir("fl2000_regs", NULL);
 
 	reg_address_file = debugfs_create_x32("reg_address", fl2000_debug_umode,
-			root_dir, &reg_debug_address);
+			root_dir, &reg_data->reg_debug_address);
 
 	reg_data_file = debugfs_create_file("reg_data", fl2000_debug_umode,
 			root_dir, usb_dev, &reg_ops);
 }
+
 #else /* CONFIG_DEBUG_FS */
+
 #define fl2000_debugfs_reg_init(usb_dev)
+
 #endif /* CONFIG_DEBUG_FS */
 
 int fl2000_regmap_create(struct usb_device *usb_dev)
 {
+	struct fl2000_reg_data *reg_data;
 	struct regmap *regmap;
 
-	regmap = devm_regmap_init(&usb_dev->dev, NULL, usb_dev,
-			&fl2000_regmap_config);
-	if (IS_ERR(regmap))
-		return PTR_ERR(regmap);
+	reg_data = devm_kzalloc(&usb_dev->dev, sizeof(*reg_data), GFP_KERNEL);
+	if (!reg_data) {
+		dev_err(&usb_dev->dev, "Registers data allocation failed");
+		return -ENOMEM;
+	}
 
-	fl2000_debugfs_reg_init(usb_dev);
+	reg_data->usb_dev = usb_dev;
+
+	regmap = devm_regmap_init(&usb_dev->dev, NULL, reg_data,
+			&fl2000_regmap_config);
+	if (IS_ERR(regmap)) {
+		dev_err(&usb_dev->dev, "Registers map failed (%ld)",
+				PTR_ERR(regmap));
+		return PTR_ERR(regmap);
+	}
+
+	fl2000_debugfs_reg_init(reg_data);
 
 	dev_info(&usb_dev->dev, "Configured FL2000 registers");
 	return 0;
