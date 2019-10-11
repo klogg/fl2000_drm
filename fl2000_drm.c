@@ -175,11 +175,36 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 		 struct drm_display_mode *adjusted_mode)
 {
 	struct drm_device *drm = encoder->dev;
+	struct usb_device *usb_dev = drm->dev_private;
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_hsync1_reg hsync1;
+	fl2000_vga_hsync2_reg hsync2;
+	fl2000_vga_vsync1_reg vsync1;
+	fl2000_vga_vsync2_reg vsync2;
 
 	dev_info(drm->dev, "fl2000_mode_set");
 
-	/* TODO: Calculate PLL settings, timings, etc.
-	 * Also here we force VGA connect to allow bridge perform its setup */
+	/* TODO: Calculate PLL settings */
+
+	/* Timings configuration */
+	hsync1.hactive = mode->hdisplay;
+	hsync1.htotal = mode->htotal;
+	regmap_write(regmap, FL2000_VGA_HSYNC_REG1, hsync1.val);
+
+	vsync1.vactive = mode->vdisplay;
+	vsync1.vtotal = mode->vtotal;
+	regmap_write(regmap, FL2000_VGA_VSYNC_REG1, vsync1.val);
+
+	hsync2.hsync_width = mode->hsync_end - mode->hsync_start;
+	hsync2.hstart = (mode->htotal - mode->hsync_start + 1);
+	regmap_write(regmap, FL2000_VGA_HSYNC_REG2, hsync2.val);
+
+	vsync2.vsync_width = mode->vsync_end - mode->vsync_start;
+	vsync2.vstart = (mode->vtotal - mode->vsync_start + 1);
+	vsync2.start_latency = vsync2.vstart;
+	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
+
+	/* Also here we force VGA connect to allow bridge perform its setup */
 }
 
 /* TODO: Possibly we need .check callback as well */
