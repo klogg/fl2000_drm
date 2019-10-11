@@ -283,8 +283,7 @@ static int fl2000_bind(struct device *master)
 
 	ret = drm_fbdev_generic_setup(drm, BPP);
 	if (ret) {
-		dev_err(drm->dev, "Cannot initialize framebuffer (%d)",
-				ret);
+		dev_err(drm->dev, "Cannot initialize framebuffer (%d)", ret);
 		return ret;
 	}
 
