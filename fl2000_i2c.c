@@ -26,6 +26,10 @@
 
 struct fl2000_i2c_algo_data {
 	struct usb_device *usb_dev;
+#if defined(CONFIG_DEBUG_FS)
+	u8 i2c_debug_address;
+	u8 i2c_debug_offset;
+#endif
 };
 
 static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
@@ -45,17 +49,14 @@ static inline int fl2000_i2c_write_dword(struct i2c_adapter *adapter,
 
 #if defined(CONFIG_DEBUG_FS)
 
-/* TODO: This shall not be static, allocate per usb_device instead */
-static u8 i2c_debug_address;	/* I2C bus address that we will talk to */
-static u8 i2c_debug_offset;	/* Offset of the register within I2C address */
-
 static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 {
 	int ret;
 	u32 u32_value;
-	struct i2c_adapter *i2c_adapter = data;
-	ret = fl2000_i2c_read_dword(i2c_adapter, i2c_debug_address,
-			i2c_debug_offset, &u32_value);
+	struct i2c_adapter *adapter = data;
+	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
+	ret = fl2000_i2c_read_dword(adapter, i2c_algo_data->i2c_debug_address,
+			i2c_algo_data->i2c_debug_offset, &u32_value);
 	*value = u32_value;
 	return ret;
 }
@@ -63,9 +64,10 @@ static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 static int fl2000_debugfs_i2c_write(void *data, u64 value)
 {
 	u32 u32_value = value;
-	struct i2c_adapter *i2c_adapter = data;
-	return fl2000_i2c_write_dword(i2c_adapter, i2c_debug_address,
-			i2c_debug_offset, &u32_value);
+	struct i2c_adapter *adapter = data;
+	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
+	return fl2000_i2c_write_dword(adapter, i2c_algo_data->i2c_debug_address,
+			i2c_algo_data->i2c_debug_offset, &u32_value);
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read,
@@ -75,22 +77,26 @@ static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 {
 	struct dentry *root_dir;
 	struct dentry *i2c_address_file, *i2c_offset_file, *i2c_data_file;
+	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
 
 	root_dir = debugfs_create_dir("fl2000_i2c", NULL);
 
 	i2c_address_file = debugfs_create_x8("i2c_address", fl2000_debug_umode,
-			root_dir, &i2c_debug_address);
+			root_dir, &i2c_algo_data->i2c_debug_address);
 
 	i2c_offset_file = debugfs_create_x8("i2c_offset", fl2000_debug_umode,
-			root_dir, &i2c_debug_offset);
+			root_dir, &i2c_algo_data->i2c_debug_offset);
 
 	i2c_data_file = debugfs_create_file("i2c_data", fl2000_debug_umode,
 			root_dir, adapter, &i2c_ops);
 
 	return 0;
 }
+
 #else /* CONFIG_DEBUG_FS */
+
 #define fl2000_debugfs_i2c_init(adapter)
+
 #endif /* CONFIG_DEBUG_FS */
 
 
