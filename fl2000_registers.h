@@ -56,9 +56,52 @@ typedef union {
 
 #define FL2000_VGA_CTRL_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x04)
 #define FL2000_VGA_HSYNC_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x08)
+typedef union {
+	u32 val;
+	struct {
+		u32 htotal:12;
+		u32 __reserved1:4;
+		u32 hactive:12;
+		u32 __reserved2:4;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_hsync1_reg;
+
 #define FL2000_VGA_HSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x0C)
+typedef union {
+	u32 val;
+	struct {
+		u32 hstart:12;
+		u32 __reserved1:4;
+		u32 hsync_width:8;
+		u32 __reserved2:8;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_hsync2_reg;
+
 #define FL2000_VGA_VSYNC_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x10)
+typedef union {
+	u32 val;
+	struct {
+		u32 vtotal:12;
+		u32 __reserved1:4;
+		u32 vactive:12;
+		u32 __reserved2:4;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_vsync1_reg;
+
 #define FL2000_VGA_VSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x14)
+typedef union {
+	u32 val;
+	struct {
+		u32 vstart:12;
+		u32 __reserved1:4;
+		u32 vsync_width:3;
+		u32 __reserved2:1;
+		u32 start_latency:10;
+		u32 __reserved3:1;
+		u32 buf_error_en:1;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_vsync2_reg;
+
 #define FL2000_VGA_TEST_REG		(FL2000_VGA_CONTROL_OFFSET + 0x18)
 #define FL2000_VGA_ISOCH_REG		(FL2000_VGA_CONTROL_OFFSET + 0x1C)
 #define FL2000_VGA_I2C_SC_REG		(FL2000_VGA_CONTROL_OFFSET + 0x20)
@@ -87,6 +130,19 @@ static const struct reg_field FL2000_VGA_I2C_SC_REG_monitor_detect =
 #define FL2000_VGA_I2C_RD_REG		(FL2000_VGA_CONTROL_OFFSET + 0x24)
 #define FL2000_VGA_I2C_WR_REG		(FL2000_VGA_CONTROL_OFFSET + 0x28)
 #define FL2000_VGA_PLL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x2C)
+typedef union {
+	u32 val;
+	struct {
+		u32 post_div:8;
+		u32 pre_div:8;
+		u32 multi:8;
+		u32 test_io:1;
+		u32 cfg_dac_pwrdown:1;
+		u32 force_dac_pwrup:1;
+		u32 __reserved:5;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_pll_reg;
+
 #define FL2000_VGA_LBUF_REG		(FL2000_VGA_CONTROL_OFFSET + 0x30)
 #define FL2000_VGA_HI_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x34)
 #define FL2000_VGA_LO_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x38)
