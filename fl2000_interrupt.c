@@ -47,7 +47,6 @@ static int fl2000_debugfs_intr_init(void)
 #define fl2000_debugfs_intr_status(status)
 #endif /* CONFIG_DEBUG_FS */
 
-
 static void fl2000_intr_completion(struct urb *urb);
 
 void fl2000_inter_check(struct usb_device *usb_dev, u32 status);
@@ -136,21 +135,25 @@ int fl2000_intr_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 
-	intr->buf = devm_kzalloc(&usb_dev->dev, INTR_BUFSIZE, GFP_DMA);
-	if (!intr->buf) {
-		dev_err(&usb_dev->dev, "Cannot allocate interrupt data");
-		return -ENOMEM;
-	}
-
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!intr->urb) {
 		dev_err(&usb_dev->dev, "Allocate interrupt URB failed");
 		return -ENOMEM;
 	}
 
+	intr->buf = usb_alloc_coherent(usb_dev, INTR_BUFSIZE, GFP_KERNEL,
+			&intr->urb->transfer_dma);
+	if (!intr->buf) {
+		dev_err(&usb_dev->dev, "Cannot allocate interrupt data");
+		usb_free_urb(intr->urb);
+		return -ENOMEM;
+	}
+
 	intr->work_queue = create_workqueue("work_queue");
 	if (!intr->work_queue) {
 		dev_err(&usb_dev->dev, "Create interrupt workqueue failed");
+		usb_free_coherent(usb_dev, INTR_BUFSIZE, intr->buf,
+				intr->urb->transfer_dma);
 		usb_free_urb(intr->urb);
 		return -ENOMEM;
 	}
@@ -167,6 +170,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 	if (ret) {
 		dev_err(&usb_dev->dev, "URB submission failed");
 		destroy_workqueue(intr->work_queue);
+		usb_free_coherent(usb_dev, INTR_BUFSIZE, intr->buf,
+				intr->urb->transfer_dma);
 		usb_free_urb(intr->urb);
 		return ret;
 	}
@@ -179,6 +184,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 void fl2000_intr_destroy(struct usb_interface *interface)
 {
 	struct fl2000_intr *intr = usb_get_intfdata(interface);
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
 	if (intr == NULL)
 		return;
@@ -186,6 +192,9 @@ void fl2000_intr_destroy(struct usb_interface *interface)
 	usb_poison_urb(intr->urb);
 
 	destroy_workqueue(intr->work_queue);
+
+	usb_free_coherent(usb_dev, INTR_BUFSIZE, intr->buf,
+			intr->urb->transfer_dma);
 
 	usb_free_urb(intr->urb);
 }
