@@ -176,7 +176,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 {
 	struct drm_device *drm = encoder->dev;
 
-	dev_info(drm->dev, "fl2000_atomic_mode_set");
+	dev_info(drm->dev, "fl2000_mode_set");
 
 	/* TODO: Calculate PLL settings, timings, etc.
 	 * Also here we force VGA connect to allow bridge perform its setup */
