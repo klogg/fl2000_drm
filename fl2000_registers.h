@@ -16,6 +16,8 @@
 #define FL2000_USB_CONTROL_OFFSET	0x0000
 
 #define FL2000_USB_LPM			(FL2000_USB_CONTROL_OFFSET + 0x70)
+static const struct reg_field FL2000_USB_LPM_magic =
+		REG_FIELD(FL2000_USB_LPM, 13, 13);
 static const struct reg_field FL2000_USB_LPM_u2_reject =
 		REG_FIELD(FL2000_USB_LPM, 19, 19);
 static const struct reg_field FL2000_USB_LPM_u1_reject =
@@ -36,7 +38,7 @@ typedef union {
 	struct {
 		u32 vga_status:1;
 		u32 vga_error:1;	/* read self clear */
-		u32 line_buf_halt:1;
+		u32 lbuf_halt:1;
 		u32 iso_ack:1;		/* read self clear */
 		u32 td_drop:1;		/* read self clear */
 		u32 irq_pending:1;	/* read self clear */
@@ -44,7 +46,7 @@ typedef union {
 		u32 dac_status:1;
 		u32 lbuf_overflow:1;
 		u32 lbuf_underflow:1;
-		u32 frame_count:16;
+		u32 frame_cnt:16;
 		u32 hdmi_event:1;	/* read self clear */
 		u32 hdmi_status:1;
 		u32 edid_status:1;
@@ -55,6 +57,37 @@ typedef union {
 } fl2000_vga_status_reg;
 
 #define FL2000_VGA_CTRL_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x04)
+typedef union {
+	u32 val;
+	struct {
+		u32 clear_watermark:1;
+		u32 frame_sync:1;
+		u32 hsync_polarity:1;
+		u32 vsync_polarity:1;
+		u32 de_polarity:1;
+		u32 mirror_mode:1;
+		u32 vga565_mode:1;
+		u32 dac_output_en:1;
+		u32 vga_timing_en:1;
+		u32 use_new_pkt_retry:1;
+		u32 ref_select:1;
+		u32 dac_px_clk_invert:1;
+		u32 clear_lbuf_status:1;
+		u32 drop_cnt:1;
+		u32 use_vdi_itp_cnt:1;
+		u32 __reserved1:1;
+		u32 __reserved2:8;
+		u32 vga_compress:1;
+		u32 vga332_mode:1;
+		u32 vga_color_palette_en:1;
+		u32 vga_first_bt_enc_en:1;
+		u32 clear_125us_cnt:1;
+		u32 disable_halt:1;
+		u32 force_de_en:1;
+		u32 vga555_mode:1;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_cntrl_reg_pxclk;
+
 #define FL2000_VGA_HSYNC_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x08)
 typedef union {
 	u32 val;
@@ -64,7 +97,7 @@ typedef union {
 		u32 hactive:12;
 		u32 __reserved2:4;
 	} __attribute__ ((aligned, packed));
-} fl2000_vga_hsync1_reg;
+} fl2000_vga_hsync_reg1;
 
 #define FL2000_VGA_HSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x0C)
 typedef union {
@@ -75,7 +108,7 @@ typedef union {
 		u32 hsync_width:8;
 		u32 __reserved2:8;
 	} __attribute__ ((aligned, packed));
-} fl2000_vga_hsync2_reg;
+} fl2000_vga_hsync_reg2;
 
 #define FL2000_VGA_VSYNC_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x10)
 typedef union {
@@ -86,7 +119,7 @@ typedef union {
 		u32 vactive:12;
 		u32 __reserved2:4;
 	} __attribute__ ((aligned, packed));
-} fl2000_vga_vsync1_reg;
+} fl2000_vga_vsync_reg1;
 
 #define FL2000_VGA_VSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x14)
 typedef union {
@@ -100,10 +133,22 @@ typedef union {
 		u32 __reserved3:1;
 		u32 buf_error_en:1;
 	} __attribute__ ((aligned, packed));
-} fl2000_vga_vsync2_reg;
+} fl2000_vga_vsync_reg2;
 
 #define FL2000_VGA_TEST_REG		(FL2000_VGA_CONTROL_OFFSET + 0x18)
 #define FL2000_VGA_ISOCH_REG		(FL2000_VGA_CONTROL_OFFSET + 0x1C)
+typedef union {
+	u32 val;
+	struct {
+		u32 start_mframe_cnt:14;
+		u32 use_mframe_match:1;
+		u32 use_zero_len_frame:1;
+		u32 mframe_cnt:14;
+		u32 mframe_cnt_update:1;
+		u32 __reserved:1;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_isoch_reg;
+
 #define FL2000_VGA_I2C_SC_REG		(FL2000_VGA_CONTROL_OFFSET + 0x20)
 /* Implement structure here because during I2C xfers there would be too many
  * slow USB control exchanges caused by independent setting of reg_fields */
@@ -126,7 +171,6 @@ static const struct reg_field FL2000_VGA_I2C_SC_REG_edid_detect =
 static const struct reg_field FL2000_VGA_I2C_SC_REG_monitor_detect =
 		REG_FIELD(FL2000_VGA_I2C_SC_REG, 28, 28);
 
-
 #define FL2000_VGA_I2C_RD_REG		(FL2000_VGA_CONTROL_OFFSET + 0x24)
 #define FL2000_VGA_I2C_WR_REG		(FL2000_VGA_CONTROL_OFFSET + 0x28)
 #define FL2000_VGA_PLL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x2C)
@@ -147,6 +191,40 @@ typedef union {
 #define FL2000_VGA_HI_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x34)
 #define FL2000_VGA_LO_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x38)
 #define FL2000_VGA_CTRL_REG_ACLK	(FL2000_VGA_CONTROL_OFFSET + 0x3C)
+typedef union {
+	u32 val;
+	struct {
+		u32 cfg_timing_reset_n:1;
+		u32 plh_block_en:1;
+		u32 edid_mon_int_en:1;
+		u32 ext_mon_int_en:1;
+		u32 vga_status_self_clear:1;
+		u32 pll_lock_time:5;
+		u32 pll_fast_timeout_en:1;
+		u32 ppe_block_em:1;
+		u32 pll_timer_en:1;
+		u32 feedback_int_en:1;
+		u32 clr_125us_counter:1;
+		u32 ccs_pd_dis:1;
+		u32 standby_en:1;
+		u32 force_loopback:1;
+		u32 lbuf_drop_frame_en:1;
+		u32 lbuf_vde_rst_en:1;
+		u32 lbuf_sw_rst:1;
+		u32 lbuf_err_int_en:1;
+		u32 biac_en:1;
+		u32 pxclk_in_en:1;
+		u32 vga_err_int_en:1;
+		u32 force_vga_connect:1;
+		u32 force_pll_up:1;
+		u32 use_zero_td:1;
+		u32 use_zero_pkt_len:1;
+		u32 use_pkt_pending:1;
+		u32 pll_dac_pd_usbp3_en:1;
+		u32 pll_dac_pd_novga_en:1;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_ctrl_reg_aclk;
+
 #define FL2000_VGA_PXCLK_CNT_REG	(FL2000_VGA_CONTROL_OFFSET + 0x40)
 #define FL2000_VGA_VCNT_REG		(FL2000_VGA_CONTROL_OFFSET + 0x44)
 #define FL2000_RST_CTRL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x48)
@@ -174,6 +252,8 @@ static const struct reg_field FL2000_VGA_CTRL_REG_3_wakeup_clear_en =
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x8C) */
 
+/* Default values as per documentation
+ * XXX: Probably we shall not trust documentation and validate on a real HW */
 static const struct reg_default fl2000_reg_defaults[] = {
 	regmap_reg_default(FL2000_VGA_STATUS_REG,		0x00000000),
 	regmap_reg_default(FL2000_VGA_CTRL_REG_PXCLK,		0x0010119C),
