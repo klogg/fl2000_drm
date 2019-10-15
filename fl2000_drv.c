@@ -60,7 +60,7 @@ static void fl2000_usb_dev_data_release(struct device *dev, void *res)
 static int fl2000_create_controls(struct usb_device *usb_dev)
 {
 	struct usb_dev_data *usb_dev_data;
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	struct regmap *regmap = fl2000_get_regmap(usb_dev);
 	if (!regmap) {
 		dev_err(&usb_dev->dev, "Regmap capture failed");
 		return -ENOMEM;

@@ -106,7 +106,7 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	struct regmap *regmap = fl2000_get_regmap(usb_dev);
 	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
 	u32 mask;
 
@@ -182,7 +182,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	struct usb_device *usb_dev = drm->dev_private;
 	struct fl2000_drm_if *drm_if = container_of(drm, struct fl2000_drm_if,
 			drm);
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	struct regmap *regmap = fl2000_get_regmap(usb_dev);
 	fl2000_vga_hsync_reg1 hsync1 = {.val = 0};
 	fl2000_vga_hsync_reg2 hsync2 = {.val = 0};
 	fl2000_vga_vsync_reg1 vsync1 = {.val = 0};
@@ -299,7 +299,7 @@ static int fl2000_bind(struct device *master)
 	struct drm_mode_config *mode_config;
 	struct usb_device *usb_dev = container_of(master, struct usb_device,
 			dev);
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	struct regmap *regmap = fl2000_get_regmap(usb_dev);
 	u64 dma_mask;
 
 	dev_info(master, "Binding FL2000 master component");
