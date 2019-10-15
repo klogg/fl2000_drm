@@ -239,7 +239,7 @@ static int fl2000_bind(struct device *master)
 	struct drm_mode_config *mode_config;
 	struct usb_device *usb_dev = container_of(master, struct usb_device,
 			dev);
-	u64 mask;
+	u64 dma_mask;
 
 	dev_info(master, "Binding FL2000 master component");
 
@@ -261,8 +261,6 @@ static int fl2000_bind(struct device *master)
 	/* For register operations */
 	drm->dev_private = usb_dev;
 
-	mask = dma_get_mask(drm->dev);
-
 	drm_mode_config_init(drm);
 	mode_config = &drm->mode_config;
 	mode_config->funcs = &fl2000_mode_config_funcs;
@@ -271,7 +269,9 @@ static int fl2000_bind(struct device *master)
 	mode_config->min_height = 1;
 	mode_config->max_height = MAX_HEIGHT;
 
-	ret = dma_set_coherent_mask(drm->dev, mask);
+	/* Set DMA mask for DRM device from mask of the 'parent' USB device */
+	dma_mask = dma_get_mask(&usb_dev->dev);
+	ret = dma_set_coherent_mask(drm->dev, dma_mask);
 	if (ret) {
 		dev_err(drm->dev, "Cannot set DRM device DMA mask (%d)", ret);
 		return ret;
