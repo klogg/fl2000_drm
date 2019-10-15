@@ -107,7 +107,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 	fl2000_vga_i2c_sc_reg reg = {.val = 0};
 	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
 	struct usb_device *usb_dev = i2c_algo_data->usb_dev;
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	struct regmap *regmap = fl2000_get_regmap(usb_dev);
 	u32 mask = 0;
 
 	if (!read) {

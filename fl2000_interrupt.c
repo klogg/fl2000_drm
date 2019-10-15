@@ -62,7 +62,7 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	struct fl2000_intr *intr = container_of(work_item,
 			struct fl2000_intr, work);
 	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	struct regmap *regmap = fl2000_get_regmap(usb_dev);
 	u32 status;
 
 	/* Process interrupt */
