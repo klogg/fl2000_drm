@@ -43,6 +43,7 @@ static const u32 fl2000_pixel_formats[] = {
 struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
+	struct regmap_field *magic;
 };
 
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
@@ -106,6 +107,8 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 	struct drm_device *drm = crtc->dev;
 	struct usb_device *usb_dev = drm->dev_private;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
+	u32 mask;
 
 	dev_info(drm->dev, "fl2000_display_enable");
 
@@ -114,10 +117,11 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 		return;
 	}
 
-	/* TODO: Enable HW
-	 * Also here we need to stop forcing VGA connect assuming bridge have
-	 * finished its configuration */
-
+	/* Disable forcing VGA connect */
+	mask = 0;
+	aclk.force_vga_connect = false;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 }
 
 void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
@@ -176,15 +180,63 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 {
 	struct drm_device *drm = encoder->dev;
 	struct usb_device *usb_dev = drm->dev_private;
+	struct fl2000_drm_if *drm_if = container_of(drm, struct fl2000_drm_if,
+			drm);
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	fl2000_vga_hsync1_reg hsync1;
-	fl2000_vga_hsync2_reg hsync2;
-	fl2000_vga_vsync1_reg vsync1;
-	fl2000_vga_vsync2_reg vsync2;
+	fl2000_vga_hsync_reg1 hsync1 = {.val = 0};
+	fl2000_vga_hsync_reg2 hsync2 = {.val = 0};
+	fl2000_vga_vsync_reg1 vsync1 = {.val = 0};
+	fl2000_vga_vsync_reg2 vsync2 = {.val = 0};
+	fl2000_vga_cntrl_reg_pxclk pxclk = {.val = 0};
+	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
+	fl2000_vga_pll_reg pll = {.val = 0};
+	fl2000_vga_isoch_reg isoch = {.val = 0};
+	u32 mask;
 
 	dev_info(drm->dev, "fl2000_mode_set");
 
+	mask = 0;
+	aclk.force_pll_up = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_pll_up);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
 	/* TODO: Calculate PLL settings */
+	pll.val = 0x0020410A; // 32MHz
+	regmap_write(regmap, FL2000_VGA_HSYNC_REG1, hsync1.val);
+
+	/* TODO: Reset FL2000 and read back PLL settings for validation */
+
+	/* Generic clock configuration */
+	mask = 0;
+	aclk.use_pkt_pending = false;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_pkt_pending);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	mask = 0;
+	aclk.use_zero_pkt_len = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_zero_pkt_len);
+	aclk.vga_err_int_en = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, vga_err_int_en);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	mask = 0;
+	pxclk.dac_output_en = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
+	pxclk.drop_cnt = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, drop_cnt);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, pxclk.val);
+
+	mask = 0;
+	pxclk.dac_output_en = true;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
+	pxclk.clear_watermark = true;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, clear_watermark);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, pxclk.val);
+
+	mask = 0;
+	isoch.mframe_cnt = 0;
+	fl2000_add_bitmask(mask, fl2000_vga_isoch_reg, mframe_cnt);
+	regmap_write_bits(regmap, FL2000_VGA_ISOCH_REG, mask, isoch.val);
 
 	/* Timings configuration */
 	hsync1.hactive = mode->hdisplay;
@@ -204,7 +256,15 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	vsync2.start_latency = vsync2.vstart;
 	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
 
-	/* Also here we force VGA connect to allow bridge perform its setup */
+	/* XXX: This is actually some unknown & undocumented FL2000 USB FE
+	 * register setting */
+	regmap_field_write(drm_if->magic, true);
+
+	/* Force VGA connect to allow bridge perform its setup */
+	mask = 0;
+	aclk.force_vga_connect = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 }
 
 /* TODO: Possibly we need .check callback as well */
@@ -239,6 +299,7 @@ static int fl2000_bind(struct device *master)
 	struct drm_mode_config *mode_config;
 	struct usb_device *usb_dev = container_of(master, struct usb_device,
 			dev);
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	u64 dma_mask;
 
 	dev_info(master, "Binding FL2000 master component");
@@ -251,6 +312,9 @@ static int fl2000_bind(struct device *master)
 	devres_add(master, drm_if);
 
 	drm = &drm_if->drm;
+
+	drm_if->magic = devm_regmap_field_alloc(&usb_dev->dev, regmap,
+			FL2000_USB_LPM_magic);
 
 	ret = drm_dev_init(drm, &fl2000_drm_driver, master);
 	if (ret) {
