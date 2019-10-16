@@ -149,6 +149,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	if (fb) {
 		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
 		int idx;
+		struct drm_format_name_buf format_name;
 
 		/* TODO: Do we really need this? What if it fails? */
 		if (!drm_dev_enter(drm, &idx))
@@ -157,7 +158,9 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		/* TODO:
 		 * Calculate & validate real buffer area for transmission
 		 * Schedule transmission of 'addr' over USB */
-		printk("%lld", addr);
+		printk("%lld :: %s", addr,
+				drm_get_format_name(fb->format->format,
+						&format_name));
 
 		drm_dev_exit(idx);
 	}
