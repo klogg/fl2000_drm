@@ -147,13 +147,9 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	dev_info(drm->dev, "fl2000_display_update");
 
 	if (fb) {
+		/* We support only RGB pixel formats, so only #0 */
 		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
-		int idx;
 		struct drm_format_name_buf format_name;
-
-		/* TODO: Do we really need this? What if it fails? */
-		if (!drm_dev_enter(drm, &idx))
-			return;
 
 		/* TODO:
 		 * Calculate & validate real buffer area for transmission
@@ -161,8 +157,6 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		printk("%lld :: %s", addr,
 				drm_get_format_name(fb->format->format,
 						&format_name));
-
-		drm_dev_exit(idx);
 	}
 
 	if (event) {
