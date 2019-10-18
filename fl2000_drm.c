@@ -134,6 +134,26 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 	/* TODO: disable HW */
 }
 
+static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
+		struct drm_plane_state *plane_state,
+		struct drm_crtc_state *crtc_state)
+{
+	struct drm_crtc *crtc = &pipe->crtc;
+	struct drm_device *drm = crtc->dev;
+	struct drm_plane *plane = &pipe->plane;
+	struct drm_plane_state *pstate = plane->state;
+	struct drm_framebuffer *fb = pstate->fb;
+	int n;
+
+	n = drm_format_num_planes(fb->format->format);
+	if (n > 1) {
+		dev_err(drm->dev, "Only single plane RGB framebuffers are " \
+				"supported, got %d planes", n);
+		return -EINVAL;
+	}
+	return 0;
+}
+
 static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		struct drm_plane_state *old_pstate)
 {
@@ -264,7 +284,6 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 }
 
-/* TODO: Possibly we need .check callback as well */
 /* It is assumed that FL2000 has bridge either connected to its DPI or
  * implementing analog D-SUB frontend. In this case initialization flow:
  *  1. fl2k mode_set
@@ -275,6 +294,7 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_mode_valid,
 	.enable = fl2000_display_enable,
 	.disable = fl2000_display_disable,
+	.check = fl2000_display_check,
 	.update = fl2000_display_update,
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
