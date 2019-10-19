@@ -140,9 +140,7 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
-	struct drm_plane *plane = &pipe->plane;
-	struct drm_plane_state *pstate = plane->state;
-	struct drm_framebuffer *fb = pstate->fb;
+	struct drm_framebuffer *fb = plane_state->fb;
 	int n;
 
 	n = drm_format_num_planes(fb->format->format);
