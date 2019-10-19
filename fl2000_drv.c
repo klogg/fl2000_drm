@@ -35,6 +35,9 @@ int fl2000_drm_create(struct usb_device *usb_dev);
 int fl2000_intr_create(struct usb_interface *interface);
 void fl2000_intr_destroy(struct usb_interface *interface);
 
+int fl2000_stream_create(struct usb_interface *interface);
+void fl2000_stream_destroy(struct usb_interface *interface);
+
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
 		USB_PRODUCT_ID_FL2000, USB_CLASS_AV) },
@@ -233,7 +236,7 @@ static int fl2000_probe(struct usb_interface *interface,
 		dev_info(&usb_dev->dev, "Probing Streaming interface (%u)",
 				iface_num);
 
-		/* TODO: create streaming structures */
+		ret = fl2000_stream_create(interface);
 
 		ret = usb_set_interface(usb_dev, iface_num, alt_setting);
 
@@ -270,6 +273,7 @@ static void fl2000_disconnect(struct usb_interface *interface)
 		break;
 
 	case FL2000_USBIF_STREAMING:
+		fl2000_stream_destroy(interface);
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
