@@ -22,6 +22,7 @@
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_edid.h>
+#include <drm/drm_probe_helper.h>
 
 #include "it66121_registers.h"
 
