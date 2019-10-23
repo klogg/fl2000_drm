@@ -143,7 +143,7 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 	struct drm_framebuffer *fb = plane_state->fb;
 	int n;
 
-	n = drm_format_num_planes(fb->format->format);
+	n = fb->format->num_planes;
 	if (n > 1) {
 		dev_err(drm->dev, "Only single plane RGB framebuffers are " \
 				"supported, got %d planes", n);

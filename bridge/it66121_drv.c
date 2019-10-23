@@ -147,7 +147,7 @@ static int it66121_configure_input(struct it66121_priv *priv)
 }
 
 static int it66121_configure_afe(struct it66121_priv *priv,
-		struct drm_display_mode *mode)
+		const struct drm_display_mode *mode)
 {
 	int ret;
 
@@ -662,8 +662,8 @@ static void it66121_bridge_disable(struct drm_bridge *bridge)
 }
 
 static void it66121_bridge_mode_set(struct drm_bridge *bridge,
-		struct drm_display_mode *mode,
-		struct drm_display_mode *adjusted_mode)
+		const struct drm_display_mode *mode,
+		const struct drm_display_mode *adjusted_mode)
 
 {
 	int i, ret;
@@ -696,7 +696,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	hdmi_avi_infoframe_init(&priv->hdmi_avi_infoframe);
 
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
-			adjusted_mode, false);
+			&priv->connector, adjusted_mode);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot create AVI infoframe (%d)",
 				ret);
