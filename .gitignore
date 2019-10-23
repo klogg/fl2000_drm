@@ -5,6 +5,7 @@
 Module.symvers
 modules.order
 .tmp_versions
+*.mod
 *.mod.c
 *.ur-safe
 .cproject
