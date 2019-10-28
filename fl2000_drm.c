@@ -44,9 +44,28 @@ struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
 	struct regmap_field *magic;
+	bool vblank_enable;
 };
 
+static inline struct fl2000_drm_if *fl2000_get_drm_if(struct drm_device *drm)
+{
+	return container_of(drm, struct fl2000_drm_if, drm);
+}
+
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
+
+int fl2000_enable_vblank(struct drm_device *drm, unsigned int crtc)
+{
+	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
+	drm_if->vblank_enable = true;
+	return 0;
+}
+
+void fl2000_disable_vblank(struct drm_device *drm, unsigned int crtc)
+{
+	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
+	drm_if->vblank_enable = false;
+}
 
 static struct drm_driver fl2000_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_PRIME | \
@@ -66,6 +85,9 @@ static struct drm_driver fl2000_drm_driver = {
 	.gem_prime_get_sg_table	= drm_gem_cma_prime_get_sg_table,
 	.gem_prime_mmap = drm_gem_cma_prime_mmap,
 	.gem_prime_vmap = drm_gem_cma_prime_vmap,
+
+        .enable_vblank = fl2000_enable_vblank,
+        .disable_vblank = fl2000_disable_vblank,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
@@ -122,6 +144,8 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 	aclk.force_vga_connect = false;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	drm_crtc_vblank_on(crtc);
 }
 
 void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
@@ -130,6 +154,8 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 	struct drm_device *drm = crtc->dev;
 
 	dev_info(drm->dev, "fl2000_display_disable");
+
+	drm_crtc_vblank_off(crtc);
 
 	/* TODO: disable HW */
 }
@@ -195,8 +221,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 {
 	struct drm_device *drm = encoder->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-	struct fl2000_drm_if *drm_if = container_of(drm, struct fl2000_drm_if,
-			drm);
+	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
 	struct regmap *regmap = fl2000_get_regmap(usb_dev);
 	fl2000_vga_hsync_reg1 hsync1 = {.val = 0};
 	fl2000_vga_hsync_reg2 hsync2 = {.val = 0};
@@ -376,6 +401,13 @@ static int fl2000_bind(struct device *master)
 	}
 
 	drm_mode_config_reset(drm);
+
+	ret = drm_vblank_init(drm, drm->mode_config.num_crtc);
+	if (ret) {
+		dev_err(drm->dev, "Failed to initialize %d VBLANK(s) (%d)",
+				drm->mode_config.num_crtc, ret);
+		return ret;
+	}
 
 	drm_kms_helper_poll_init(drm);
 
