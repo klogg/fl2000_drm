@@ -127,11 +127,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 	/* There's only one altsetting (#0) and one endpoint (#3) in the
 	 * interrupt interface (#2) but lets try and "find" it anyway */
 	ret = usb_find_int_in_endpoint(interface->cur_altsetting, &desc);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot find altsetting containing " \
-				"interrupt endpoint");
+	if (ret)
 		return ret;
-	}
 
 	intr = devm_kzalloc(&usb_dev->dev, sizeof(*intr), GFP_KERNEL);
 	if (!intr) {
