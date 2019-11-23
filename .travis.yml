@@ -12,6 +12,7 @@ sudo: required
 before_install:
    - export KVER="5.3.0-1009-gcp"
    - export KSRC="/usr/src/linux-headers-$KVER"
+   - sudo sh -c "echo 'deb http://archive.ubuntu.com/ubuntu/ $(lsb_release -cs)-proposed restricted main multiverse universe' >> /etc/apt/sources.list.d/proposed-repositories.list"
    - sudo apt-get update
    - sudo apt-get install -y build-essential linux-headers-$KVER gcc-8
    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 10
