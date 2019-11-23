@@ -48,15 +48,14 @@ Considering, no firm decision yet. Current design uses unsafe components linking
  * Original driver by FrescoLogic: https://github.com/FrescoLogic/FL2000
  * Major clean-up of original FL driver by Hans Ulli Kroll: https://github.com/ulli-kroll/FL2000
  * Reference IT66121FN driver ftom RK3188 Android KK kernel repositpry: https://github.com/phjanderson/Kernel-3188
- * Reference USB DRM implementation of DisplayLink driver (see drivers/gpu/drm/udl in kernel sources)
- * Reference simple DRM implementation of PL111 driver (see drivers/gpu/drm/pl111 in kernel sources)
+ * Reference USB DRM implementation of DisplayLink driver: https://elixir.bootlin.com/linux/latest/source/drivers/gpu/drm/udl
+ * Reference simple DRM implementation of PL111 driver: https://elixir.bootlin.com/linux/latest/source/drivers/gpu/drm/pl111
 
 ## Notes
  * VGA (D-Sub) DAC output of FL2000DX can be implemented as a DRM bridge (dumb_vga_dac)
  * For registration of sibling I2C devices of IT66121 (CEC, DDC, ...) i2c\_new\_dummy() function may be used
  * Need to review, test and cleanup init/cleanup procedures to ensure no leaks or races or other issues
  * Need to implement unit testing with latest kernel & DRM unit testing tools, target coverage shall be 100%
- * Need to implement static code analysis with Coverity Scan and maybe some other tools
 
 ## TODO
  * Debug and fix deinitialization (shutdown / remove)
@@ -65,4 +64,4 @@ Considering, no firm decision yet. Current design uses unsafe components linking
  * Allow driver to be builtin to kernel
  * Refactor for better / cleaner structure and modularity
  * Minimize debugfs implementation
- * Move all regmaps to RBTREE
+ * Move all regmaps to RBTREE, review default values, volatile and precious register sets
