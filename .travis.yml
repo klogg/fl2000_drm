@@ -24,6 +24,5 @@ before_install:
    - sudo update-alternatives --set gcc /usr/bin/gcc-8
 
 script:
-   - export PLATFORM=x86_64
-   - build-wrapper-linux-x86-64 --out-dir bw-output make
+   - strace -f -E LD_DEBUG=all build-wrapper-linux-x86-64 --out-dir bw-output make
    - sonar-scanner
