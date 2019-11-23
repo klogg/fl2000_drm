@@ -31,10 +31,11 @@ int fl2000_regmap_create(struct usb_device *usb_dev);
 /* DRM device creation */
 int fl2000_drm_create(struct usb_device *usb_dev);
 
-/* Private data on USB interrupt interface */
+/* Interrupt polling task */
 int fl2000_intr_create(struct usb_interface *interface);
 void fl2000_intr_destroy(struct usb_interface *interface);
 
+/* Stream transfer task */
 int fl2000_stream_create(struct usb_interface *interface);
 void fl2000_stream_destroy(struct usb_interface *interface);
 
