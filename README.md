@@ -34,7 +34,7 @@ DRM initialization flow:
  * HDCP is not supported
  * USB2.0 is not supported
  * Color/format conversion is not supported (limited to RGB)
- * Dongle onboard SPI EEPROM access via USB Mass Storage not implemented
+ * Dongle onboard SPI EEPROM access via USB Mass Storage is not implemented
 
 ## Known issues
  * Connecting more than one dongle to the same USB bus may not work
@@ -54,10 +54,9 @@ Considering, no firm decision yet. Current design uses unsafe components linking
 ## Notes
  * VGA (D-Sub) DAC output of FL2000DX can be implemented as a DRM bridge (dumb_vga_dac)
  * For registration of sibling I2C devices of IT66121 (CEC, DDC, ...) i2c\_new\_dummy() function may be used
- * Need to review, test and cleanup init/cleanup procedures to ensure no leaks or races or other issues
- * Need to implement unit testing with latest kernel & DRM unit testing tools, target coverage shall be 100%
 
 ## TODO
+ * Review, test and cleanup init/cleanup procedures to ensure no leaks or races or other issues
  * Debug and fix deinitialization (shutdown / remove)
  * Move all (or as much as possible) resources to device resources (dev/devres functions) and simplify release
  * Replace bus detection & components linking with configuration (modprobe / udev)
@@ -65,3 +64,4 @@ Considering, no firm decision yet. Current design uses unsafe components linking
  * Refactor for better / cleaner structure and modularity
  * Minimize debugfs implementation
  * Move all regmaps to RBTREE, review default values, volatile and precious register sets
+ * Implement unit testing with latest kernel & DRM unit testing tools, target coverage shall be 100%
