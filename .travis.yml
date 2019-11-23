@@ -22,6 +22,7 @@ before_install:
    - sudo apt-get install -y build-essential linux-headers-$KVER gcc-8
    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 10
    - sudo update-alternatives --set gcc /usr/bin/gcc-8
+   - ln -s ./build-wrapper-linux-x86/libinterceptor-x86_64.so ./build-wrapper-linux-x86/libinterceptor-haswell.so
 
 script:
    - build-wrapper-linux-x86-64 --out-dir bw-output make
