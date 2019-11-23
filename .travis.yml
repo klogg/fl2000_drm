@@ -24,5 +24,8 @@ before_install:
    - sudo update-alternatives --set gcc /usr/bin/gcc-8
 
 script:
-   - strace -f -E LD_DEBUG=all build-wrapper-linux-x86-64 --out-dir bw-output make
+   - INTERCEPTOR_LIB=`find ${TRAVIS_HOME} -name libinterceptor-x86_64.so`
+   - INTERCEPTOR_LINK=`sed "s/x86_64/haswell/g"<<<"$INTERCEPTOR_LIB"`
+   - ln -s $INTERCEPTOR_LIB $INTERCEPTOR_LINK
+   - build-wrapper-linux-x86-64 --out-dir bw-output make
    - sonar-scanner
