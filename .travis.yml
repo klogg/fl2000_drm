@@ -6,6 +6,9 @@ addons:
 
 language: c
 
+git:
+    depth: false
+
 os:
    - linux
 
