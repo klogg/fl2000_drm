@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * fl2000_drm_drm.c
+ * fl2000_drm.c
  *
  * (C) Copyright 2012, Red Hat
  * (C) Copyright 2018-2019, Artem Mygaiev
