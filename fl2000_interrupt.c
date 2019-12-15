@@ -168,6 +168,9 @@ int fl2000_intr_create(struct usb_interface *interface)
 			intr->buf, INTR_BUFSIZE, fl2000_intr_completion, intr,
 			desc->bInterval);
 
+	intr->urb->transfer_flags |=
+			URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
+
 	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
 	if (ret) {
 		dev_err(&usb_dev->dev, "URB submission failed");
