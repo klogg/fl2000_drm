@@ -54,14 +54,14 @@ static inline struct fl2000_drm_if *fl2000_get_drm_if(struct drm_device *drm)
 
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
 
-int fl2000_enable_vblank(struct drm_device *drm, unsigned int crtc)
+static int fl2000_enable_vblank(struct drm_device *drm, unsigned int crtc)
 {
 	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
 	drm_if->vblank_enable = true;
 	return 0;
 }
 
-void fl2000_disable_vblank(struct drm_device *drm, unsigned int crtc)
+static void fl2000_disable_vblank(struct drm_device *drm, unsigned int crtc)
 {
 	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
 	drm_if->vblank_enable = false;
@@ -168,6 +168,8 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 	struct drm_device *drm = crtc->dev;
 	struct drm_framebuffer *fb = plane_state->fb;
 	int n;
+
+	dev_info(drm->dev, "fl2000_display_check");
 
 	n = fb->format->num_planes;
 	if (n > 1) {
