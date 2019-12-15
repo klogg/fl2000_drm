@@ -8,6 +8,9 @@
 
 #include "fl2000.h"
 
+void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
+		struct drm_crtc *crtc);
+
 #define DRM_DRIVER_NAME		"fl2000_drm"
 #define DRM_DRIVER_DESC		"USB-HDMI"
 #define DRM_DRIVER_DATE		"20181001"
@@ -181,8 +184,12 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 
 	n = fb->format->num_planes;
 	if (n > 1) {
+		/* TODO: Check real buffer area for transmission */
+		struct drm_format_name_buf format_name;
 		dev_err(drm->dev, "Only single plane RGB framebuffers are " \
-				"supported, got %d planes", n);
+				"supported, got %d planes (%s)", n,
+				drm_get_format_name(fb->format->format,
+						&format_name));
 		return -EINVAL;
 	}
 	return 0;
@@ -203,14 +210,9 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	if (fb) {
 		/* We support only RGB pixel formats, so only #0 */
 		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
-		struct drm_format_name_buf format_name;
 
-		/* TODO:
-		 * Calculate & validate real buffer area for transmission
-		 * Schedule transmission of 'addr' over USB */
-		printk("%lld :: %s", addr,
-				drm_get_format_name(fb->format->format,
-						&format_name));
+		fl2000_stream_frame(drm->dev_private, addr, crtc);
+
 	}
 
 	if (event) {
@@ -529,4 +531,9 @@ void fl2000_inter_check(struct usb_device *usb_dev, u32 status)
 	if (drm_if) {
 		drm_kms_helper_hotplug_event(&drm_if->drm);
 	}
+}
+
+void fl2000_blank(struct drm_crtc *crtc)
+{
+	drm_crtc_handle_vblank(crtc);
 }
