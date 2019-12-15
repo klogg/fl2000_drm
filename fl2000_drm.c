@@ -54,6 +54,15 @@ static inline struct fl2000_drm_if *fl2000_get_drm_if(struct drm_device *drm)
 
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
 
+static void fl2000_drm_release(struct drm_device *drm)
+{
+	/* TODO: Stop all URB streaming operations */
+
+	drm_atomic_helper_shutdown(drm);
+	drm_mode_config_cleanup(drm);
+	drm_dev_fini(drm);
+}
+
 static int fl2000_enable_vblank(struct drm_device *drm, unsigned int crtc)
 {
 	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
@@ -73,6 +82,7 @@ static struct drm_driver fl2000_drm_driver = {
 	.lastclose = drm_fb_helper_lastclose,
 	.ioctls = NULL,
 	.fops = &fl2000_drm_driver_fops,
+	.release = fl2000_drm_release,
 
 	.dumb_create = drm_gem_cma_dumb_create,
 	.gem_free_object_unlocked = drm_gem_cma_free_object,
@@ -328,7 +338,7 @@ static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
 	.mode_set = fl2000_mode_set,
 };
 
-static void fl2000_drm_release(struct device *dev, void *res)
+static void fl2000_drm_if_release(struct device *dev, void *res)
 {
 	/* Noop */
 }
@@ -346,7 +356,8 @@ static int fl2000_bind(struct device *master)
 
 	dev_info(master, "Binding FL2000 master component");
 
-	drm_if = devres_alloc(&fl2000_drm_release, sizeof(*drm_if), GFP_KERNEL);
+	drm_if = devres_alloc(&fl2000_drm_if_release, sizeof(*drm_if),
+			GFP_KERNEL);
 	if (!drm_if) {
 		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure");
 		return -ENOMEM;
@@ -438,7 +449,7 @@ static void fl2000_unbind(struct device *master)
 
 	dev_info(master, "Unbinding FL2000 master component");
 
-	drm_if = devres_find(master, fl2000_drm_release, NULL, NULL);
+	drm_if = devres_find(master, fl2000_drm_if_release, NULL, NULL);
 	if (!drm_if)
 		return;
 
@@ -446,16 +457,13 @@ static void fl2000_unbind(struct device *master)
 	if (!drm)
 		return;
 
-	drm_dev_unregister(drm);
-
 	/* Detach bridge */
 	component_unbind_all(master, drm);
 
-	drm_mode_config_cleanup(drm);
-
+	/* Prepare to DRM device shutdown */
+	drm_kms_helper_poll_fini(drm);
+	drm_dev_unplug(drm);
 	drm_dev_put(drm);
-
-	devm_kfree(master, drm_if);
 }
 
 static struct component_master_ops fl2000_drm_master_ops = {
@@ -519,7 +527,7 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 void fl2000_inter_check(struct usb_device *usb_dev, u32 status)
 {
 	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
-			fl2000_drm_release, NULL, NULL);
+			fl2000_drm_if_release, NULL, NULL);
 	if (drm_if) {
 		drm_kms_helper_hotplug_event(&drm_if->drm);
 	}
