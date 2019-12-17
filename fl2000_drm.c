@@ -524,11 +524,28 @@ int fl2000_drm_create(struct usb_device *usb_dev)
 	return 0;
 }
 
-void fl2000_inter_check(struct usb_device *usb_dev, u32 status)
+void fl2000_inter_check(struct usb_device *usb_dev)
 {
+	int ret;
+	u32 status;
 	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
 			fl2000_drm_if_release, NULL, NULL);
+	struct regmap *regmap = fl2000_get_regmap(usb_dev);
+
 	if (drm_if) {
+		/* Process interrupt */
+		ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
+		if (ret) {
+			dev_err(&usb_dev->dev, "Cannot read interrupt " \
+					"register (%d)", ret);
+		} else {
+			dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X",
+					status);
+
+			/* TODO: This shall be called only for relevant
+			 * interrupts, others shall be processed differently */
+		}
+
 		drm_kms_helper_hotplug_event(&drm_if->drm);
 	}
 }
