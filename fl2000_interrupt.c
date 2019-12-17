@@ -8,6 +8,8 @@
 
 #include "fl2000.h"
 
+void fl2000_inter_check(struct usb_device *usb_dev);
+
 #define INTR_BUFSIZE	1
 
 struct fl2000_intr {
@@ -16,45 +18,9 @@ struct fl2000_intr {
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
 	u8 *buf;
-#if defined(CONFIG_DEBUG_FS)
-	u32 intr_status;
-#endif
 };
 
-/* XXX: TBH the whole design of checking interrupt status in debugfs here is
- * completely wrong. This part shall be rewritten considering interrupts
- * happening all the time and statuses read and stored somewhere (ring?) */
-
-#if defined(CONFIG_DEBUG_FS)
-
-static void fl2000_debugfs_intr_status(struct fl2000_intr *intr, u32 status)
-{
-	intr->intr_status = status;
-}
-
-static int fl2000_debugfs_intr_init(struct fl2000_intr *intr)
-{
-	struct dentry *root_dir;
-	struct dentry *interrupt_file;
-
-	root_dir = debugfs_create_dir("fl2000_interrupt", NULL);
-
-	interrupt_file = debugfs_create_x32("intr_status", fl2000_debug_umode,
-			root_dir, &intr->intr_status);
-
-	return 0;
-}
-
-#else /* CONFIG_DEBUG_FS */
-
-#define fl2000_debugfs_intr_init()
-#define fl2000_debugfs_intr_status(status)
-
-#endif /* CONFIG_DEBUG_FS */
-
 static void fl2000_intr_completion(struct urb *urb);
-
-void fl2000_inter_check(struct usb_device *usb_dev, u32 status);
 
 static void fl2000_intr_work(struct work_struct *work_item)
 {
@@ -62,26 +28,8 @@ static void fl2000_intr_work(struct work_struct *work_item)
 	struct fl2000_intr *intr = container_of(work_item,
 			struct fl2000_intr, work);
 	struct usb_device *usb_dev = interface_to_usbdev(intr->interface);
-	struct regmap *regmap = fl2000_get_regmap(usb_dev);
-	u32 status;
 
-	/* Process interrupt */
-	if (regmap) {
-		ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
-		if (ret) {
-			dev_err(&usb_dev->dev, "Cannot read interrupt " \
-					"register (%d)", ret);
-		} else {
-			dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X",
-					status);
-
-			fl2000_debugfs_intr_status(intr, status);
-
-			/* TODO: This shall be called only for relevant
-			 * interrupts, others shall be processed differently */
-			fl2000_inter_check(usb_dev, status);
-		}
-	}
+	fl2000_inter_check(usb_dev);
 
 	/* Restart urb */
 	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
@@ -114,8 +62,6 @@ static void fl2000_intr_completion(struct urb *urb)
 		}
 	}
 }
-
-void fl2000_intr_destroy(struct usb_interface *interface);
 
 int fl2000_intr_create(struct usb_interface *interface)
 {
@@ -151,7 +97,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 
-	intr->work_queue = create_workqueue("work_queue");
+	intr->work_queue = create_workqueue("fl2000_interrupt");
 	if (!intr->work_queue) {
 		dev_err(&usb_dev->dev, "Create interrupt workqueue failed");
 		usb_free_coherent(usb_dev, INTR_BUFSIZE, intr->buf,
@@ -180,8 +126,6 @@ int fl2000_intr_create(struct usb_interface *interface)
 		usb_free_urb(intr->urb);
 		return ret;
 	}
-
-	fl2000_debugfs_intr_init(intr);
 
 	return 0;
 }
