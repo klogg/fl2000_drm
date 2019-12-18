@@ -544,13 +544,8 @@ void fl2000_inter_check(struct usb_device *usb_dev)
 
 			/* TODO: This shall be called only for relevant
 			 * interrupts, others shall be processed differently */
+			drm_kms_helper_hotplug_event(&drm_if->drm);
 		}
-
-		drm_kms_helper_hotplug_event(&drm_if->drm);
 	}
 }
 
-void fl2000_blank(struct drm_crtc *crtc)
-{
-	drm_crtc_handle_vblank(crtc);
-}
