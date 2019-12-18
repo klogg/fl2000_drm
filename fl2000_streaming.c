@@ -70,6 +70,7 @@ int fl2000_stream_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 	devres_add(&usb_dev->dev, stream);
+	usb_set_intfdata(interface, stream);
 
 	stream->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!stream->urb) {
@@ -84,8 +85,6 @@ int fl2000_stream_create(struct usb_interface *interface)
 			URB_ZERO_PACKET | 	 /* send NULL URB after data */
 			URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
 
-	usb_set_intfdata(interface, stream);
-
 	return 0;
 }
 
@@ -94,6 +93,5 @@ void fl2000_stream_destroy(struct usb_interface *interface)
 	struct fl2000_stream *stream = usb_get_intfdata(interface);
 
 	usb_poison_urb(stream->urb);
-
 	usb_free_urb(stream->urb);
 }
