@@ -8,8 +8,6 @@
 
 #include "fl2000.h"
 
-void fl2000_blank(struct drm_crtc *crtc);
-
 /* Streaming is implemented with a single URB for each frame. USB is configured
  * to send NULL URB automatically after each data URB */
 struct fl2000_stream {
@@ -18,11 +16,11 @@ struct fl2000_stream {
 
 static void fl2000_stream_completion(struct urb *urb)
 {
-	struct drm_crtc *crtc = urb->context;
-
 	/* XXX: Maybe we need to check timings or lbuf? */
 
-	fl2000_blank(crtc);
+	/* This can be called from interrupt context so scheduling work is not
+	 * necessary */
+	drm_crtc_handle_vblank(urb->context);
 }
 
 static void fl2000_stream_release(struct device *dev, void *res)
