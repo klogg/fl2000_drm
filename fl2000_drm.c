@@ -8,6 +8,8 @@
 
 #include "fl2000.h"
 
+int fl2000_magic(struct usb_device *usb_dev);
+
 void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 		struct drm_crtc *crtc);
 
@@ -46,7 +48,6 @@ static const u32 fl2000_pixel_formats[] = {
 struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
-	struct regmap_field *magic;
 	bool vblank_enable;
 };
 
@@ -139,7 +140,7 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-	struct regmap *regmap = fl2000_get_regmap(usb_dev);
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
 	u32 mask;
 
@@ -233,8 +234,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 {
 	struct drm_device *drm = encoder->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
-	struct regmap *regmap = fl2000_get_regmap(usb_dev);
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	fl2000_vga_hsync_reg1 hsync1 = {.val = 0};
 	fl2000_vga_hsync_reg2 hsync2 = {.val = 0};
 	fl2000_vga_vsync_reg1 vsync1 = {.val = 0};
@@ -308,9 +308,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	vsync2.start_latency = vsync2.vstart;
 	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
 
-	/* XXX: This is actually some unknown & undocumented FL2000 USB FE
-	 * register setting */
-	regmap_field_write(drm_if->magic, true);
+	fl2000_magic(usb_dev);
 
 	/* Force VGA connect to allow bridge perform its setup */
 	mask = 0;
@@ -351,7 +349,6 @@ static int fl2000_bind(struct device *master)
 	struct drm_mode_config *mode_config;
 	struct usb_device *usb_dev = container_of(master, struct usb_device,
 			dev);
-	struct regmap *regmap = fl2000_get_regmap(usb_dev);
 	u64 dma_mask;
 
 	dev_info(master, "Binding FL2000 master component");
@@ -365,9 +362,6 @@ static int fl2000_bind(struct device *master)
 	devres_add(master, drm_if);
 
 	drm = &drm_if->drm;
-
-	drm_if->magic = devm_regmap_field_alloc(&usb_dev->dev, regmap,
-			FL2000_USB_LPM_magic);
 
 	ret = drm_dev_init(drm, &fl2000_drm_driver, master);
 	if (ret) {
@@ -473,16 +467,16 @@ static struct component_master_ops fl2000_drm_master_ops = {
 
 static void fl2000_match_release(struct device *dev, void *data)
 {
-	component_master_del(dev, &fl2000_drm_master_ops);
+	/* Noop */
 }
 
 static int fl2000_compare(struct device *dev, void *data)
 {
 	int i;
-	struct i2c_adapter *adapter = data;
+	struct usb_device *usb_dev = data;
 
-	/* Check component's parent (must be I2C adapter) */
-	if (dev->parent != &adapter->dev)
+	/* Check component's parent (must be our USB device) */
+	if (dev->parent->parent != &usb_dev->dev)
 		return 0;
 
 	/* Check this is a supported DRM bridge */
@@ -495,42 +489,13 @@ static int fl2000_compare(struct device *dev, void *data)
 	return 0;
 }
 
-struct i2c_adapter *fl2000_get_i2c_adapter(struct usb_device *usb_dev);
-
-int fl2000_drm_create(struct usb_device *usb_dev)
-{
-	int ret = 0;
-	struct component_match *match = NULL;
-	struct i2c_adapter *adapter;
-
-	adapter = fl2000_get_i2c_adapter(usb_dev);
-	if (!adapter) {
-		dev_err(&usb_dev->dev, "Cannot find I2C adapter");
-		return -ENODEV;
-	}
-
-	/* Make USB interface master */
-	component_match_add_release(&usb_dev->dev, &match,
-			fl2000_match_release, fl2000_compare, adapter);
-
-	ret = component_master_add_with_match(&usb_dev->dev,
-			&fl2000_drm_master_ops, match);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot register component master (%d)",
-				ret);
-		return ret;
-	}
-
-	return 0;
-}
-
 void fl2000_inter_check(struct usb_device *usb_dev)
 {
 	int ret;
 	u32 status;
 	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
 			fl2000_drm_if_release, NULL, NULL);
-	struct regmap *regmap = fl2000_get_regmap(usb_dev);
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 
 	if (drm_if) {
 		/* Process interrupt */
@@ -547,5 +512,30 @@ void fl2000_inter_check(struct usb_device *usb_dev)
 			drm_kms_helper_hotplug_event(&drm_if->drm);
 		}
 	}
+}
+
+int fl2000_drm_init(struct usb_device *usb_dev)
+{
+	int ret = 0;
+	struct component_match *match = NULL;
+
+	/* Make USB interface master */
+	component_match_add_release(&usb_dev->dev, &match,
+			fl2000_match_release, fl2000_compare, usb_dev);
+
+	ret = component_master_add_with_match(&usb_dev->dev,
+			&fl2000_drm_master_ops, match);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot register component master (%d)",
+				ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+void fl2000_drm_cleanup(struct usb_device *usb_dev)
+{
+	component_master_del(&usb_dev->dev, &fl2000_drm_master_ops);
 }
 

@@ -18,18 +18,12 @@
 #define USB_VENDOR_ID_FRESCO_LOGIC	0x1D5C
 #define USB_PRODUCT_ID_FL2000		0x2000
 
-#define FL2000_USBIF_AVCONTROL		0
-#define FL2000_USBIF_STREAMING		1
-#define FL2000_USBIF_INTERRUPT		2
-
-/* I2C adapter interface creation */
-int fl2000_i2c_create(struct usb_device *usb_dev);
-
-/* Register map creation */
-int fl2000_regmap_create(struct usb_device *usb_dev);
-
-/* DRM device creation */
-int fl2000_drm_create(struct usb_device *usb_dev);
+enum {
+	FL2000_USBIF_AVCONTROL = 0,
+	FL2000_USBIF_STREAMING = 1,
+	FL2000_USBIF_INTERRUPT = 2,
+	FL2000_USBIFS = 3
+};
 
 /* Interrupt polling task */
 int fl2000_intr_create(struct usb_interface *interface);
@@ -39,6 +33,30 @@ void fl2000_intr_destroy(struct usb_interface *interface);
 int fl2000_stream_create(struct usb_interface *interface);
 void fl2000_stream_destroy(struct usb_interface *interface);
 
+/* I2C adapter interface creation */
+int fl2000_i2c_init(struct usb_device *usb_dev);
+void fl2000_i2c_cleanup(struct usb_device *usb_dev);
+
+/* Register map creation */
+int fl2000_regmap_init(struct usb_device *usb_dev);
+void fl2000_regmap_cleanup(struct usb_device *usb_dev);
+
+/* DRM device creation */
+int fl2000_drm_init(struct usb_device *usb_dev);
+void fl2000_drm_cleanup(struct usb_device *usb_dev);
+
+/* Ordered list of "init"/"cleanup functions for sub-devices. Shall be processed
+ * forward order on init and backward on cleanup*/
+static const struct {
+	const char *name;
+	int (*init_fn)(struct usb_device *usb_dev);
+	void (*cleanup_fn)(struct usb_device *usb_dev);
+} fl2000_devices[] = {
+	{"registers map", fl2000_regmap_init, fl2000_regmap_cleanup},
+	{"I2C adapter", fl2000_i2c_init, fl2000_i2c_cleanup},
+	{"DRM device", fl2000_drm_init, fl2000_drm_cleanup}
+};
+
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
 		USB_PRODUCT_ID_FL2000, USB_CLASS_AV) },
@@ -46,231 +64,91 @@ static struct usb_device_id fl2000_id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
-struct usb_dev_data {
-	struct regmap_field *u1_reject;
-	struct regmap_field *u2_reject;
-	struct regmap_field *wake_nrdy;
-	struct regmap_field *app_reset;
-	struct regmap_field *wakeup_clear_en;
-	struct regmap_field *edid_detect;
-	struct regmap_field *monitor_detect;
+struct fl2000_drv {
+	int usbifs_up;
 };
 
-static void fl2000_usb_dev_data_release(struct device *dev, void *res)
+static void fl2000_drv_release(struct device *dev, void *res)
 {
 	/* Noop */
-}
-
-static int fl2000_create_controls(struct usb_device *usb_dev)
-{
-	struct usb_dev_data *usb_dev_data;
-	struct regmap *regmap = fl2000_get_regmap(usb_dev);
-	if (!regmap) {
-		dev_err(&usb_dev->dev, "Regmap capture failed");
-		return -ENOMEM;
-	}
-
-	/* Create local data structure */
-	usb_dev_data = devres_alloc(fl2000_usb_dev_data_release,
-			sizeof(*usb_dev_data), GFP_KERNEL);
-	if (!usb_dev_data) {
-		dev_err(&usb_dev->dev, "USB data allocation failed");
-		return -ENOMEM;
-	}
-	devres_add(&usb_dev->dev, usb_dev_data);
-
-	usb_dev_data->u1_reject = devm_regmap_field_alloc(&usb_dev->dev,
-			regmap, FL2000_USB_LPM_u1_reject);
-	usb_dev_data->u2_reject = devm_regmap_field_alloc(&usb_dev->dev,
-			regmap, FL2000_USB_LPM_u2_reject);
-	usb_dev_data->wake_nrdy = devm_regmap_field_alloc(&usb_dev->dev,
-			regmap, FL2000_USB_CTRL_wake_nrdy);
-	usb_dev_data->app_reset = devm_regmap_field_alloc(&usb_dev->dev,
-			regmap, FL2000_RST_CTRL_REG_app_reset);
-	usb_dev_data->wakeup_clear_en = devm_regmap_field_alloc(&usb_dev->dev,
-			regmap, FL2000_VGA_CTRL_REG_3_wakeup_clear_en);
-	usb_dev_data->edid_detect = devm_regmap_field_alloc(&usb_dev->dev,
-			regmap, FL2000_VGA_I2C_SC_REG_edid_detect);
-	usb_dev_data->monitor_detect = devm_regmap_field_alloc(&usb_dev->dev,
-			regmap, FL2000_VGA_I2C_SC_REG_monitor_detect);
-
-	/* Dont really care which one failed */
-	if (IS_ERR(usb_dev_data->u1_reject) ||
-			IS_ERR(usb_dev_data->u2_reject) ||
-			IS_ERR(usb_dev_data->wake_nrdy) ||
-			IS_ERR(usb_dev_data->app_reset) ||
-			IS_ERR(usb_dev_data->wakeup_clear_en) ||
-			IS_ERR(usb_dev_data->edid_detect) ||
-			IS_ERR(usb_dev_data->monitor_detect))
-		return -1;
-
-	return 0;
-}
-
-int fl2000_reset(struct usb_device *usb_dev)
-{
-	int ret;
-	struct usb_dev_data *usb_dev_data = devres_find(&usb_dev->dev,
-			fl2000_usb_dev_data_release, NULL, NULL);;
-
-	if (!usb_dev_data) {
-		dev_err(&usb_dev->dev, "Device resources not found");
-		return -ENOMEM;
-	}
-
-	ret = regmap_field_write(usb_dev_data->app_reset, true);
-	msleep(10);
-	if (ret)
-		return -EIO;
-
-	return 0;
-}
-
-int fl2000_wait(struct usb_device *usb_dev)
-{
-	int ret;
-	struct usb_dev_data *usb_dev_data = devres_find(&usb_dev->dev,
-			fl2000_usb_dev_data_release, NULL, NULL);;
-
-	if (!usb_dev_data) {
-		dev_err(&usb_dev->dev, "Device resources not found");
-		return -ENOMEM;
-	}
-
-	ret = regmap_field_write(usb_dev_data->edid_detect, true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(usb_dev_data->monitor_detect, true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(usb_dev_data->wakeup_clear_en, false);
-	if (ret)
-		return -EIO;
-
-	return 0;
-}
-
-int fl2000_start(struct usb_device *usb_dev)
-{
-	int ret;
-	struct usb_dev_data *usb_dev_data = devres_find(&usb_dev->dev,
-			fl2000_usb_dev_data_release, NULL, NULL);;
-
-	if (!usb_dev_data) {
-		dev_err(&usb_dev->dev, "Device resources not found");
-		return -ENOMEM;
-	}
-
-	ret = regmap_field_write(usb_dev_data->u1_reject, true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(usb_dev_data->u2_reject, true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(usb_dev_data->wake_nrdy, false);
-	if (ret)
-		return -EIO;
-
-	return 0;
-}
-
-static int fl2000_init(struct usb_device *usb_dev)
-{
-	int ret;
-
-	/* Create registers map */
-	ret = fl2000_regmap_create(usb_dev);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot create registers map (%d)", ret);
-		return ret;
-	}
-
-	/* Create controls */
-	ret = fl2000_create_controls(usb_dev);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot create controls (%d)", ret);
-		return ret;
-	}
-
-	/* Reset application logic */
-	ret = fl2000_reset(usb_dev);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Initial device reset failed (%d)", ret);
-		return ret;
-	}
-
-	/* Create I2C adapter */
-	ret = fl2000_i2c_create(usb_dev);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot create I2C adapter (%d)", ret);
-		return ret;
-	}
-
-	/* Create DRM device */
-	ret = fl2000_drm_create(usb_dev);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot create DRM interface (%d)", ret);
-		return ret;
-	}
-
-	return 0;
 }
 
 static int fl2000_probe(struct usb_interface *interface,
 		const struct usb_device_id *usb_dev_id)
 {
-	int ret;
+	int i, ret;
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
-	u8 alt_setting = interface->cur_altsetting->desc.bAlternateSetting;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	struct fl2000_drv *drv = devres_find(&usb_dev->dev,
+				fl2000_drv_release, NULL, NULL);
+
+	/* Create local data structure if it does not exist yet */
+	if (!drv) {
+		drv = devres_alloc(fl2000_drv_release, sizeof(*drv),
+				GFP_KERNEL);
+		if (!drv) {
+			dev_err(&usb_dev->dev, "USB data allocation failed");
+			return -ENOMEM;
+		}
+		devres_add(&usb_dev->dev, drv);
+		drv->usbifs_up = 0;
+	}
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
-		/* This is rather useless, AVControl is not properly implemented
-		 * on FL2000 chip - that is why all the "magic" needed */
-
-		ret = fl2000_init(usb_dev);
-
+		ret = 0; /* Do nothing */
 		break;
 
 	case FL2000_USBIF_STREAMING:
-		dev_info(&usb_dev->dev, "Probing Streaming interface (%u)",
-				iface_num);
-
 		ret = fl2000_stream_create(interface);
-
-		ret = usb_set_interface(usb_dev, iface_num, alt_setting);
-
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
-		dev_info(&usb_dev->dev, "Probing Interrupt interface (%u)",
-				iface_num);
-
-		/* Initialize interrupt endpoint processing */
 		ret = fl2000_intr_create(interface);
-
 		break;
 
-	default:
-		/* Device does not have any other interfaces */
+	default: /* Device does not have any other interfaces */
 		dev_warn(&interface->dev, "What interface %d?", iface_num);
 		ret = -ENODEV;
-
 		break;
 	}
+	if (ret != 0)
+		return ret;
+
+	/* Start everything when all interfaces are up */
+	if (++drv->usbifs_up == FL2000_USBIFS) {
+		for (i = 0; i < ARRAY_SIZE(fl2000_devices); i++) {
+			ret = (*fl2000_devices[i].init_fn)(usb_dev);
+			if (ret) {
+				/* TODO: Cleanup what was init before error */
+				dev_err(&usb_dev->dev, "Cannot create %s (%d)",
+						fl2000_devices[i].name, ret);
+			}
+		}
+	}
+
 	return ret;
 }
 
 static void fl2000_disconnect(struct usb_interface *interface)
 {
+	int i;
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
-
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	dev_info(&usb_dev->dev, "Disconnecting interface: %u", iface_num);
+	struct fl2000_drv *drv = devres_find(&usb_dev->dev,
+				fl2000_drv_release, NULL, NULL);
+
+	/* De-initialize everything while all interfaces are still up */
+	if (drv) {
+		for (i = ARRAY_SIZE(fl2000_devices) - 1; i >= 0; i--)
+			(*fl2000_devices[i].cleanup_fn)(usb_dev);
+
+		devres_release(&usb_dev->dev, fl2000_drv_release, NULL, NULL);
+	}
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
+		/* Do nothing */
 		break;
 
 	case FL2000_USBIF_STREAMING:

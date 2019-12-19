@@ -68,9 +68,4 @@ static const umode_t fl2000_debug_umode = 0666;
 	(__mask) |= __data.__val; \
 })
 
-static inline struct regmap *fl2000_get_regmap(struct usb_device *usb_dev)
-{
-	return dev_get_regmap(&usb_dev->dev, NULL);
-}
-
 #endif /* __FL2000_DRM_H__ */

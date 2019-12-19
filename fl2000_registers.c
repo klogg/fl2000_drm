@@ -12,11 +12,40 @@
 #define CONTROL_MSG_READ	64
 #define CONTROL_MSG_WRITE	65
 
+#define FL2000_HW_RST_MDELAY	10
+
+enum fl2000_regfield_n {
+	U1_REJECT,
+	U2_REJECT,
+	WAKE_NRDY,
+	APP_RESET,
+	WAKEUP_CLR_EN,
+	EDID_DETECT,
+	MON_DETECT,
+	MAGIC,
+	NUM_REGFIELDS
+};
+
 struct fl2000_reg_data {
 	struct usb_device *usb_dev;
+	struct regmap_field *field[NUM_REGFIELDS];
 #if defined(CONFIG_DEBUG_FS)
 	unsigned int reg_debug_address;
 #endif
+};
+
+static const struct {
+	enum fl2000_regfield_n n;
+	struct reg_field field;
+} fl2000_reg_fields[] = {
+	{U1_REJECT, FL2000_USB_LPM_u1_reject},
+	{U2_REJECT, FL2000_USB_LPM_u2_reject},
+	{WAKE_NRDY, FL2000_USB_CTRL_wake_nrdy},
+	{APP_RESET, FL2000_RST_CTRL_REG_app_reset},
+	{WAKEUP_CLR_EN, FL2000_VGA_CTRL_REG_3_wakeup_clr_en},
+	{EDID_DETECT, FL2000_VGA_I2C_SC_REG_edid_detect},
+	{MON_DETECT, FL2000_VGA_I2C_SC_REG_mon_detect},
+	{MAGIC, FL2000_USB_LPM_magic}
 };
 
 static bool fl2000_reg_precious(struct device *dev, unsigned int reg)
@@ -156,16 +185,106 @@ static void fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 
 #endif /* CONFIG_DEBUG_FS */
 
-int fl2000_regmap_create(struct usb_device *usb_dev)
+static void fl2000_reg_data_release(struct device *dev, void *res)
 {
+	/* Noop */
+}
+
+int fl2000_reset(struct usb_device *usb_dev)
+{
+	int ret;
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
+			fl2000_reg_data_release, NULL, NULL);
+
+	if (!reg_data) {
+		dev_err(&usb_dev->dev, "Device resources not found");
+		return -ENOMEM;
+	}
+
+	ret = regmap_field_write(reg_data->field[APP_RESET], true);
+	msleep(FL2000_HW_RST_MDELAY);
+	if (ret)
+		return -EIO;
+
+	return 0;
+}
+
+int fl2000_wait(struct usb_device *usb_dev)
+{
+	int ret;
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
+			fl2000_reg_data_release, NULL, NULL);
+
+	if (!reg_data) {
+		dev_err(&usb_dev->dev, "Device resources not found");
+		return -ENOMEM;
+	}
+
+	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[MON_DETECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[WAKEUP_CLR_EN], false);
+	if (ret)
+		return -EIO;
+
+	return 0;
+}
+
+int fl2000_magic(struct usb_device *usb_dev)
+{
+	int ret;
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
+			fl2000_reg_data_release, NULL, NULL);;
+
+	/* XXX: This is actually some unknown & undocumented FL2000 USB FE
+	 * register setting */
+	ret = regmap_field_write(reg_data->field[MAGIC], true);
+	if (ret)
+		return -EIO;
+
+	return 0;
+}
+
+int fl2000_start(struct usb_device *usb_dev)
+{
+	int ret;
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
+			fl2000_reg_data_release, NULL, NULL);;
+
+	if (!reg_data) {
+		dev_err(&usb_dev->dev, "Device resources not found");
+		return -ENOMEM;
+	}
+
+	ret = regmap_field_write(reg_data->field[U1_REJECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[U2_REJECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[WAKE_NRDY], false);
+	if (ret)
+		return -EIO;
+
+	return 0;
+}
+
+int fl2000_regmap_init(struct usb_device *usb_dev)
+{
+	int i;
 	struct fl2000_reg_data *reg_data;
 	struct regmap *regmap;
 
-	reg_data = devm_kzalloc(&usb_dev->dev, sizeof(*reg_data), GFP_KERNEL);
+	reg_data = devres_alloc(&fl2000_reg_data_release, sizeof(*reg_data),
+			GFP_KERNEL);
 	if (!reg_data) {
 		dev_err(&usb_dev->dev, "Registers data allocation failed");
 		return -ENOMEM;
 	}
+	devres_add(&usb_dev->dev, reg_data);
 
 	reg_data->usb_dev = usb_dev;
 
@@ -174,11 +293,43 @@ int fl2000_regmap_create(struct usb_device *usb_dev)
 	if (IS_ERR(regmap)) {
 		dev_err(&usb_dev->dev, "Registers map failed (%ld)",
 				PTR_ERR(regmap));
+		devres_release(&usb_dev->dev, fl2000_reg_data_release,
+				NULL, NULL);
 		return PTR_ERR(regmap);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(fl2000_reg_fields); i++) {
+		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;
+		reg_data->field[n] = devm_regmap_field_alloc(
+				&usb_dev->dev, regmap,
+				fl2000_reg_fields[i].field);
+		if (IS_ERR(reg_data->field[n])) {
+			/* TODO: Release what was allocated before error */
+			return PTR_ERR(reg_data->field[n]);
+		}
 	}
 
 	fl2000_debugfs_reg_init(reg_data);
 
 	dev_info(&usb_dev->dev, "Configured FL2000 registers");
 	return 0;
+}
+
+void fl2000_regmap_cleanup(struct usb_device *usb_dev)
+{
+	int i;
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
+			fl2000_reg_data_release, NULL, NULL);
+
+	for (i = 0; i < ARRAY_SIZE(fl2000_reg_fields); i++) {
+		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;
+		devm_regmap_field_free(&usb_dev->dev, reg_data->field[n]);
+	}
+
+	/* XXX: Current regmap implementation missing some kind of a
+	 * devm_regmap_destroy() call that would work similarly to *_find() */
+
+	if (reg_data)
+		devres_release(&usb_dev->dev, fl2000_reg_data_release,
+				NULL, NULL);
 }
