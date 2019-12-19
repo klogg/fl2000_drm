@@ -107,7 +107,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 	fl2000_vga_i2c_sc_reg reg = {.val = 0};
 	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
 	struct usb_device *usb_dev = i2c_algo_data->usb_dev;
-	struct regmap *regmap = fl2000_get_regmap(usb_dev);
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	u32 mask = 0;
 
 	if (!read) {
@@ -264,24 +264,19 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_comb_2nd_msg_len	= I2C_REG_DATA_SIZE,
 };
 
-static void fl2000_i2c_algo_data_release(struct device *dev, void *res)
+static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 {
-	i2c_del_adapter(res);
+	/* Noop */
 }
 
-struct i2c_adapter *fl2000_get_i2c_adapter(struct usb_device *usb_dev)
-{
-	return devres_find(&usb_dev->dev, fl2000_i2c_algo_data_release, NULL, NULL);
-}
-
-int fl2000_i2c_create(struct usb_device *usb_dev)
+int fl2000_i2c_init(struct usb_device *usb_dev)
 {
 	int ret;
 	struct i2c_adapter *adapter;
 	struct fl2000_i2c_algo_data *i2c_algo_data;
 
 	/* Adapter must be allocated before anything else */
-	adapter = devres_alloc(fl2000_i2c_algo_data_release, sizeof(*adapter),
+	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter),
 			GFP_KERNEL);
 	if (!adapter) {
 		dev_err(&usb_dev->dev, "I2C adapter allocation failed");
@@ -320,4 +315,17 @@ int fl2000_i2c_create(struct usb_device *usb_dev)
 
 	dev_info(&adapter->dev, "Connected FL2000 I2C adapter");
 	return 0;
+}
+
+void fl2000_i2c_cleanup(struct usb_device *usb_dev)
+{
+	struct i2c_adapter *adapter = devres_find(&usb_dev->dev,
+			fl2000_i2c_adapter_release, NULL, NULL);
+
+	if (!adapter)
+		return;
+
+	i2c_del_adapter(adapter);
+	devm_kfree(&usb_dev->dev, adapter->algo_data);
+	devres_release(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
 }

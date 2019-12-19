@@ -168,7 +168,7 @@ typedef union {
 } fl2000_vga_i2c_sc_reg;
 static const struct reg_field FL2000_VGA_I2C_SC_REG_edid_detect =
 		REG_FIELD(FL2000_VGA_I2C_SC_REG, 30, 30);
-static const struct reg_field FL2000_VGA_I2C_SC_REG_monitor_detect =
+static const struct reg_field FL2000_VGA_I2C_SC_REG_mon_detect =
 		REG_FIELD(FL2000_VGA_I2C_SC_REG, 28, 28);
 
 #define FL2000_VGA_I2C_RD_REG		(FL2000_VGA_CONTROL_OFFSET + 0x24)
@@ -247,7 +247,7 @@ static const struct reg_field FL2000_RST_CTRL_REG_app_reset =
 #define FL2000_TEST_STAT2		(FL2000_VGA_CONTROL_OFFSET + 0x80)
 #define FL2000_TEST_STAT3		(FL2000_VGA_CONTROL_OFFSET + 0x84)
 #define FL2000_VGA_CTRL_REG_3		(FL2000_VGA_CONTROL_OFFSET + 0x88)
-static const struct reg_field FL2000_VGA_CTRL_REG_3_wakeup_clear_en =
+static const struct reg_field FL2000_VGA_CTRL_REG_3_wakeup_clr_en =
 		REG_FIELD(FL2000_VGA_CTRL_REG_3, 10, 10);
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x8C) */

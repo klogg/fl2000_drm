@@ -31,22 +31,36 @@ static void fl2000_stream_release(struct device *dev, void *res)
 void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 		struct drm_crtc *crtc)
 {
-	int ret = -1;
+	int ret;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
+	struct urb *urb;
 
-	if (stream) {
-		struct urb *urb = stream->urb;
-		urb->transfer_dma = addr;
-		urb->context = crtc;
-		ret = usb_submit_urb(urb, GFP_KERNEL);
-	}
+	if (!stream)
+		return;
 
+	urb = stream->urb;
+	urb->transfer_dma = addr;
+	urb->context = crtc;
+
+	ret = usb_submit_urb(urb, GFP_KERNEL);
 	if (ret) {
 		/* TODO: schedule firing VBLANK immediately */
 	}
 }
 
+/**
+ * fl2000_stream_create() - streaming processing context creation
+ * @interface:	streaming transfers interface
+ *
+ * This function is called only on Interrupt interface probe
+ *
+ * It shall not talk to HW which may not be fully initialized at this stage,
+ * only make needed allocations and static configuration. It shall not initiate
+ * any USB transfers.
+ *
+ * Return: Operation result
+ */
 int fl2000_stream_create(struct usb_interface *interface)
 {
 	int ret;
@@ -70,7 +84,6 @@ int fl2000_stream_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 	devres_add(&usb_dev->dev, stream);
-	usb_set_intfdata(interface, stream);
 
 	stream->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!stream->urb) {
@@ -78,6 +91,8 @@ int fl2000_stream_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 
+	/* Most of stuff is static here, except 'transfer_dma' which is
+	 * different for each frame. Note that we do not set 'transfer' field */
 	usb_fill_bulk_urb(stream->urb, usb_dev,
 			usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)),
 			NULL, 0, fl2000_stream_completion, NULL);
@@ -90,8 +105,15 @@ int fl2000_stream_create(struct usb_interface *interface)
 
 void fl2000_stream_destroy(struct usb_interface *interface)
 {
-	struct fl2000_stream *stream = usb_get_intfdata(interface);
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
+			fl2000_stream_release, NULL, NULL);
+
+	if (!stream)
+		return;
 
 	usb_poison_urb(stream->urb);
 	usb_free_urb(stream->urb);
+
+	devres_release(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 }
