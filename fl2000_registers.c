@@ -235,33 +235,9 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 	return 0;
 }
 
-int fl2000_start(struct usb_device *usb_dev)
-{
-	int ret;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);;
-
-	if (!reg_data) {
-		dev_err(&usb_dev->dev, "Device resources not found");
-		return -ENOMEM;
-	}
-
-	ret = regmap_field_write(reg_data->field[U1_REJECT], true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(reg_data->field[U2_REJECT], true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(reg_data->field[WAKE_NRDY], false);
-	if (ret)
-		return -EIO;
-
-	return 0;
-}
-
 int fl2000_regmap_init(struct usb_device *usb_dev)
 {
-	int i;
+	int i, ret;
 	struct fl2000_reg_data *reg_data;
 	struct regmap *regmap;
 
@@ -295,6 +271,17 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 			return PTR_ERR(reg_data->field[n]);
 		}
 	}
+
+	/* TODO: Move this to regmap default configuration values array */
+	ret = regmap_field_write(reg_data->field[U1_REJECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[U2_REJECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[WAKE_NRDY], false);
+	if (ret)
+		return -EIO;
 
 	fl2000_debugfs_reg_init(reg_data);
 
