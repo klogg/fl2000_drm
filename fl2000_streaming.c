@@ -50,6 +50,20 @@ void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 	}
 }
 
+void fl2000_stream_cancel(struct usb_device *usb_dev)
+{
+	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
+			fl2000_stream_release, NULL, NULL);
+	struct urb *urb;
+
+	if (!stream)
+		return;
+
+	urb = stream->urb;
+
+	usb_kill_urb(urb);
+}
+
 /**
  * fl2000_stream_create() - streaming processing context creation
  * @interface:	streaming transfers interface

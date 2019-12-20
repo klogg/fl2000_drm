@@ -12,6 +12,7 @@ int fl2000_afe_magic(struct usb_device *usb_dev);
 
 void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 		struct drm_crtc *crtc);
+void fl2000_stream_cancel(struct usb_device *usb_dev);
 
 #define DRM_DRIVER_NAME		"fl2000_drm"
 #define DRM_DRIVER_DESC		"USB-HDMI"
@@ -59,8 +60,7 @@ DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
-	/* TODO: Cancel all URB streaming operations */
-
+	fl2000_stream_cancel(drm->dev_private);
 	drm_atomic_helper_shutdown(drm);
 	drm_mode_config_cleanup(drm);
 	drm_dev_fini(drm);
@@ -507,8 +507,7 @@ void fl2000_inter_check(struct usb_device *usb_dev)
 		dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X", status);
 
 		/* TODO: This shall be called only for relevant interrupts,
-		 * others shall be processed differently. Also need to check
-		 * if VBLANKs are enabled */
+		 * others shall be processed differently */
 		drm_kms_helper_hotplug_event(&drm_if->drm);
 	}
 }
@@ -537,4 +536,3 @@ void fl2000_drm_cleanup(struct usb_device *usb_dev)
 {
 	component_master_del(&usb_dev->dev, &fl2000_drm_master_ops);
 }
-
