@@ -233,13 +233,13 @@ int fl2000_wait(struct usb_device *usb_dev)
 	return 0;
 }
 
-int fl2000_magic(struct usb_device *usb_dev)
+int fl2000_afe_magic(struct usb_device *usb_dev)
 {
 	int ret;
 	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
 			fl2000_reg_data_release, NULL, NULL);;
 
-	/* XXX: This is actually some unknown & undocumented FL2000 USB FE
+	/* XXX: This is actually some unknown & undocumented FL2000 USB AFE
 	 * register setting */
 	ret = regmap_field_write(reg_data->field[MAGIC], true);
 	if (ret)
