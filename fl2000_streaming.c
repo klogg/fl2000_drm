@@ -8,6 +8,8 @@
 
 #include "fl2000.h"
 
+void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe);
+
 /* Streaming is implemented with a single URB for each frame. USB is configured
  * to send NULL URB automatically after each data URB */
 struct fl2000_stream {
@@ -16,12 +18,9 @@ struct fl2000_stream {
 
 static void fl2000_stream_completion(struct urb *urb)
 {
-	/* XXX: Maybe we need to check timings or lbuf? */
-
 	/* This can be called from interrupt context so scheduling work is not
-	 * necessary.
-	 * TODO: Not sure if we need to check if vblanks are enabled in DRM */
-	drm_crtc_handle_vblank(urb->context);
+	 * necessary */
+	fl2000_handle_vblank(urb->context);
 }
 
 static void fl2000_stream_release(struct device *dev, void *res)
@@ -30,7 +29,7 @@ static void fl2000_stream_release(struct device *dev, void *res)
 }
 
 void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
-		struct drm_crtc *crtc)
+		struct drm_simple_display_pipe *pipe)
 {
 	int ret;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
@@ -40,13 +39,15 @@ void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 	if (!stream)
 		return;
 
+	/* XXX: Maybe we need to check timings or lbuf? */
+
 	urb = stream->urb;
 	urb->transfer_dma = addr;
-	urb->context = crtc;
+	urb->context = pipe;
 
 	ret = usb_submit_urb(urb, GFP_KERNEL);
 	if (ret) {
-		/* TODO: schedule firing VBLANK immediately */
+		fl2000_handle_vblank(urb->context);
 	}
 }
 

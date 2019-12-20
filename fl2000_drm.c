@@ -11,7 +11,7 @@
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
 void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
-		struct drm_crtc *crtc);
+		struct drm_simple_display_pipe *pipe);
 void fl2000_stream_cancel(struct usb_device *usb_dev);
 
 #define DRM_DRIVER_NAME		"fl2000_drm"
@@ -48,7 +48,7 @@ static const u32 fl2000_pixel_formats[] = {
 struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
-	bool vblank_enable;
+	bool vblank_enabled;
 };
 
 static inline struct fl2000_drm_if *fl2000_drm_to_drm_if(struct drm_device *drm)
@@ -75,15 +75,14 @@ static void fl2000_drm_release(struct drm_device *drm)
 static int fl2000_enable_vblank(struct drm_simple_display_pipe *pipe)
 {
 	struct fl2000_drm_if *drm_if = fl2000_pipe_to_drm_if(pipe);
-	drm_if->vblank_enable = true;
+	drm_if->vblank_enabled = true;
 	return 0;
 }
 
 static void fl2000_disable_vblank(struct drm_simple_display_pipe *pipe)
 {
 	struct fl2000_drm_if *drm_if = fl2000_pipe_to_drm_if(pipe);
-	/* TODO: Do we stop streaming (i.e. URB transmission)? */
-	drm_if->vblank_enable = false;
+	drm_if->vblank_enabled = false;
 }
 
 static struct drm_driver fl2000_drm_driver = {
@@ -214,8 +213,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	if (fb) {
 		/* We support only RGB pixel formats, so only #0 */
 		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
-
-		fl2000_stream_frame(drm->dev_private, addr, crtc);
+		fl2000_stream_frame(drm->dev_private, addr, pipe);
 	}
 
 	if (event) {
@@ -515,6 +513,15 @@ void fl2000_inter_check(struct usb_device *usb_dev)
 		 * others shall be processed differently */
 		drm_kms_helper_hotplug_event(&drm_if->drm);
 	}
+}
+
+void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe)
+{
+	struct fl2000_drm_if *drm_if = fl2000_pipe_to_drm_if(pipe);
+	struct drm_crtc *crtc = &pipe->crtc;
+
+	if (drm_if->vblank_enabled)
+		drm_crtc_handle_vblank(crtc);
 }
 
 int fl2000_drm_init(struct usb_device *usb_dev)
