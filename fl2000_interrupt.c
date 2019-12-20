@@ -16,7 +16,6 @@ struct fl2000_intr {
 	struct urb *urb;
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
-	bool intr_enable;
 };
 
 static void fl2000_intr_work(struct work_struct *work_item)
@@ -43,11 +42,7 @@ static void fl2000_intr_completion(struct urb *urb)
 			fl2000_intr_release, NULL, NULL);
 
 	INIT_WORK(&intr->work, &fl2000_intr_work);
-
 	queue_work(intr->work_queue, &intr->work);
-
-	if (!intr->intr_enable)
-		return;
 
 	/* Restart urb */
 	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
@@ -60,45 +55,12 @@ static void fl2000_intr_completion(struct urb *urb)
 }
 
 /**
- * fl2000_intr_start() - start checking for interrupt events
- * @usb_dev:	USB device to operate on
- *
- * Send URB to interrupt endpoint to start polling. Shall be called on fully
- * initialized device.
- *
- * Return: Operation result
- */
-int fl2000_intr_start(struct usb_device *usb_dev)
-{
-	int ret = 0;
-	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
-			fl2000_intr_release, NULL, NULL);
-
-	if (!intr)
-		return -ENODEV;
-
-	intr->intr_enable = true;
-
-	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
-	if (ret) {
-		/* TODO: WTF! Signal general failure, stop driver! Except in
-		 * case of -EPERM, that means we already in progress of
-		 * stopping */
-		dev_err(&usb_dev->dev, "URB submission failed");
-	}
-
-	return ret;
-}
-
-/**
  * fl2000_intr_create() - interrupt processing context creation
  * @interface:	USB interrupt transfers interface
  *
  * This function is called only on Interrupt interface probe
  *
- * It shall not talk to HW which may not be fully initialized at this stage,
- * only make needed allocations and static configuration. It shall not initiate
- * any USB transfers.
+ * Function initiates USB Interrupt transfers
  *
  * Return: Operation result
  */
@@ -127,6 +89,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!intr->urb) {
 		dev_err(&usb_dev->dev, "Allocate interrupt URB failed");
+		devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 		return -ENOMEM;
 	}
 
@@ -135,6 +98,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 	if (!buf) {
 		dev_err(&usb_dev->dev, "Cannot allocate interrupt data");
 		usb_free_urb(intr->urb);
+		devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 		return -ENOMEM;
 	}
 
@@ -144,10 +108,9 @@ int fl2000_intr_create(struct usb_interface *interface)
 		usb_free_coherent(usb_dev, INTR_BUFSIZE, buf,
 				intr->urb->transfer_dma);
 		usb_free_urb(intr->urb);
+		devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 		return -ENOMEM;
 	}
-
-	intr->intr_enable = false;
 
 	/* Interrupt URB configuration is static, including allocated buffer
 	 * NOTE: We are setting 'transfer_dma' during coherent buffer
@@ -158,6 +121,17 @@ int fl2000_intr_create(struct usb_interface *interface)
 			desc->bInterval);
 	intr->urb->transfer_flags |=
 			URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
+
+	/* Start checking for interrupts */
+	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
+	if (ret) {
+		dev_err(&usb_dev->dev, "URB submission failed");
+		destroy_workqueue(intr->work_queue);
+		usb_free_coherent(usb_dev, INTR_BUFSIZE, buf,
+				intr->urb->transfer_dma);
+		usb_free_urb(intr->urb);
+		devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
+	}
 
 	return 0;
 }
@@ -171,14 +145,12 @@ void fl2000_intr_destroy(struct usb_interface *interface)
 	if (!intr)
 		return;
 
-	intr->intr_enable = false;
-
 	usb_poison_urb(intr->urb);
+	cancel_work_sync(&intr->work);
+
+	destroy_workqueue(intr->work_queue);
 	usb_free_coherent(usb_dev, INTR_BUFSIZE, intr->urb->transfer_buffer,
 			intr->urb->transfer_dma);
-	destroy_workqueue(intr->work_queue);
-	cancel_work_sync(&intr->work);
 	usb_free_urb(intr->urb);
-
 	devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 }
