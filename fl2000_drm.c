@@ -51,9 +51,15 @@ struct fl2000_drm_if {
 	bool vblank_enable;
 };
 
-static inline struct fl2000_drm_if *fl2000_get_drm_if(struct drm_device *drm)
+static inline struct fl2000_drm_if *fl2000_drm_to_drm_if(struct drm_device *drm)
 {
 	return container_of(drm, struct fl2000_drm_if, drm);
+}
+
+static inline struct fl2000_drm_if *fl2000_pipe_to_drm_if(
+		struct drm_simple_display_pipe *pipe)
+{
+	return container_of(pipe, struct fl2000_drm_if, pipe);
 }
 
 DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
@@ -66,17 +72,17 @@ static void fl2000_drm_release(struct drm_device *drm)
 	drm_dev_fini(drm);
 }
 
-static int fl2000_enable_vblank(struct drm_device *drm, unsigned int crtc)
+static int fl2000_enable_vblank(struct drm_simple_display_pipe *pipe)
 {
-	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
+	struct fl2000_drm_if *drm_if = fl2000_pipe_to_drm_if(pipe);
 	drm_if->vblank_enable = true;
 	return 0;
 }
 
-static void fl2000_disable_vblank(struct drm_device *drm, unsigned int crtc)
+static void fl2000_disable_vblank(struct drm_simple_display_pipe *pipe)
 {
+	struct fl2000_drm_if *drm_if = fl2000_pipe_to_drm_if(pipe);
 	/* TODO: Do we stop streaming (i.e. URB transmission)? */
-	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
 	drm_if->vblank_enable = false;
 }
 
@@ -97,9 +103,6 @@ static struct drm_driver fl2000_drm_driver = {
 	.gem_prime_get_sg_table = drm_gem_cma_prime_get_sg_table,
 	.gem_prime_vmap = drm_gem_cma_prime_vmap,
 	.gem_prime_vunmap = drm_gem_cma_prime_vunmap,
-
-        .enable_vblank = fl2000_enable_vblank,
-        .disable_vblank = fl2000_disable_vblank,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
@@ -329,6 +332,8 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.check = fl2000_display_check,
 	.update = fl2000_display_update,
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
+	.enable_vblank = fl2000_enable_vblank,
+	.disable_vblank = fl2000_disable_vblank,
 };
 
 static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
