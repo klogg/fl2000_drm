@@ -19,7 +19,8 @@ static void fl2000_stream_completion(struct urb *urb)
 	/* XXX: Maybe we need to check timings or lbuf? */
 
 	/* This can be called from interrupt context so scheduling work is not
-	 * necessary */
+	 * necessary.
+	 * TODO: Not sure if we need to check if vblanks are enabled in DRM */
 	drm_crtc_handle_vblank(urb->context);
 }
 

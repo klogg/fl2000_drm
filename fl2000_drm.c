@@ -59,7 +59,7 @@ DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
-	/* TODO: Stop all URB streaming operations */
+	/* TODO: Cancel all URB streaming operations */
 
 	drm_atomic_helper_shutdown(drm);
 	drm_mode_config_cleanup(drm);
@@ -75,6 +75,7 @@ static int fl2000_enable_vblank(struct drm_device *drm, unsigned int crtc)
 
 static void fl2000_disable_vblank(struct drm_device *drm, unsigned int crtc)
 {
+	/* TODO: Do we stop streaming (i.e. URB transmission)? */
 	struct fl2000_drm_if *drm_if = fl2000_get_drm_if(drm);
 	drm_if->vblank_enable = false;
 }
@@ -212,7 +213,6 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
 
 		fl2000_stream_frame(drm->dev_private, addr, crtc);
-
 	}
 
 	if (event) {
