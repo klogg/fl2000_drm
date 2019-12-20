@@ -495,20 +495,21 @@ void fl2000_inter_check(struct usb_device *usb_dev)
 			fl2000_drm_if_release, NULL, NULL);
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 
-	if (drm_if) {
-		/* Process interrupt */
-		ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
-		if (ret) {
-			dev_err(&usb_dev->dev, "Cannot read interrupt " \
-					"register (%d)", ret);
-		} else {
-			dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X",
-					status);
+	if (!drm_if || !regmap)
+		return;
 
-			/* TODO: This shall be called only for relevant
-			 * interrupts, others shall be processed differently */
-			drm_kms_helper_hotplug_event(&drm_if->drm);
-		}
+	/* Process interrupt */
+	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot read interrupt register (%d)",
+				ret);
+	} else {
+		dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X", status);
+
+		/* TODO: This shall be called only for relevant interrupts,
+		 * others shall be processed differently. Also need to check
+		 * if VBLANKs are enabled */
+		drm_kms_helper_hotplug_event(&drm_if->drm);
 	}
 }
 
