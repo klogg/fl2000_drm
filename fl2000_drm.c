@@ -26,7 +26,6 @@ void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 #define BPP			32
 
 int fl2000_reset(struct usb_device *usb_dev);
-int fl2000_wait(struct usb_device *usb_dev);
 
 /* List all supported bridges */
 static const char *fl2000_supported_bridges[] = {
@@ -431,7 +430,6 @@ static int fl2000_bind(struct device *master)
 	}
 
 	fl2000_reset(usb_dev);
-	fl2000_wait(usb_dev);
 
 	return 0;
 }
