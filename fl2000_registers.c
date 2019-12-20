@@ -202,23 +202,10 @@ int fl2000_reset(struct usb_device *usb_dev)
 	}
 
 	ret = regmap_field_write(reg_data->field[APP_RESET], true);
-	msleep(FL2000_HW_RST_MDELAY);
 	if (ret)
 		return -EIO;
 
-	return 0;
-}
-
-int fl2000_wait(struct usb_device *usb_dev)
-{
-	int ret;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);
-
-	if (!reg_data) {
-		dev_err(&usb_dev->dev, "Device resources not found");
-		return -ENOMEM;
-	}
+	msleep(FL2000_HW_RST_MDELAY);
 
 	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
 	if (ret)
