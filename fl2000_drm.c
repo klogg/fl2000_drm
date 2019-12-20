@@ -8,7 +8,7 @@
 
 #include "fl2000.h"
 
-int fl2000_magic(struct usb_device *usb_dev);
+int fl2000_afe_magic(struct usb_device *usb_dev);
 
 void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 		struct drm_crtc *crtc);
@@ -308,7 +308,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	vsync2.start_latency = vsync2.vstart;
 	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
 
-	fl2000_magic(usb_dev);
+	fl2000_afe_magic(usb_dev);
 
 	/* Force VGA connect to allow bridge perform its setup */
 	mask = 0;
