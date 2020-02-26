@@ -13,8 +13,20 @@ void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe);
 /* Streaming is implemented with a single URB for each frame. USB is configured
  * to send NULL URB automatically after each data URB */
 struct fl2000_stream {
+	struct hrtimer vblank_timer;
 	struct urb *urb;
 };
+
+static enum hrtimer_restart fl2000_vblank_timer(struct hrtimer *vblank_timer)
+{
+	struct fl2000_stream *stream = container_of(vblank_timer,
+			struct fl2000_stream, vblank_timer);
+
+	/* TODO: stream URB */
+
+	return HRTIMER_RESTART;
+}
+
 
 static void fl2000_stream_completion(struct urb *urb)
 {
@@ -44,6 +56,8 @@ void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 	urb = stream->urb;
 	urb->transfer_dma = addr;
 	urb->context = pipe;
+
+	/* XXX: If HRT is used for VBLANKs - hrtimer_set_expires() */
 
 	ret = usb_submit_urb(urb, GFP_KERNEL);
 	if (ret) {
@@ -100,6 +114,9 @@ int fl2000_stream_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 	devres_add(&usb_dev->dev, stream);
+
+	hrtimer_init(&stream->vblank_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	stream->vblank_timer.function = fl2000_vblank_timer;
 
 	stream->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!stream->urb) {
