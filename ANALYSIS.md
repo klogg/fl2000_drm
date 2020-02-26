@@ -1159,3 +1159,22 @@ REG WR 0x0070 : 0x04086085
 REG RD 0x0070 : 0x04086085
 REG WR 0x0070 : 0x04006085
 ```
+
+## Frame streaming
+It is not quite good to bound frame sending to some timer of host, better to use some event that signals that HW is ready ands needs data; otherwise due to accumulating erros overflows or underflows will occur. Thus, it is important to understand:
+* How URBs are returned from FL2000? Is there any FPS dependency?
+* Do I get overflow / underflow interrupts? Are they linked to waterlevels?
+
+### Tests for URB / LBUF dependencies
+1. ebable LBUF error interrupt enable
+2. configure re-sending same URB on every 'ack'
+3. send multiple URBs
+4. **check** timestamp of every URB 'ack' - does it correspond to FPS?
+5. **check** if LBUF overflow interrupt occurs?
+6. stop sending URBs
+7. **check** if LBUF underflow interrupt occurs?
+8. set LBUF high waterlevel to `(2 x frame_hight - 1)` lines
+9. set LBUF low waterlevel to `1` line
+10. send only 2 URBs
+11. **check** if LBUF overflow interrupt occurs?
+12. **check** if LBUF underflow interrupt occurs?
