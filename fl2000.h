@@ -24,6 +24,7 @@
 #include <linux/shmem_fs.h>
 #include <linux/dma-buf.h>
 #include <linux/dma-mapping.h>
+#include <linux/time.h>
 #include <drm/drmP.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_fb_helper.h>
