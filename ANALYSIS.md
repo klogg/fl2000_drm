@@ -1173,7 +1173,7 @@ It is not quite good to bound frame sending to some timer of host, better to use
 5. **check** if LBUF overflow interrupt occurs?
 6. stop sending URBs
 7. **check** if LBUF underflow interrupt occurs?
-8. set LBUF high waterlevel to `(2 x frame_hight - 1)` lines
+8. set LBUF high waterlevel to `frame_hight + 1` lines
 9. set LBUF low waterlevel to `1` line
 10. send only 2 URBs
 11. **check** if LBUF overflow interrupt occurs?
