@@ -127,7 +127,7 @@ int fl2000_stream_create(struct usb_interface *interface)
 	/* Most of stuff is static here, except 'transfer_dma' which is
 	 * different for each frame. Note that we do not set 'transfer' field */
 	usb_fill_bulk_urb(stream->urb, usb_dev,
-			usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)),
+			usb_sndbulkpipe(usb_dev, usb_endpoint_num(desc)),
 			NULL, 0, fl2000_stream_completion, NULL);
 	stream->urb->transfer_flags |=
 			URB_ZERO_PACKET | 	 /* send NULL URB after data */
