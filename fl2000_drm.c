@@ -269,6 +269,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_zero_pkt_len);
 	aclk.vga_err_int_en = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, vga_err_int_en);
+	aclk.lbuf_err_int_en = true;
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 
 	mask = 0;
@@ -307,6 +308,9 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	vsync2.vstart = (mode->vtotal - mode->vsync_start + 1);
 	vsync2.start_latency = vsync2.vstart;
 	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
+
+	regmap_write(regmap, FL2000_VGA_HI_MARK, (480+1));
+	regmap_write(regmap, FL2000_VGA_LO_MARK, 1);
 
 	fl2000_afe_magic(usb_dev);
 
@@ -493,7 +497,7 @@ static int fl2000_compare(struct device *dev, void *data)
 void fl2000_inter_check(struct usb_device *usb_dev)
 {
 	int ret;
-	u32 status;
+	fl2000_vga_status_reg status;
 	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
 			fl2000_drm_if_release, NULL, NULL);
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -502,16 +506,29 @@ void fl2000_inter_check(struct usb_device *usb_dev)
 		return;
 
 	/* Process interrupt */
-	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
+	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot read interrupt register (%d)",
 				ret);
 	} else {
-		dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X", status);
+		dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X", status.val);
 
-		/* TODO: This shall be called only for relevant interrupts,
-		 * others shall be processed differently */
-		drm_kms_helper_hotplug_event(&drm_if->drm);
+		if (status.hdmi_event || status.monitor_event ||
+				status.edid_event) {
+			drm_kms_helper_hotplug_event(&drm_if->drm);
+		}
+		if (status.lbuf_halt) {
+			dev_info(&usb_dev->dev, "!!! LBUF halt");
+			regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, (1<<20), (1<<20));
+		}
+		if (status.lbuf_overflow) {
+			dev_info(&usb_dev->dev, "!!! LBUF overflow");
+			regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, (1<<31), (1<<31));
+		}
+		if (status.lbuf_underflow) {
+			dev_info(&usb_dev->dev, "!!! LBUF underflow");
+			regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, (1<<31), (1<<31));
+		}
 	}
 }
 
