@@ -13,26 +13,49 @@ void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe);
 /* Streaming is implemented with a single URB for each frame. USB is configured
  * to send NULL URB automatically after each data URB */
 struct fl2000_stream {
+	struct work_struct work;
+	struct workqueue_struct *work_queue;
+	struct drm_simple_display_pipe *pipe;
 	struct hrtimer vblank_timer;
 	struct urb *urb;
+	int count;
 };
 
 static enum hrtimer_restart fl2000_vblank_timer(struct hrtimer *vblank_timer)
 {
-	struct fl2000_stream *stream = container_of(vblank_timer,
-			struct fl2000_stream, vblank_timer);
-
-	/* TODO: stream URB */
+	/* TODO: so what here? */
 
 	return HRTIMER_RESTART;
 }
 
+static void fl2000_stream_work(struct work_struct *work_item)
+{
+	struct fl2000_stream *stream = container_of(work_item,
+			struct fl2000_stream, work);
+	struct urb *urb = stream->urb;
+	int ret;
+
+	if (++stream->count == 1000)
+		stream->count = 0;
+
+	ret = usb_submit_urb(urb, GFP_KERNEL);
+	if (ret) {
+		stream->count = 0;
+		fl2000_handle_vblank(stream->pipe);
+	}
+}
 
 static void fl2000_stream_completion(struct urb *urb)
 {
+	struct fl2000_stream *stream = urb->context;
+
 	/* This can be called from interrupt context so scheduling work is not
 	 * necessary */
-	fl2000_handle_vblank(urb->context);
+	fl2000_handle_vblank(stream->pipe);
+
+	INIT_WORK(&stream->work, &fl2000_stream_work);
+	queue_work(stream->work_queue, &stream->work);
+
 }
 
 static void fl2000_stream_release(struct device *dev, void *res)
@@ -44,24 +67,32 @@ void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
 		struct drm_simple_display_pipe *pipe)
 {
 	int ret;
+	struct urb *urb;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
-	struct urb *urb;
-
 	if (!stream)
+		return;
+
+	/* Only first frame for tests */
+	if (stream->count)
 		return;
 
 	/* XXX: Maybe we need to check timings or lbuf? */
 
+	/* XXX: UGLY CRAP */
+	stream->pipe = pipe;
+
 	urb = stream->urb;
 	urb->transfer_dma = addr;
-	urb->context = pipe;
+	urb->context = stream;
 
 	/* XXX: If HRT is used for VBLANKs - hrtimer_set_expires() */
 
 	ret = usb_submit_urb(urb, GFP_KERNEL);
 	if (ret) {
-		fl2000_handle_vblank(urb->context);
+		fl2000_handle_vblank(pipe);
+	} else {
+		++stream->count;
 	}
 }
 
@@ -124,6 +155,8 @@ int fl2000_stream_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 
+	stream->count = 0;
+
 	/* Most of stuff is static here, except 'transfer_dma' which is
 	 * different for each frame. Note that we do not set 'transfer' field */
 	usb_fill_bulk_urb(stream->urb, usb_dev,
@@ -132,6 +165,8 @@ int fl2000_stream_create(struct usb_interface *interface)
 	stream->urb->transfer_flags |=
 			URB_ZERO_PACKET | 	 /* send NULL URB after data */
 			URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
+
+	stream->work_queue = create_workqueue("fl2000_stream");
 
 	return 0;
 }
