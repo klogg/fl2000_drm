@@ -189,6 +189,7 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 
 #define IT66121_HDMI_AV_MUTE		0x0C1
 #define IT66121_HDMI_AV_MUTE_ON		(1<<0)
+#define IT66121_HDMI_AV_MUTE_BLUE	(1<<1)
 
 #define IT66121_HDMI_BLACK_SRC		0x0C2
 #define IT66121_HDMI_OESS_PREIOD	0x0C3
