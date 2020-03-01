@@ -648,8 +648,8 @@ static void it66121_bridge_disable(struct drm_bridge *bridge)
 
 	/* Mute AV */
 	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
-			IT66121_HDMI_AV_MUTE_ON,
-			IT66121_HDMI_AV_MUTE_ON);
+			IT66121_HDMI_AV_MUTE_ON | IT66121_HDMI_AV_MUTE_BLUE,
+			IT66121_HDMI_AV_MUTE_ON | IT66121_HDMI_AV_MUTE_BLUE);
 	if (ret)
 		return;
 
