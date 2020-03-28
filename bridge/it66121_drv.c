@@ -738,15 +738,6 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		return;
 	}
 
-	/* Set TX mode to HDMI */
-	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
-			IT66121_HDMI_MODE_HDMI);
-	if (ret) {
-		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
-				"(%d)", ret);
-		return;
-	}
-
 	/* Disable TXCLK prior to configuration */
 	ret = regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
 			IT66121_SYS_TXCLK_OFF,
@@ -758,6 +749,15 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	ret = it66121_configure_input(priv);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot configure input bus " \
+				"(%d)", ret);
+		return;
+	}
+
+	/* Set TX mode to HDMI */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
+			IT66121_HDMI_MODE_HDMI);
+	if (ret) {
+		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
 				"(%d)", ret);
 		return;
 	}
