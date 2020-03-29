@@ -29,6 +29,5 @@ before_install:
 script:
    - INTERCEPTOR_LIB=`find ${TRAVIS_HOME} -name libinterceptor-x86_64.so`
    - INTERCEPTOR_LINK=`sed "s/x86_64/haswell/g"<<<"$INTERCEPTOR_LIB"`
-   - ln -s $INTERCEPTOR_LIB $INTERCEPTOR_LINK
    - build-wrapper-linux-x86-64 --out-dir bw-output make
    - sonar-scanner
