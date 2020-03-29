@@ -4,26 +4,18 @@
 
 fl2k_proto = Proto("fl2k", "FL2000 Protocol")
 
-InterfaceClass = {
-    UNKNOWN = 0xFFFF,
-    AV = 0x10,
-}
-
 TransferType = {
     INTERRUPT = 1,
     CONTROL = 2,
     BULK = 3,
 }
 
+-- XXX: Prior to pcap 1.0.5 there were 3 stages: SETUP, DATA, STATUS; now it is same as in Linux usbmon
 ControlTransferStage = {
-    SETUP = 0,
-    DATA = 1,
-    STATUS = 2,
+    SETUP = 83,
+    CONTROL = 67,
 }
 
-local f_transfer = Field.new("usb.transfer_type")
-local f_stage = Field.new("usb.control_stage")
-local f_data_len = Field.new("usb.data_len")
 local op_types = {
     [0x40] = "RD",
     [0x41] = "WR",
@@ -31,7 +23,7 @@ local op_types = {
 
 local f = fl2k_proto.fields
 -- Control related
-f.f_reg_op = ProtoField.uint8("fl2k.reg_op", "Register operation", base.HEX, op_types)
+f.f_reg_op = ProtoField.uint8("fl2k.reg_op", "Register operation", base.HEX)
 f.f_reg_addr = ProtoField.uint16("fl2k.reg_addr", "Register address", base.HEX)
 f.f_reg_value = ProtoField.uint32("fl2k.reg_value", "Register value", base.HEX)
 -- Interrupt related
@@ -39,88 +31,76 @@ f.f_irq = ProtoField.uint32("fl2k.irq", "Interrupt", base.DEC)
 -- Bulk related
 f.f_fb = ProtoField.bytes("fl2k.fb", "Framebuffer", base.SPACE)
 
-function fl2k_proto.dissector(tvb, pinfo, tree)
-    local t_fl2k = tree:add(fl2k_proto, tvb())
-    local transfer = f_transfer()
-
-    if (transfer.value == TransferType.CONTROL) then
-
-        local stage = f_stage()
-        pinfo.cols["info"]:set("FL2000 Registers")
-        if (stage.value == ControlTransferStage.SETUP) then
-            -- For future use
-            local reg_op = tvb(0, 1):uint()
-            local reg_addr = tvb(3, 2):le_uint()
-
-            t_fl2k:add(f.f_reg_op, tvb(0, 1))
-            t_fl2k:add_le(f.f_reg_addr, tvb(3, 2))
-
-            if (reg_addr == 0x8020) then
-                if (reg_op == 0x40) then
-                    pinfo.cols["info"]:append(" I2C Check")
-                else
-                    pinfo.cols["info"]:append(" I2C Operation")
-                end
-            elseif (reg_addr == 0x8024) then
-                pinfo.cols["info"]:append(" I2C Read Data")
-            elseif (reg_addr == 0x8028) then
-                pinfo.cols["info"]:append(" I2C Write Data")
-            else
-                if (reg_op == 0x40) then
-                    pinfo.cols["info"]:append(" Read")
-                else
-                    pinfo.cols["info"]:append(" Write")
-                end
-            end
-
-        elseif (stage.value == ControlTransferStage.DATA) then
-            -- For future use
-            local reg_value = tvb(0, 4):le_uint()
-
-            t_fl2k:add_le(f.f_reg_value, tvb(0, 4))
-
-        elseif (stage == ControlTransferStage.STATUS) then
-        -- Do nothing
-        end
-
-    elseif (transfer.value == TransferType.INTERRUPT) then
-        pinfo.cols["info"]:set("FL2000 Interrupt")
-        t_fl2k:add_le(f.f_irq, tvb(0, 1))
-
-    elseif (transfer.value == TransferType.BULK) then
-        pinfo.cols["info"]:set("FL2000 Data")
-        -- TODO: is it possible to parse it as image?
-        t_fl2k:add_le(f.f_fb, tvb())
-    else
-        pinfo.cols["info"]:set("FL2000 WTF???")
-    end
-end
-
-usb_control_table = DissectorTable.get("usb.control")
-usb_control_table:add(InterfaceClass.UNKNOWN, fl2k_proto)
-
-usb_interrupt_table = DissectorTable.get("usb.interrupt")
-usb_interrupt_table:add(InterfaceClass.AV, fl2k_proto)
-
-usb_bulk_table = DissectorTable.get("usb.bulk")
-usb_bulk_table:add(InterfaceClass.AV, fl2k_proto)
-
--- Here we go with Tap
-
-fl2k_tap = Listener.new("usb", "fl2k")
-
+-- Extractors list
+-- XXX: Before I've used 'control_stage' but Wireshark is a total mess with USB parsing
+local f_stage = Field.new("usb.urb_type")
+local f_transfer = Field.new("usb.transfer_type")
+local f_data_len = Field.new("usb.data_len")
+local f_frame_num = Field.new("frame.number")
 local f_reg_op = Field.new("fl2k.reg_op")
 local f_reg_addr = Field.new("fl2k.reg_addr")
 local f_reg_value = Field.new("fl2k.reg_value")
 local f_irq = Field.new("fl2k.irq")
 
-local i2c_devices = {
-    [0x4C] = "IT66121",
-}
+function fl2k_proto.dissector(tvb, pinfo, tree)
+    local t_fl2k = tree:add(fl2k_proto, tvb())
+    local transfer = f_transfer()
+    local data_len = f_data_len()
 
-local i2c_bank = {
-    ["IT66121"] = 0,
+    if (transfer.value == TransferType.CONTROL) then
+        local stage = f_stage()
+        pinfo.cols["info"]:set("FL2000 Registers")
+        if (stage.value == ControlTransferStage.SETUP) then
+            local reg_op = tvb(0, 1):uint()
+            local reg_addr = tvb(3, 2):le_uint()
+
+            t_fl2k:add_le(f.f_reg_op, tvb(0, 1))
+            t_fl2k:add_le(f.f_reg_addr, tvb(3, 2))
+            if (data_len.value ~= 0) then
+                t_fl2k:add_le(f.f_reg_value, tvb(7, 4))
+            end
+
+            pinfo.cols["info"]:append(" " .. op_types[reg_op])
+        elseif (stage.value == ControlTransferStage.CONTROL) then
+            if (data_len.value ~= 0) then
+                t_fl2k:add_le(f.f_reg_value, tvb(0, 4))
+            end
+        else
+            pinfo.cols["info"]:set("Unparsed operation")
+        end
+
+    elseif (transfer.value == TransferType.INTERRUPT) then
+        pinfo.cols["info"]:set("FL2000 Interrupt")
+        t_fl2k:add_le(f.f_irq, tvb(0, 1))
+    elseif (transfer.value == TransferType.BULK) then
+        pinfo.cols["info"]:set("FL2000 Data")
+        -- TODO: is it possible to parse it as image?
+        t_fl2k:add_le(f.f_fb, tvb())
+    else
+        pinfo.cols["info"]:set("Unknown transfer")
+    end
+end
+
+-- Register dissector with FL2000 / FrescoLogic IDs
+ProductID = 0x1d5c2000
+usb_product_table = DissectorTable.get("usb.product")
+usb_product_table:add(ProductID, fl2k_proto)
+
+-- XXX: It seems that 'usb.product' table does not always work. Keep option to register for interface tables 
+--[[
+InterfaceClass = {
+    UNKNOWN = 0xFFFF,
+    AV = 0x10,
 }
+usb_control_table = DissectorTable.get("usb.control")
+usb_control_table:add(InterfaceClass.UNKNOWN, fl2k_proto)
+usb_interrupt_table = DissectorTable.get("usb.interrupt")
+usb_interrupt_table:add(InterfaceClass.AV, fl2k_proto)
+usb_bulk_table = DissectorTable.get("usb.bulk")
+usb_bulk_table:add(InterfaceClass.AV, fl2k_proto)
+--]]
+
+-- Here we go with Tap
 
 I2C_STATE = {
     IDLE = 0,
@@ -144,6 +124,10 @@ local op_i2c_start_idx = 0
 
 local regs = {}     -- count register access statistics
 
+local i2c_bank = {
+    ["IT66121"] = 0,
+}
+
 local function check_i2c_bank(i2c_device, reg_addr, reg_value)
     if (i2c_device == "IT66121" and reg_addr == 0x0C) then
         if (bit.band(reg_value, 0x01000000) ~= 0) then
@@ -160,7 +144,7 @@ local function count_i2c_regs(i2c_device, reg_addr, reg_op)
         i2c_regs[i2c_device] = {}
     end
     if not i2c_regs[i2c_device][reg_addr] then
-        i2c_regs[i2c_device][reg_addr] = {}
+        i2c_regs[i2c_device][reg_addr] = {["RD"] = 0, ["WR"] = 0}
     end
     if not i2c_regs[i2c_device][reg_addr][reg_op] then
         i2c_regs[i2c_device][reg_addr][reg_op] = 1
@@ -171,6 +155,9 @@ end
 
 local function analyze_i2c(op)
     local ret
+    local i2c_devices = {
+        [0x4C] = "IT66121",
+    }
     local i2c_done = bit.band(op.reg_value, 0x80000000)
     if op.reg_addr == 0x8020 and op.reg_op == "RD" then
         if i2c_state == I2C_STATE.IDLE and i2c_done ~= 0 then
@@ -230,7 +217,7 @@ end
 
 local function count_regs(reg_addr, reg_op)
     if not regs[reg_addr] then
-        regs[reg_addr] = {}
+        regs[reg_addr] = {["RD"] = 0, ["WR"] = 0}
     end
     if not regs[reg_addr][reg_op] then
         regs[reg_addr][reg_op] = 1
@@ -239,23 +226,25 @@ local function count_regs(reg_addr, reg_op)
     end
 end
 
-local function log_ops_setup(reg_addr, reg_op)
+local function log_ops_setup(frame_num, reg_addr, reg_op)
     ops[op_idx] = {}
+    ops[op_idx].num = frame_num
     ops[op_idx].type = TransferType.CONTROL
     ops[op_idx].reg_op = reg_op
     ops[op_idx].reg_addr = reg_addr
+    count_regs(reg_addr, reg_op)
 end
 
 local function log_ops_data(reg_value)
     local is_i2c
     ops[op_idx].reg_value = reg_value
-    is_i2c = analyze_i2c(ops[op_idx])
     ops[op_idx].i2c = nil
-    if is_i2c == 0 then -- start detected
+    is_i2c = analyze_i2c(ops[op_idx])
+    if (is_i2c == 0) then -- start detected
         op_i2c_start_idx = op_idx
-    elseif is_i2c ~= nil then -- finish detected
+    elseif (is_i2c ~= nil) then -- finish detected
         local i = op_idx
-        while i >= op_i2c_start_idx do
+        while (i >= op_i2c_start_idx) do
              ops[i].i2c = is_i2c
              i = i - 1
         end
@@ -263,15 +252,17 @@ local function log_ops_data(reg_value)
     op_idx = op_idx + 1
 end
 
-local function log_ops_interrupt(intr_data)
+local function log_ops_interrupt(frame_num, intr_data)
     ops[op_idx] = {}
+    ops[op_idx].num = frame_num
     ops[op_idx].type = TransferType.INTERRUPT
     ops[op_idx].intr_data = intr_data
     op_idx = op_idx + 1
 end
 
-local function log_ops_bulk(fb_size)
+local function log_ops_bulk(frame_num, fb_size)
     ops[op_idx] = {}
+    ops[op_idx].num = frame_num
     ops[op_idx].type = TransferType.BULK
     ops[op_idx].fb_size = fb_size
     op_idx = op_idx + 1
@@ -279,6 +270,9 @@ end
 
 local function sort_table(s_table)
     local ordered_keys = {}
+    if s_table == nil then
+        return {}
+    end
     for k in pairs(s_table) do
         table.insert(ordered_keys, k)
     end
@@ -286,57 +280,110 @@ local function sort_table(s_table)
     return ordered_keys
 end
 
-function fl2k_tap.packet(pinfo, tvb, tapinfo)
-    local transfer = f_transfer()
-    if (transfer.value == TransferType.CONTROL) then
-        local stage = f_stage()
-        if (stage.value == ControlTransferStage.SETUP) then
-            local reg_addr = f_reg_addr().value
-            local reg_op = op_types[f_reg_op().value]
-            log_ops_setup(reg_addr, reg_op)
-            count_regs(reg_addr, reg_op)
-        elseif (stage.value == ControlTransferStage.DATA) then
-            local reg_value = f_reg_value().value
-            log_ops_data(reg_value)
-        end
-    elseif (transfer.value == TransferType.INTERRUPT) then
-        local intr_data = f_irq().value
-        log_ops_interrupt(intr_data)
-    elseif (transfer.value == TransferType.BULK) then
-        local fb_size = f_data_len().value
-        log_ops_bulk(fb_size)
+local function reg_stats()
+    local win = TextWindow.new("FL2000 Register Statistics")
+    local ordered_keys = sort_table(regs)
+    win:clear()
+    win:append("Register address\tRD\tWR\n")
+    for i = 1, #ordered_keys do
+        win:append(string.format("0x%04X\t\t%d\t%d\n", ordered_keys[i], regs[ordered_keys[i]]["RD"], regs[ordered_keys[i]]["WR"]))
     end
 end
 
-function fl2k_tap.draw()
-    local ordered_keys = {}
-    print ("========= FL2000 register Statistics =========")
-    ordered_keys = sort_table(regs)
+local function i2c_stats(device_id)
+    local win = TextWindow.new(device_id .. " Register Statistics")
+    local ordered_keys = sort_table(i2c_regs[device_id])
+    win:clear()
+    win:append("Register address\tRD\tWR\n")
     for i = 1, #ordered_keys do
-        print(string.format("0x%04X", ordered_keys[i]), regs[ordered_keys[i]]["RD"], regs[ordered_keys[i]]["WR"])
-    end
-    print ("========= IT66121 register Statistics =========")
-    ordered_keys = sort_table(i2c_regs["IT66121"])
-    for i = 1, #ordered_keys do
-        print(string.format("0x%02X", ordered_keys[i]), i2c_regs["IT66121"][ordered_keys[i]]["RD"], i2c_regs["IT66121"][ordered_keys[i]]["WR"])
-    end
-    print ("=========== Operations list ===========")
-    op_idx = 1
-    i2c_idx = nil
-    while (ops[op_idx])
-    do
-        if ops[op_idx].type == TransferType.CONTROL then
-            if (ops[op_idx].i2c == nil) then -- this is pure reg operation
-                print(string.format("REG %s 0x%04X : 0x%08X", ops[op_idx].reg_op, ops[op_idx].reg_addr, ops[op_idx].reg_value))
-            elseif (ops[op_idx].i2c ~= i2c_idx) then -- this is an i2c operation
-                i2c_idx = ops[op_idx].i2c
-                print(string.format("%s %s: 0x%02X : 0x%08X", i2c[i2c_idx].i2c_op, i2c[i2c_idx].i2c_device, i2c[i2c_idx].i2c_offset, i2c[i2c_idx].i2c_data))
-            end
-        elseif ops[op_idx].type == TransferType.INTERRUPT then
-            print("INTERRUPT", ops[op_idx].intr_data)
-        elseif ops[op_idx].type == TransferType.BULK then
-            print("FRAME", ops[op_idx].fb_size)
-        end
-        op_idx = op_idx + 1
+        win:append(string.format("0x%03X\t\t%d\t%d\n", ordered_keys[i], i2c_regs[device_id][ordered_keys[i]]["RD"], i2c_regs[device_id][ordered_keys[i]]["WR"]))
     end
 end
+
+local function menuable_tap()
+    if not gui_enabled() then return end
+
+    local win = TextWindow.new("Operations")
+
+    -- XXX: When was registering Listener for "usb" some packets were not captured
+    local fl2k_tap = Listener.new(nil, "fl2k")
+
+    local function remove()
+        -- this way we remove the listener that otherwise will remain running indefinitely
+        fl2k_tap:remove();
+    end
+
+    -- we tell the window to call the remove() function when closed
+    win:set_atclose(remove)
+
+    -- this function will be called whenever a reset is needed
+    -- e.g. when reloading the capture file
+    function fl2k_tap.reset()
+        win:clear()
+
+        i2c_state = I2C_STATE.IDLE
+        i2c = {}
+        i2c_idx = 1
+
+        i2c_regs = {}
+
+        ops = {}
+        op_idx = 1
+        op_i2c_start_idx = 0
+    end
+
+    function fl2k_tap.packet(pinfo, tvb, tapinfo)
+        local transfer = f_transfer().value
+        local frame_num = f_frame_num().value
+        if (transfer == TransferType.CONTROL) then
+            local stage = f_stage().value
+            local data_len = f_data_len().value
+            if (stage == ControlTransferStage.SETUP) then
+                local reg_addr = f_reg_addr().value
+                local reg_op = op_types[f_reg_op().value]
+                log_ops_setup(frame_num, reg_addr, reg_op)
+            end
+            if (data_len ~= 0) then
+                local reg_value = f_reg_value().value
+                log_ops_data(reg_value)
+            end
+        elseif (transfer == TransferType.INTERRUPT) then
+            local intr_data = f_irq().value
+            log_ops_interrupt(frame_num, intr_data)
+        elseif (transfer == TransferType.BULK) then
+            local fb_size = f_data_len().value
+            log_ops_bulk(frame_num, fb_size)
+        end
+    end
+
+    function fl2k_tap.draw()
+        local draw_op_idx = 1
+        local draw_i2c_idx = nil
+        win:clear()
+        while (ops[draw_op_idx])
+        do
+            if ops[draw_op_idx].type == TransferType.CONTROL then
+                if (ops[draw_op_idx].i2c == nil) then -- this is pure reg operation
+                    win:append(string.format("[%06d] REG %s 0x%04X : 0x%08X\n", ops[draw_op_idx].num, ops[draw_op_idx].reg_op, ops[draw_op_idx].reg_addr, ops[draw_op_idx].reg_value))
+                elseif (ops[draw_op_idx].i2c ~= draw_i2c_idx) then -- this is a new i2c operation
+                    draw_i2c_idx = ops[draw_op_idx].i2c
+                    win:append(string.format("[%06d] %s %s: 0x%02X : 0x%08X\n", ops[draw_op_idx].num, i2c[draw_i2c_idx].i2c_op, i2c[draw_i2c_idx].i2c_device, i2c[draw_i2c_idx].i2c_offset, i2c[draw_i2c_idx].i2c_data))
+                end
+            elseif ops[draw_op_idx].type == TransferType.INTERRUPT then
+                win:append(string.format("[%06d] Interrupt - status 0x%04X\n", ops[draw_op_idx].num, ops[draw_op_idx].intr_data))
+            elseif ops[draw_op_idx].type == TransferType.BULK then
+                win:append(string.format("[%06d] Data Frame - size %d\n", ops[draw_op_idx].num, ops[draw_op_idx].fb_size))
+            end
+            draw_op_idx = draw_op_idx + 1
+        end
+        win:add_button("FL2000 Register Statistics", function() reg_stats() end)
+        win:add_button("IT66121 Register Statistics", function() i2c_stats("IT66121") end)
+    end
+
+    -- Ensure that all existing packets are processed.
+    retap_packets()
+end
+
+-- using this function we register our function
+-- to be called when the user selects the Tools->Test->Packets menu
+register_menu("FL2000 Analysis", menuable_tap, MENU_TOOLS_UNSORTED)
