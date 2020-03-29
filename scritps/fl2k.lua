@@ -10,12 +10,6 @@ TransferType = {
     BULK = 3,
 }
 
--- XXX: Prior to pcap 1.0.5 there were 3 stages: SETUP, DATA, STATUS; now it is same as in Linux usbmon
-ControlTransferStage = {
-    SETUP = 83,
-    CONTROL = 67,
-}
-
 local op_types = {
     [0x40] = "RD",
     [0x41] = "WR",
@@ -32,41 +26,56 @@ f.f_irq = ProtoField.uint32("fl2k.irq", "Interrupt", base.DEC)
 f.f_fb = ProtoField.bytes("fl2k.fb", "Framebuffer", base.SPACE)
 
 -- Extractors list
--- XXX: Before I've used 'control_stage' but Wireshark is a total mess with USB parsing
-local f_stage = Field.new("usb.urb_type")
+-- XXX: urb_type on Linux and control_stage on Windows
+local f_urb_type = Field.new("usb.urb_type")
+local f_control_stage = Field.new("usb.control_stage")
 local f_transfer = Field.new("usb.transfer_type")
-local f_data_len = Field.new("usb.data_len")
 local f_frame_num = Field.new("frame.number")
 local f_reg_op = Field.new("fl2k.reg_op")
 local f_reg_addr = Field.new("fl2k.reg_addr")
 local f_reg_value = Field.new("fl2k.reg_value")
 local f_irq = Field.new("fl2k.irq")
+local f_data_len = Field.new("usb.data_len")
+
+function f_stage()
+    local ControlURBType = {
+        [83] = "SETUP",
+        [67] = "CONTROL",
+    }
+    local ControlTransferStage = {
+        [0] = "SETUP",
+        [3] = "CONTROL",
+    }
+    local urb_type = f_urb_type()
+    local control_stage = f_control_stage()
+    if (urb_type) then
+        return ControlURBType[urb_type.value]
+    elseif (control_stage) then
+        return ControlTransferStage[control_stage.value]
+    end
+end
 
 function fl2k_proto.dissector(tvb, pinfo, tree)
     local t_fl2k = tree:add(fl2k_proto, tvb())
     local transfer = f_transfer()
-    local data_len = f_data_len()
 
     if (transfer.value == TransferType.CONTROL) then
-        local stage = f_stage()
         pinfo.cols["info"]:set("FL2000 Registers")
-        if (stage.value == ControlTransferStage.SETUP) then
+        if (f_stage() == "SETUP") then
             local reg_op = tvb(0, 1):uint()
             local reg_addr = tvb(3, 2):le_uint()
 
             t_fl2k:add_le(f.f_reg_op, tvb(0, 1))
             t_fl2k:add_le(f.f_reg_addr, tvb(3, 2))
-            if (data_len.value ~= 0) then
-                t_fl2k:add_le(f.f_reg_value, tvb(7, 4))
-            end
 
             pinfo.cols["info"]:append(" " .. op_types[reg_op])
-        elseif (stage.value == ControlTransferStage.CONTROL) then
-            if (data_len.value ~= 0) then
+            if (op_types[reg_op] == "WR") then
+                t_fl2k:add_le(f.f_reg_value, tvb(7, 4))
+            end
+        elseif (f_stage() == "CONTROL") then
+            if (f_data_len().value > 0) then 
                 t_fl2k:add_le(f.f_reg_value, tvb(0, 4))
             end
-        else
-            pinfo.cols["info"]:set("Unparsed operation")
         end
 
     elseif (transfer.value == TransferType.INTERRUPT) then
@@ -128,8 +137,8 @@ local i2c_bank = {
     ["IT66121"] = 0,
 }
 
-local function check_i2c_bank(i2c_device, reg_addr, reg_value)
-    if (i2c_device == "IT66121" and reg_addr == 0x0C) then
+local function check_i2c_bank(i2c_device, i2c_offset, reg_value)
+    if (i2c_device == "IT66121" and (i2c_offset == 0x00C or i2c_offset == 0x10C)) then
         if (bit.band(reg_value, 0x01000000) ~= 0) then
             i2c_bank["IT66121"] = 0x100
         else
@@ -138,18 +147,17 @@ local function check_i2c_bank(i2c_device, reg_addr, reg_value)
     end
 end
 
-local function count_i2c_regs(i2c_device, reg_addr, reg_op)
-    reg_addr = reg_addr + i2c_bank[i2c_device]
+local function count_i2c_regs(i2c_device, i2c_offset, reg_op)
     if not i2c_regs[i2c_device] then
         i2c_regs[i2c_device] = {}
     end
-    if not i2c_regs[i2c_device][reg_addr] then
-        i2c_regs[i2c_device][reg_addr] = {["RD"] = 0, ["WR"] = 0}
+    if not i2c_regs[i2c_device][i2c_offset] then
+        i2c_regs[i2c_device][i2c_offset] = {["RD"] = 0, ["WR"] = 0}
     end
-    if not i2c_regs[i2c_device][reg_addr][reg_op] then
-        i2c_regs[i2c_device][reg_addr][reg_op] = 1
+    if not i2c_regs[i2c_device][i2c_offset][reg_op] then
+        i2c_regs[i2c_device][i2c_offset][reg_op] = 1
     else
-        i2c_regs[i2c_device][reg_addr][reg_op] = i2c_regs[i2c_device][reg_addr][reg_op] + 1
+        i2c_regs[i2c_device][i2c_offset][reg_op] = i2c_regs[i2c_device][i2c_offset][reg_op] + 1
     end
 end
 
@@ -180,22 +188,23 @@ local function analyze_i2c(op)
             i2c_state = I2C_STATE.IDLE
         end
     elseif op.reg_addr == 0x8020 and op.reg_op == "WR" then
-        local i2c_address = i2c_devices[bit.band(op.reg_value, 0x7F)]
+        local i2c_device = i2c_devices[bit.band(op.reg_value, 0x7F)]
         local i2c_op = bit.band(bit.rshift(op.reg_value, 7), 0x01)
-        local i2c_offset = bit.band(bit.rshift(op.reg_value, 8), 0xFF)
+        local i2c_offset = bit.band(bit.rshift(op.reg_value, 8), 0xFF) + i2c_bank[i2c_device]
         if i2c_state == I2C_STATE.READ1 and i2c_op == 1 then
             i2c[i2c_idx].i2c_op = "I2C RD"
-            i2c[i2c_idx].i2c_device = i2c_address
+            i2c[i2c_idx].i2c_device = i2c_device
             i2c[i2c_idx].i2c_offset = i2c_offset
             i2c_state = I2C_STATE.READ2
-            count_i2c_regs(i2c_address, i2c_offset, "RD")
+            count_i2c_regs(i2c_device, i2c_offset, "RD")
         elseif i2c_state == I2C_STATE.WRITE2 and i2c_op == 0 then
             i2c[i2c_idx].i2c_op = "I2C WR"
-            i2c[i2c_idx].i2c_device = i2c_address
+            i2c[i2c_idx].i2c_device = i2c_device
             i2c[i2c_idx].i2c_offset = i2c_offset
             i2c_state = I2C_STATE.WRITE3
-            check_i2c_bank(i2c_address, i2c_offset, i2c[i2c_idx].i2c_data)
-            count_i2c_regs(i2c_address, i2c_offset, "WR")
+            count_i2c_regs(i2c_device, i2c_offset, "WR")
+            -- Check if we actually switch bank now
+            check_i2c_bank(i2c_device, i2c_offset, i2c[i2c_idx].i2c_data)
         else
             i2c_state = I2C_STATE.IDLE
         end
@@ -336,16 +345,20 @@ local function menuable_tap()
         local transfer = f_transfer().value
         local frame_num = f_frame_num().value
         if (transfer == TransferType.CONTROL) then
-            local stage = f_stage().value
             local data_len = f_data_len().value
-            if (stage == ControlTransferStage.SETUP) then
+            if (f_stage() == "SETUP") then
                 local reg_addr = f_reg_addr().value
                 local reg_op = op_types[f_reg_op().value]
                 log_ops_setup(frame_num, reg_addr, reg_op)
-            end
-            if (data_len ~= 0) then
-                local reg_value = f_reg_value().value
-                log_ops_data(reg_value)
+                if (reg_op == "WR") then
+                    local reg_value = f_reg_value().value
+                    log_ops_data(reg_value)
+                end
+            elseif (f_stage() == "CONTROL") then
+                if (f_data_len().value > 0) then 
+                    local reg_value = f_reg_value().value
+                    log_ops_data(reg_value)
+                end
             end
         elseif (transfer == TransferType.INTERRUPT) then
             local intr_data = f_irq().value
@@ -367,7 +380,7 @@ local function menuable_tap()
                     win:append(string.format("[%06d] REG %s 0x%04X : 0x%08X\n", ops[draw_op_idx].num, ops[draw_op_idx].reg_op, ops[draw_op_idx].reg_addr, ops[draw_op_idx].reg_value))
                 elseif (ops[draw_op_idx].i2c ~= draw_i2c_idx) then -- this is a new i2c operation
                     draw_i2c_idx = ops[draw_op_idx].i2c
-                    win:append(string.format("[%06d] %s %s: 0x%02X : 0x%08X\n", ops[draw_op_idx].num, i2c[draw_i2c_idx].i2c_op, i2c[draw_i2c_idx].i2c_device, i2c[draw_i2c_idx].i2c_offset, i2c[draw_i2c_idx].i2c_data))
+                    win:append(string.format("[%06d] %s %s: 0x%03X : 0x%08X\n", ops[draw_op_idx].num, i2c[draw_i2c_idx].i2c_op, i2c[draw_i2c_idx].i2c_device, i2c[draw_i2c_idx].i2c_offset, i2c[draw_i2c_idx].i2c_data))
                 end
             elseif ops[draw_op_idx].type == TransferType.INTERRUPT then
                 win:append(string.format("[%06d] Interrupt - status 0x%04X\n", ops[draw_op_idx].num, ops[draw_op_idx].intr_data))
