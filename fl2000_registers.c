@@ -80,7 +80,7 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 
 	*val = *data;
 
-	dev_dbg(&usb_dev->dev, "RD: 0x%04X - 0x%08X", reg, *data);
+	//dev_dbg(&usb_dev->dev, "RD: 0x%04X - 0x%08X", reg, *data);
 
 	kfree(data);
 	return ret;
@@ -98,7 +98,7 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 
 	*data = val;
 
-	dev_dbg(&usb_dev->dev, "WR: 0x%04X - 0x%08X", reg, *data);
+	//dev_dbg(&usb_dev->dev, "WR: 0x%04X - 0x%08X", reg, *data);
 
 	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
 			CONTROL_MSG_WRITE, (USB_DIR_OUT | USB_TYPE_VENDOR), 0,
@@ -235,6 +235,26 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 	return 0;
 }
 
+int fl2000_usb_magic(struct usb_device *usb_dev)
+{
+	int ret;
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
+			fl2000_reg_data_release, NULL, NULL);;
+
+	/* TODO: Move this to regmap default configuration values array */
+	ret = regmap_field_write(reg_data->field[U1_REJECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[U2_REJECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[WAKE_NRDY], false);
+	if (ret)
+		return -EIO;
+
+	return 0;
+}
+
 int fl2000_regmap_init(struct usb_device *usb_dev)
 {
 	int i, ret;
@@ -272,18 +292,10 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 		}
 	}
 
-	/* TODO: Move this to regmap default configuration values array */
-	ret = regmap_field_write(reg_data->field[U1_REJECT], true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(reg_data->field[U2_REJECT], true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(reg_data->field[WAKE_NRDY], false);
-	if (ret)
-		return -EIO;
-
 	fl2000_debugfs_reg_init(reg_data);
+
+	fl2000_reset(usb_dev);
+	fl2000_usb_magic(usb_dev);
 
 	dev_info(&usb_dev->dev, "Configured FL2000 registers");
 	return 0;

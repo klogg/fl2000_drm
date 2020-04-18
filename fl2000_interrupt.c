@@ -13,6 +13,7 @@ void fl2000_inter_check(struct usb_device *usb_dev);
 #define INTR_BUFSIZE	1
 
 struct fl2000_intr {
+	u8 poll_interval;
 	struct urb *urb;
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
@@ -43,6 +44,11 @@ static void fl2000_intr_completion(struct urb *urb)
 
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 	queue_work(intr->work_queue, &intr->work);
+
+	/* For interrupt URBs, as part of successful URB submission
+	 * urb->interval is modified to reflect the actual transfer period used,
+	 * so we need to restore it */
+	intr->urb->interval = intr->poll_interval;
 
 	/* Restart urb */
 	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
@@ -75,8 +81,10 @@ int fl2000_intr_create(struct usb_interface *interface)
 	/* There's only one altsetting (#0) and one endpoint (#3) in the
 	 * interrupt interface (#2) but lets try and "find" it anyway */
 	ret = usb_find_int_in_endpoint(interface->cur_altsetting, &desc);
-	if (ret)
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot find interrupt endpoint");
 		return ret;
+	}
 
 	intr = devres_alloc(&fl2000_intr_release, sizeof(*intr), GFP_KERNEL);
 	if (!intr) {
@@ -85,6 +93,9 @@ int fl2000_intr_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 	devres_add(&usb_dev->dev, intr);
+
+	/* TODO: Do we need a different interval? */
+	intr->poll_interval = desc->bInterval;
 
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!intr->urb) {
@@ -118,7 +129,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 	usb_fill_int_urb(intr->urb, usb_dev,
 			usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)),
 			buf, INTR_BUFSIZE, fl2000_intr_completion, intr,
-			desc->bInterval);
+			intr->poll_interval);
 	intr->urb->transfer_flags |=
 			URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
 
@@ -132,6 +143,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 		usb_free_urb(intr->urb);
 		devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 	}
+
+	dev_info(&usb_dev->dev, "Interrupt interface up");
 
 	return 0;
 }
