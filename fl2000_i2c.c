@@ -219,8 +219,8 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 
 		msgs[1].buf[0] = data.b[idx];
 
-		dev_dbg(&adapter->dev, "I2C RD: 0x%02X - 0x%02X", offset + idx,
-				data.b[idx]);
+		//dev_dbg(&adapter->dev, "I2C RD: 0x%02X - 0x%02X", offset + idx,
+		//		data.b[idx]);
 	} else {
 		/* Since FL2000 i2c bus implementation always operates with
 		 * 4-byte messages, we need to read before write in order not to
@@ -236,8 +236,8 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 		if (ret)
 			return ret;
 
-		dev_dbg(&adapter->dev, "I2C WR: 0x%02X - 0x%02X", offset + idx,
-				data.b[idx]);
+		//dev_dbg(&adapter->dev, "I2C WR: 0x%02X - 0x%02X", offset + idx,
+		//		data.b[idx]);
 	}
 
 	return num;

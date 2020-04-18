@@ -10,9 +10,11 @@
 
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
-void fl2000_stream_frame(struct usb_device *usb_dev, dma_addr_t addr,
-		struct drm_simple_display_pipe *pipe);
-void fl2000_stream_cancel(struct usb_device *usb_dev);
+int fl2000_stream_mode_set(struct usb_device *usb_dev);
+void fl2000_stream_update(struct usb_device *usb_dev, dma_addr_t addr,
+		size_t fb_size, struct drm_simple_display_pipe *pipe);
+int fl2000_stream_enable(struct usb_device *usb_dev);
+void fl2000_stream_disable(struct usb_device *usb_dev);
 
 #define DRM_DRIVER_NAME		"fl2000_drm"
 #define DRM_DRIVER_DESC		"USB-HDMI"
@@ -48,7 +50,6 @@ static const u32 fl2000_pixel_formats[] = {
 struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
-	bool vblank_enabled;
 };
 
 static inline struct fl2000_drm_if *fl2000_drm_to_drm_if(struct drm_device *drm)
@@ -66,23 +67,9 @@ DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
-	fl2000_stream_cancel(drm->dev_private);
 	drm_atomic_helper_shutdown(drm);
 	drm_mode_config_cleanup(drm);
 	drm_dev_fini(drm);
-}
-
-static int fl2000_enable_vblank(struct drm_simple_display_pipe *pipe)
-{
-	struct fl2000_drm_if *drm_if = fl2000_pipe_to_drm_if(pipe);
-	drm_if->vblank_enabled = true;
-	return 0;
-}
-
-static void fl2000_disable_vblank(struct drm_simple_display_pipe *pipe)
-{
-	struct fl2000_drm_if *drm_if = fl2000_pipe_to_drm_if(pipe);
-	drm_if->vblank_enabled = false;
 }
 
 static struct drm_driver fl2000_drm_driver = {
@@ -121,7 +108,7 @@ static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
 	.atomic_commit = drm_atomic_helper_commit,
 };
 
-static enum drm_mode_status fl2000_mode_valid(struct drm_crtc *crtc,
+static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
 		const struct drm_display_mode *mode)
 {
 	struct drm_device *drm = crtc->dev;
@@ -129,8 +116,7 @@ static enum drm_mode_status fl2000_mode_valid(struct drm_crtc *crtc,
 	dev_info(drm->dev, "DRM mode validation: "DRM_MODE_FMT,
 			DRM_MODE_ARG(mode));
 
-	/* TODO: check mode against USB bulk endpoint bandwidth and other FL2000
-	 * HW limitations*/
+	/* TODO: check mode USB bandwidth and other FL2000 HW limitations*/
 
 	return MODE_OK;
 }
@@ -141,23 +127,10 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
-	struct usb_device *usb_dev = drm->dev_private;
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
-	u32 mask;
 
 	dev_info(drm->dev, "fl2000_display_enable");
 
-	if (IS_ERR(regmap)) {
-		dev_err(drm->dev, "Cannot find regmap (%ld)", PTR_ERR(regmap));
-		return;
-	}
-
-	/* Disable forcing VGA connect */
-	mask = 0;
-	aclk.force_vga_connect = false;
-	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+	/* TODO: Kick off ISO queue */
 
 	drm_crtc_vblank_on(crtc);
 }
@@ -169,9 +142,9 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 
 	dev_info(drm->dev, "fl2000_display_disable");
 
-	drm_crtc_vblank_off(crtc);
+	/* TODO: Stop ISO queue */
 
-	/* TODO: disable HW */
+	drm_crtc_vblank_off(crtc);
 }
 
 static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
@@ -213,7 +186,9 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	if (fb) {
 		/* We support only RGB pixel formats, so only #0 */
 		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
-		fl2000_stream_frame(drm->dev_private, addr, pipe);
+		size_t fb_size = fb->format->cpp[0] * fb->height * fb->width;
+
+		fl2000_stream_update(drm->dev_private, addr, fb_size, pipe);
 	}
 
 	if (event) {
@@ -228,7 +203,17 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	}
 }
 
-static void fl2000_mode_set(struct drm_encoder *encoder,
+/* Logical pipe management (no HW configuration here) */
+static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
+	.mode_valid = fl2000_display_mode_valid,
+	.enable = fl2000_display_enable,
+	.disable = fl2000_display_disable,
+	.check = fl2000_display_check,
+	.update = fl2000_display_update,
+	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
+};
+
+static void fl2000_output_mode_set(struct drm_encoder *encoder,
 		 struct drm_display_mode *mode,
 		 struct drm_display_mode *adjusted_mode)
 {
@@ -245,7 +230,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	fl2000_vga_isoch_reg isoch = {.val = 0};
 	u32 mask;
 
-	dev_info(drm->dev, "fl2000_mode_set");
+	dev_info(drm->dev, "fl2000_output_mode_set");
 
 	mask = 0;
 	aclk.force_pll_up = true;
@@ -254,7 +239,7 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 
 	/* TODO: Calculate PLL settings */
 	pll.val = 0x0020410A; // 32MHz
-	regmap_write(regmap, FL2000_VGA_HSYNC_REG1, hsync1.val);
+	regmap_write(regmap, FL2000_VGA_PLL_REG, pll.val);
 
 	/* TODO: Reset FL2000 and read back PLL settings for validation */
 
@@ -319,27 +304,51 @@ static void fl2000_mode_set(struct drm_encoder *encoder,
 	aclk.force_vga_connect = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	fl2000_stream_mode_set(usb_dev);
 }
 
-/* It is assumed that FL2000 has bridge either connected to its DPI or
- * implementing analog D-SUB frontend. In this case initialization flow:
- *  1. fl2k mode_set
- *  2. bridge mode_set
- *  3. fl2k enable
- *  4. bridge enable */
-static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
-	.mode_valid = fl2000_mode_valid,
-	.enable = fl2000_display_enable,
-	.disable = fl2000_display_disable,
-	.check = fl2000_display_check,
-	.update = fl2000_display_update,
-	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
-	.enable_vblank = fl2000_enable_vblank,
-	.disable_vblank = fl2000_disable_vblank,
-};
+static void fl2000_output_enable(struct drm_encoder *encoder)
+{
+	struct drm_device *drm = encoder->dev;
+	struct usb_device *usb_dev = drm->dev_private;
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
+	u32 mask;
 
+	dev_info(drm->dev, "fl2000_output_enable");
+
+	if (IS_ERR(regmap)) {
+		dev_err(drm->dev, "Cannot find regmap (%ld)", PTR_ERR(regmap));
+		return;
+	}
+
+	/* Disable forcing VGA connect */
+	mask = 0;
+	aclk.force_vga_connect = false;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	fl2000_stream_enable(usb_dev);
+}
+
+static void fl2000_output_disable(struct drm_encoder *encoder)
+{
+	struct drm_device *drm = encoder->dev;
+	struct usb_device *usb_dev = drm->dev_private;
+
+	dev_info(drm->dev, "fl2000_output_disable");
+
+	/* TODO: disable HW */
+
+	fl2000_stream_disable(usb_dev);
+}
+
+/* FL2000 HW control functions: mode configuration, turn on/off */
 static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
-	.mode_set = fl2000_mode_set,
+	.mode_set = fl2000_output_mode_set,
+	.enable = fl2000_output_enable,
+	.disable = fl2000_output_disable,
 };
 
 static void fl2000_drm_if_release(struct device *dev, void *res)
@@ -415,6 +424,7 @@ static int fl2000_bind(struct device *master)
 
 	drm_mode_config_reset(drm);
 
+	dev_info(master, "drm_vblank_init");
 	ret = drm_vblank_init(drm, drm->mode_config.num_crtc);
 	if (ret) {
 		dev_err(drm->dev, "Failed to initialize %d VBLANK(s) (%d)",
@@ -424,19 +434,22 @@ static int fl2000_bind(struct device *master)
 
 	drm_kms_helper_poll_init(drm);
 
+	dev_info(master, "drm_dev_register");
 	ret = drm_dev_register(drm, 0);
 	if (ret) {
 		dev_err(drm->dev, "Cannot register DRM device (%d)", ret);
 		return ret;
 	}
 
+	dev_info(master, "fl2000_reset");
+	fl2000_reset(usb_dev);
+
+	dev_info(master, "drm_fbdev_generic_setup");
 	ret = drm_fbdev_generic_setup(drm, BPP);
 	if (ret) {
 		dev_err(drm->dev, "Cannot initialize framebuffer (%d)", ret);
 		return ret;
 	}
-
-	fl2000_reset(usb_dev);
 
 	return 0;
 }
@@ -534,11 +547,9 @@ void fl2000_inter_check(struct usb_device *usb_dev)
 
 void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe)
 {
-	struct fl2000_drm_if *drm_if = fl2000_pipe_to_drm_if(pipe);
 	struct drm_crtc *crtc = &pipe->crtc;
 
-	if (drm_if->vblank_enabled)
-		drm_crtc_handle_vblank(crtc);
+	drm_crtc_handle_vblank(crtc);
 }
 
 int fl2000_drm_init(struct usb_device *usb_dev)

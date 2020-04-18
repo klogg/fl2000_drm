@@ -179,13 +179,6 @@ static int it66121_configure_afe(struct it66121_priv *priv,
 			return ret;
 	}
 
-	/* Clear reset flags */
-	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
-			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST,
-			~(IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST));
-	if (ret)
-		return ret;
-
 	/* Fire AFE */
 	ret = regmap_write(priv->regmap, IT66121_AFE_DRV_CONTROL, 0);
 	if (ret)
@@ -593,6 +586,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 
 	drm_connector_register(&priv->connector);
 
+#if 0
 	/* Start interrupts */
 	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
 			IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR |
@@ -603,6 +597,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 	queue_delayed_work(priv->work_queue, &priv->work,
 			msecs_to_jiffies(IRQ_POLL_INTRVL));
+#endif
 
 	dev_info(bridge->dev->dev, "Bridge attached");
 
@@ -738,6 +733,13 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		return;
 	}
 
+	/* Set reset flags */
+	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST,
+			(IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST | IT66121_SW_HDCP_RST));
+	if (ret)
+		return;
+
 	/* Disable TXCLK prior to configuration */
 	ret = regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
 			IT66121_SYS_TXCLK_OFF,
@@ -753,9 +755,10 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		return;
 	}
 
-	/* Set TX mode to HDMI */
+	/* Set TX mode to HDMI in DVI mode */
+	/* TODO: Why? Is this somehow read from monitor? */
 	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
-			IT66121_HDMI_MODE_HDMI);
+			IT66121_HDMI_MODE_DVI);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
 				"(%d)", ret);
@@ -768,6 +771,14 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		dev_err(bridge->dev->dev, "Cannot configure AFE (%d)", ret);
 		return;
 	}
+
+	/* Clear reset flags */
+	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST,
+			~(IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST));
+	if (ret)
+		return;
+
 
 	/* Enable TXCLK */
 	ret = regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,

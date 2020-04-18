@@ -85,5 +85,7 @@ int fl2000_avcontrol_create(struct usb_interface *interface)
 	if (ret)
 		fl2000_avcontrol_destroy(interface);
 
+	dev_info(&usb_dev->dev, "AVControl interface up");
+
 	return ret;
 }
