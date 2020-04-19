@@ -686,12 +686,12 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	 * be also DVI */
 
 	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " \
-			DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
+			DRM_MODE_FMT, DRM_MODE_ARG(mode));
 
 	hdmi_avi_infoframe_init(&priv->hdmi_avi_infoframe);
 
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
-			&priv->connector, adjusted_mode);
+			&priv->connector, mode);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot create AVI infoframe (%d)",
 				ret);
@@ -758,7 +758,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	/* Set TX mode to HDMI in DVI mode */
 	/* TODO: Why? Is this somehow read from monitor? */
 	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
-			IT66121_HDMI_MODE_DVI);
+			IT66121_HDMI_MODE_HDMI);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
 				"(%d)", ret);
@@ -766,7 +766,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	}
 
 	/* Configure AFE */
-	ret = it66121_configure_afe(priv, adjusted_mode);
+	ret = it66121_configure_afe(priv, mode);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot configure AFE (%d)", ret);
 		return;
