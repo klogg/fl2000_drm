@@ -274,6 +274,8 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	mask = 0;
 	isoch.mframe_cnt = 0;
 	fl2000_add_bitmask(mask, fl2000_vga_isoch_reg, mframe_cnt);
+	isoch.use_mframe_match = true;
+	fl2000_add_bitmask(mask, fl2000_vga_isoch_reg, use_mframe_match);
 	regmap_write_bits(regmap, FL2000_VGA_ISOCH_REG, mask, isoch.val);
 
 	/* Timings configuration */

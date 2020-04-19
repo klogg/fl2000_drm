@@ -22,10 +22,37 @@ void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe);
 /* Streaming is implemented with a single URB for each frame. USB is configured
  * to send NULL URB automatically after each data URB */
 struct fl2000_stream {
-	struct work_struct work;
+	struct work_struct work, fbk_work;
 	struct workqueue_struct *work_queue;
-	struct urb *urb;
+	struct urb *urb, *fbk_urb;
+	struct hrtimer timer;
 };
+
+#define FL2000_DBG_TIMEOUT   (15151515UL) // 66FPS
+enum hrtimer_restart fl2000_stream_timer(struct hrtimer *timer)
+{
+	int ret;
+	struct fl2000_stream *stream = container_of(timer,
+			struct fl2000_stream, timer);
+	struct usb_device *usb_dev;
+	struct urb *urb;
+
+	hrtimer_forward_now(timer, ktime_set(0, FL2000_DBG_TIMEOUT));
+
+	urb = stream->urb;
+
+	if (!urb)
+		return HRTIMER_NORESTART;
+
+	usb_dev = urb->dev;
+
+	ret = usb_submit_urb(urb, GFP_KERNEL);
+	if (ret) {
+		dev_err(&urb->dev->dev, "URB error %d", ret);
+	}
+
+	return HRTIMER_RESTART;
+}
 
 static void fl2000_stream_release(struct device *dev, void *res)
 {
@@ -34,48 +61,31 @@ static void fl2000_stream_release(struct device *dev, void *res)
 
 static void fl2000_stream_work(struct work_struct *work_item)
 {
-	int i, ret;
+	int ret;
 	struct fl2000_stream *stream = container_of(work_item,
 			struct fl2000_stream, work);
-	struct urb *urb;
 	struct usb_device *usb_dev;
-
-	static int counter = 3;
+	struct urb *urb;
 
 	if (!stream)
 		return;
 
-	urb = stream->urb;
-	usb_dev = urb->dev;
-
-	if (counter) {
-		counter--;
-		dev_info(&usb_dev->dev, "URB: transmitted length %d, frame %d",
-				urb->actual_length, urb->start_frame);
-		for (i = 0; i < urb->number_of_packets; i++) {
-			dev_info(&usb_dev->dev, "Descriptor %d: transmitted length %d, status %d",
-					i,
-					urb->iso_frame_desc[i].actual_length,
-					urb->iso_frame_desc[i].status);
-		}
-	}
-
-	ret = usb_submit_urb(urb, GFP_ATOMIC);
-	if (ret) {
-		dev_err(&urb->dev->dev, "URB error %d", ret);
-		fl2000_handle_vblank(urb->context);
-	}
-
-	fl2000_handle_vblank(urb->context);
+	/* Get feedback */
+	urb = stream->fbk_urb;
 
 	if (!urb)
 		return;
 
+	usb_dev = urb->dev;
+
+	ret = usb_submit_urb(urb, GFP_KERNEL);
+	if (ret) {
+		dev_err(&urb->dev->dev, "URB error %d", ret);
+	}
 }
 
 static void fl2000_stream_completion(struct urb *urb)
 {
-	int ret;
 	struct usb_device *usb_dev = urb->dev;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
@@ -83,9 +93,29 @@ static void fl2000_stream_completion(struct urb *urb)
 	if (!stream)
 		return;
 
+	fl2000_handle_vblank(urb->context);
+
 	INIT_WORK(&stream->work, &fl2000_stream_work);
 	queue_work(stream->work_queue, &stream->work);
+}
 
+
+static void fl2000_stream_feedback_work(struct work_struct *work_item)
+{
+	/* TODO: based on feedback adjust somehow next frame? */
+}
+
+static void fl2000_stream_feedback_completion(struct urb *urb)
+{
+	struct usb_device *usb_dev = urb->dev;
+	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
+			fl2000_stream_release, NULL, NULL);
+
+	if (!stream)
+		return;
+
+	INIT_WORK(&stream->fbk_work, &fl2000_stream_feedback_work);
+	queue_work(stream->work_queue, &stream->fbk_work);
 }
 
 #define FL2000_DBG_FRAME_SIZE		1152000
@@ -94,11 +124,12 @@ static void fl2000_stream_completion(struct urb *urb)
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev)
 {
-	int pipe, ret, i, j;
+	int ret, i, j;
 	u8 *buf;
 	dma_addr_t transfer_dma;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
+	struct urb *urb;
 
 	if (!stream)
 		return -ENODEV;
@@ -112,7 +143,6 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev)
 				"altstting for ISO transfers");
 		return ret;
 	}
-	pipe = usb_sndisocpipe(usb_dev, 2);
 
 	/* There shall be no URB active on "mode_set" */
 	if (stream->urb)
@@ -125,12 +155,18 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev)
 		return -ENOMEM;
 	}
 
-	stream->urb = usb_alloc_urb(FL2000_DBG_PACKETS, GFP_KERNEL);
-	if (!stream->urb) {
+	urb = usb_alloc_urb(FL2000_DBG_PACKETS+1, GFP_KERNEL);
+	if (!urb) {
 		dev_err(&usb_dev->dev, "Allocate stream FB URB failed");
 		return -ENOMEM;
 	}
-	stream->urb->number_of_packets = FL2000_DBG_PACKETS;
+	urb->number_of_packets = FL2000_DBG_PACKETS+1;
+
+	usb_fill_int_urb(urb, usb_dev,
+			usb_sndisocpipe(usb_dev, 2),
+			buf, FL2000_DBG_FRAME_SIZE,
+			fl2000_stream_completion, NULL,
+			1);
 
 	for (i = 0; i < FL2000_DBG_PACKETS; i++) {
 		int off, rem;
@@ -138,20 +174,56 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev)
 		rem = FL2000_DBG_FRAME_SIZE - off;
 		rem = rem < FL2000_DBG_BYTES_INTERVAL ? rem : FL2000_DBG_BYTES_INTERVAL;
 
-		stream->urb->iso_frame_desc[i].length = rem;
-		stream->urb->iso_frame_desc[i].offset = off;
+		urb->iso_frame_desc[i].length = rem;
+		urb->iso_frame_desc[i].offset = off;
 
-		for (j = off; j < off + rem; j++)
-			buf[j] = i;
+		/* R - G - B pattern */
+		for (j = off; j < off + rem; j+=3) {
+			buf[j] = 0xFF;
+			buf[j+1] = 0;
+			buf[j+2] = 0;
+		}
+	}
+	urb->iso_frame_desc[FL2000_DBG_PACKETS].length = 0;
+	urb->iso_frame_desc[FL2000_DBG_PACKETS].offset = 0;
+
+	urb->transfer_dma = transfer_dma;
+	urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
+
+	stream->urb = urb;
+
+	/* Feedback EP */
+
+	buf = usb_alloc_coherent(usb_dev, 8, GFP_KERNEL, &transfer_dma);
+	if (!buf) {
+		dev_err(&usb_dev->dev, "Allocate stream feedback buffer failed");
+		return -ENOMEM;
 	}
 
-	usb_fill_int_urb(stream->urb, usb_dev,
-			pipe,
-			buf, FL2000_DBG_FRAME_SIZE,
-			fl2000_stream_completion, stream,
-			1);
-	stream->urb->transfer_dma = transfer_dma;
-	stream->urb->transfer_flags |= URB_ISO_ASAP | URB_NO_TRANSFER_DMA_MAP;
+	urb = usb_alloc_urb(1, GFP_KERNEL);
+	if (!urb) {
+		dev_err(&usb_dev->dev, "Allocate stream feedback URB failed");
+		return -ENOMEM;
+	}
+	urb->number_of_packets = 1;
+
+	usb_fill_int_urb(urb, usb_dev,
+			usb_rcvisocpipe(usb_dev, 2),
+			buf, 8,
+			fl2000_stream_feedback_completion, NULL,
+			7);
+
+	urb->iso_frame_desc[0].length = 8;
+	urb->iso_frame_desc[0].offset = 0;
+
+	urb->transfer_dma = transfer_dma;
+	urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
+
+	stream->fbk_urb = urb;
+
+	/* Timer for packet sending */
+	hrtimer_init(&stream->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	stream->timer.function = fl2000_stream_timer;
 
 	return 0;
 }
@@ -160,7 +232,7 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev)
 int fl2000_stream_update(struct usb_device *usb_dev, dma_addr_t addr,
 		size_t fb_size, struct drm_simple_display_pipe *pipe)
 {
-	int ret;
+	int ret = 0;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
 
@@ -171,7 +243,7 @@ int fl2000_stream_update(struct usb_device *usb_dev, dma_addr_t addr,
 
 	stream->urb->context = pipe;
 
-	return 0;
+	return ret;
 }
 
 int fl2000_stream_enable(struct usb_device *usb_dev)
@@ -183,23 +255,7 @@ int fl2000_stream_enable(struct usb_device *usb_dev)
 	if (!stream)
 		return -ENODEV;
 
-	{
-		struct usb_host_endpoint *ep;
-		ep = usb_pipe_endpoint(usb_dev, stream->urb->pipe);
-		dev_info(&usb_dev->dev, "address %d, type %d, dir %d, interval %d, bytes per interval %d, speed %d",
-				ep->desc.bEndpointAddress,
-				usb_endpoint_type(&ep->desc),
-				usb_endpoint_dir_out(&ep->desc),
-				stream->urb->interval,
-				ep->ss_ep_comp.wBytesPerInterval,
-				usb_dev->speed);
-	}
-
-	ret = usb_submit_urb(stream->urb, GFP_ATOMIC);
-	if (ret) {
-		dev_err(&usb_dev->dev, "URB error %d", ret);
-		fl2000_handle_vblank(stream->urb->context);
-	}
+	hrtimer_start(&stream->timer, ktime_set(0, FL2000_DBG_TIMEOUT), HRTIMER_MODE_REL);
 
 	return ret;
 }
@@ -228,7 +284,7 @@ void fl2000_stream_disable(struct usb_device *usb_dev)
  */
 int fl2000_stream_create(struct usb_interface *interface)
 {
-	int ret;
+	int ret = 0;
 	struct fl2000_stream *stream;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
@@ -248,7 +304,7 @@ int fl2000_stream_create(struct usb_interface *interface)
 
 	dev_info(&usb_dev->dev, "Streaming interface up");
 
-	return 0;
+	return ret;
 }
 
 void fl2000_stream_destroy(struct usb_interface *interface)

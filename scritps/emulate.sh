@@ -15,10 +15,11 @@ echo $USB_ID | sudo tee /sys/bus/pci/drivers/xhci_hcd/unbind
 modprobe vfio ids=$PCI_ID
 modprobe vfio_iommu_type1
 modprobe vfio_pci
-modprobe vfio_virqfd
+#modprobe vfio_virqfd
 
 # Start virtme
 virtme-run --pwd --installed-kernel --qemu-opts -cpu host \
+	-nic user,ipv6=off,model=e1000 \
 	-machine q35,accel=kvm,kernel_irqchip=split \
 	-device $IOMMU,intremap=on,caching-mode=on \
 	-device vfio-pci,host=$USB_ID -s
