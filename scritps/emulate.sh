@@ -12,10 +12,10 @@ USB_ID="0000:04:00.0"
 echo $USB_ID | sudo tee /sys/bus/pci/drivers/xhci_hcd/unbind
 
 # Start vfio
-modprobe vfio ids=$PCI_ID
+modprobe vfio
 modprobe vfio_iommu_type1
-modprobe vfio_pci
-#modprobe vfio_virqfd
+modprobe vfio_pci ids=$PCI_ID
+modprobe vfio_virqfd
 
 # Start virtme
 virtme-run --pwd --installed-kernel --qemu-opts -cpu host \

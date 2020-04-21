@@ -114,19 +114,20 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	return ret;
 }
 
+/* We do not use default values as per documentation because:
+ *  a) somehow they differ from real HW
+ *  b) on SW reset not all of them are cleared
+ */
 static const struct regmap_config fl2000_regmap_config = {
 	.val_bits = 32,
 	.reg_bits = 16,
 	.reg_stride = 4,
 	.max_register = 0xFFFF,
 
-	.cache_type = REGCACHE_NONE,
+	.cache_type = REGCACHE_RBTREE,
 
 	.precious_reg = fl2000_reg_precious,
 	.volatile_reg = fl2000_reg_volatile,
-
-	.reg_defaults = fl2000_reg_defaults,
-	.num_reg_defaults = ARRAY_SIZE(fl2000_reg_defaults),
 
 	.reg_format_endian = REGMAP_ENDIAN_BIG,
 	.val_format_endian = REGMAP_ENDIAN_BIG,
@@ -207,16 +208,6 @@ int fl2000_reset(struct usb_device *usb_dev)
 
 	msleep(FL2000_HW_RST_MDELAY);
 
-	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(reg_data->field[MON_DETECT], true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(reg_data->field[WAKEUP_CLR_EN], false);
-	if (ret)
-		return -EIO;
-
 	return 0;
 }
 
@@ -241,7 +232,15 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
 			fl2000_reg_data_release, NULL, NULL);;
 
-	/* TODO: Move this to regmap default configuration values array */
+	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[MON_DETECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[WAKEUP_CLR_EN], false);
+	if (ret)
+		return -EIO;
 	ret = regmap_field_write(reg_data->field[U1_REJECT], true);
 	if (ret)
 		return -EIO;
@@ -260,6 +259,7 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 	int i, ret;
 	struct fl2000_reg_data *reg_data;
 	struct regmap *regmap;
+	fl2000_vga_status_reg status;
 
 	reg_data = devres_alloc(&fl2000_reg_data_release, sizeof(*reg_data),
 			GFP_KERNEL);
@@ -294,8 +294,19 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 
 	fl2000_debugfs_reg_init(reg_data);
 
-	fl2000_reset(usb_dev);
-	fl2000_usb_magic(usb_dev);
+	/* TODO: Move initial reset to higher level initialization function */
+	ret = fl2000_reset(usb_dev);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot reset device (%d)", ret);
+		return ret;
+	}
+
+	/* TODO: Split interrupt processing into DRM and register parts */
+	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot reset interrupts (%d)", ret);
+		return ret;
+	}
 
 	dev_info(&usb_dev->dev, "Configured FL2000 registers");
 	return 0;
