@@ -8,6 +8,8 @@
 
 #include "fl2000.h"
 
+int fl2000_reset(struct usb_device *usb_dev);
+int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev);
@@ -27,8 +29,6 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 #define MAX_WIDTH		4000
 #define MAX_HEIGHT		4000
 #define BPP			32
-
-int fl2000_reset(struct usb_device *usb_dev);
 
 /* List all supported bridges */
 static const char *fl2000_supported_bridges[] = {
@@ -213,6 +213,7 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
 
+/* TODO: Move registers operation to registers.c */
 static void fl2000_output_mode_set(struct drm_encoder *encoder,
 		 struct drm_display_mode *mode,
 		 struct drm_display_mode *adjusted_mode)
@@ -241,7 +242,9 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	pll.val = 0x0020410A; // 32MHz
 	regmap_write(regmap, FL2000_VGA_PLL_REG, pll.val);
 
-	/* TODO: Reset FL2000 and read back PLL settings for validation */
+	/* Reset FL2000 & confirm PLL settings */
+	fl2000_reset(usb_dev);
+	regmap_read(regmap, FL2000_VGA_PLL_REG, &pll.val);
 
 	/* Generic clock configuration */
 	mask = 0;
@@ -274,27 +277,29 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	mask = 0;
 	isoch.mframe_cnt = 0;
 	fl2000_add_bitmask(mask, fl2000_vga_isoch_reg, mframe_cnt);
-	isoch.use_mframe_match = true;
-	fl2000_add_bitmask(mask, fl2000_vga_isoch_reg, use_mframe_match);
 	regmap_write_bits(regmap, FL2000_VGA_ISOCH_REG, mask, isoch.val);
 
 	/* Timings configuration */
 	hsync1.hactive = mode->hdisplay;
 	hsync1.htotal = mode->htotal;
 	regmap_write(regmap, FL2000_VGA_HSYNC_REG1, hsync1.val);
-
-	vsync1.vactive = mode->vdisplay;
-	vsync1.vtotal = mode->vtotal;
-	regmap_write(regmap, FL2000_VGA_VSYNC_REG1, vsync1.val);
+	regmap_read(regmap, FL2000_VGA_PLL_REG, &hsync1.val);
 
 	hsync2.hsync_width = mode->hsync_end - mode->hsync_start;
 	hsync2.hstart = (mode->htotal - mode->hsync_start + 1);
 	regmap_write(regmap, FL2000_VGA_HSYNC_REG2, hsync2.val);
+	regmap_read(regmap, FL2000_VGA_PLL_REG, &hsync2.val);
+
+	vsync1.vactive = mode->vdisplay;
+	vsync1.vtotal = mode->vtotal;
+	regmap_write(regmap, FL2000_VGA_VSYNC_REG1, vsync1.val);
+	regmap_read(regmap, FL2000_VGA_PLL_REG, &vsync1.val);
 
 	vsync2.vsync_width = mode->vsync_end - mode->vsync_start;
 	vsync2.vstart = (mode->vtotal - mode->vsync_start + 1);
 	vsync2.start_latency = vsync2.vstart;
 	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
+	regmap_read(regmap, FL2000_VGA_PLL_REG, &vsync2.val);
 
 	regmap_write(regmap, FL2000_VGA_HI_MARK, (480+1));
 	regmap_write(regmap, FL2000_VGA_LO_MARK, 1);
@@ -445,6 +450,7 @@ static int fl2000_bind(struct device *master)
 
 	dev_info(master, "fl2000_reset");
 	fl2000_reset(usb_dev);
+	fl2000_usb_magic(usb_dev);
 
 	dev_info(master, "drm_fbdev_generic_setup");
 	ret = drm_fbdev_generic_setup(drm, BPP);
@@ -509,6 +515,7 @@ static int fl2000_compare(struct device *dev, void *data)
 	return 0;
 }
 
+/* TODO: Move registers operation to registers.c */
 void fl2000_inter_check(struct usb_device *usb_dev)
 {
 	int ret;

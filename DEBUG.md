@@ -7,8 +7,12 @@
 
 ## Running in a test environment
 Debugging and development of kernel module may be an issue - crashes or resource leakage in kernelspace sometimes can be irreversible. To simplify host debugging I use qemu with virtme helper tools and couple of custom scripts:
- * scripts/emulate.sh - starts a vm with current host's kernel (so you need to build the driver using its headers) and passes to it FL2000 USB device access via VID:PID configuration
+ * scripts/emulate.sh - starts a vm with current host's kernel (so you need to build the driver using its headers) and passes to it USB host controller that is used to connect FL2000 to
  * scripts/startup.sh - loads kernel modules and dependenceis for debugging/testing (execution can be automated with virtme in future)
+
+It seems that QEMU has some issues with isochronous transfers: when scheduling a series 16x3x1024 transfers for 1152000 bytes I saw only handful of threm actually transmitted. In order to enable isochronous transfers debug & development, I give whole USB Host Controller to VM and avoid using qemu-xhci model.
+
+Make sure you have IOMMU enabled on kernel boot: `GRUB_CMDLINE_LINUX_DEFAULT="quiet splash amd_iommu=on"` on AMD host or `GRUB_CMDLINE_LINUX_DEFAULT="quiet splash intel_iommu=on` on Intel host
 
 ## Register & I2C programming
 Sequnce of register configuration and writing is not documented well for either FL2000 or IT66121. In both cases code implementations are rather basic and it is very hard to simply copy-paste them into "clean" implementation. This is also true for DDC I2C communication for EDID processing or IT66121 modes configuration or frames streaming. On the other hand, Windows driver for FL2000DRM based dongle is fully available and seem to be working properly: connected display resolution recognized, Windows desktop can be seen, no artifacts present, etc. This is true for VGA and HDMI dongle versions, which means that programming for both FL2000 and IT66121 can be studied. This makes possible implementation of HW related stuff via reverse-engineering: dump USB bus interactions, parse them with Wireshark or similar tool, formalize logic and implement it.

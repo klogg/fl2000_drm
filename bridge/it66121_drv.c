@@ -63,6 +63,7 @@ static const struct regmap_range_cfg it66121_regmap_banks[] = {
 	},
 };
 
+/* TODO: Move to RBTREE cache */
 static const struct regmap_config it66121_regmap_config = {
 	.val_bits = 8, /* 8-bit register size */
 	.reg_bits = 8, /* 8-bit register address space */
@@ -73,9 +74,6 @@ static const struct regmap_config it66121_regmap_config = {
 
 	//.precious_reg = it66121_precious_reg,
 	//.volatile_reg = it66121_volatile_reg,
-
-	//.reg_defaults = it66121_reg_defaults,
-	//.num_reg_defaults = ARRAY_SIZE(it66121_reg_defaults),
 
 	.ranges = it66121_regmap_banks,
 	.num_ranges = ARRAY_SIZE(it66121_regmap_banks),
@@ -280,6 +278,8 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	return 0;
 }
 
+/* TODO: Add protection for I2C register / EDID / SPI access, e.g. mutex*/
+#if 0
 static void it66121_intr_work(struct work_struct *work_item)
 {
 	int ret;
@@ -330,6 +330,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 	queue_delayed_work(priv->work_queue, &priv->work,
 			msecs_to_jiffies(IRQ_POLL_INTRVL));
 }
+#endif
 
 static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		size_t len)
@@ -723,6 +724,18 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		return;
 	}
 
+	/* Mute AV */
+	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
+			IT66121_HDMI_AV_MUTE_ON | IT66121_HDMI_AV_MUTE_BLUE,
+			IT66121_HDMI_AV_MUTE_ON | IT66121_HDMI_AV_MUTE_BLUE);
+	if (ret)
+		return;
+
+	/* XXX: Why we need it in every mute/umute? */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
+			IT66121_HDMI_GEN_CTRL_PKT_ON |
+			IT66121_HDMI_GEN_CTRL_PKT_RPT);
+
 	/* Enable AVI infoframe */
 	ret = regmap_write(priv->regmap, IT66121_HDMI_AVI_INFO_PKT,
 			IT66121_HDMI_AVI_INFO_PKT_ON |
@@ -758,7 +771,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	/* Set TX mode to HDMI in DVI mode */
 	/* TODO: Why? Is this somehow read from monitor? */
 	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
-			IT66121_HDMI_MODE_HDMI);
+			IT66121_HDMI_MODE_DVI);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
 				"(%d)", ret);

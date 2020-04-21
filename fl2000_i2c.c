@@ -99,7 +99,7 @@ static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 
 #endif /* CONFIG_DEBUG_FS */
 
-
+/* TODO: Move this function to registers.c */
 static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		u16 addr, u8 offset, u32 *data)
 {
