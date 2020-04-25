@@ -5,6 +5,7 @@ fl2000-y := \
 	fl2000_streaming.o \
 	fl2000_i2c.o \
 	fl2000_drm.o \
+	fl2000_gem.o \
 	fl2000_avcontrol.o
 
 it66121-y := \
