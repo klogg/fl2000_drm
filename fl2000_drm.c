@@ -73,8 +73,7 @@ static void fl2000_drm_release(struct drm_device *drm)
 }
 
 static struct drm_driver fl2000_drm_driver = {
-	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_PRIME | \
-		DRIVER_ATOMIC,
+	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
 	.lastclose = drm_fb_helper_lastclose,
 	.ioctls = NULL,
 	.fops = &fl2000_drm_driver_fops,
