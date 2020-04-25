@@ -17,8 +17,6 @@
 
 #include "fl2000.h"
 
-#include "fl2000_testframe.h"
-
 void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe);
 
 /* Streaming is implemented with a single URB for each frame. USB is configured
@@ -151,7 +149,7 @@ int fl2000_stream_update(struct usb_device *usb_dev, dma_addr_t addr,
 	if (!stream)
 		return -ENODEV;
 
-	memcpy(stream->urb->transfer_buffer, packet_bytes, ARRAY_SIZE(packet_bytes));
+	//memcpy(stream->urb->transfer_buffer, addr, fb_size);
 
 	stream->urb->context = pipe;
 
