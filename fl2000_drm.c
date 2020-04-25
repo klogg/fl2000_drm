@@ -8,10 +8,25 @@
 
 #include "fl2000.h"
 
+int fl2000_gem_mmap(struct file *filp, struct vm_area_struct *vma);
+struct drm_gem_object *
+fl2000_gem_create_object_default_funcs(struct drm_device *dev, size_t size);
+int fl2000_gem_dumb_create(struct drm_file *file_priv, struct drm_device *drm,
+		struct drm_mode_create_dumb *args);
+struct drm_gem_object *fl2000_gem_prime_import_sg_table(struct drm_device *dev,
+		struct dma_buf_attachment *attach, struct sg_table *sgt);
+void fl2000_gem_free(struct drm_gem_object *gem_obj);
+extern const struct vm_operations_struct fl2000_gem_vm_ops;
+struct sg_table *fl2000_gem_prime_get_sg_table(struct drm_gem_object *gem_obj);
+void *fl2000_gem_prime_vmap(struct drm_gem_object *gem_obj);
+void fl2000_gem_prime_vunmap(struct drm_gem_object *gem_obj, void *vaddr);
+void *fl2000_gem_get_fb_addr(struct drm_framebuffer *fb,
+		struct drm_plane_state *state, unsigned int plane);
+
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev);
-void fl2000_stream_update(struct usb_device *usb_dev, dma_addr_t addr,
+void fl2000_stream_update(struct usb_device *usb_dev, void *addr,
 		size_t fb_size, struct drm_simple_display_pipe *pipe);
 int fl2000_stream_enable(struct usb_device *usb_dev);
 void fl2000_stream_disable(struct usb_device *usb_dev);
@@ -63,7 +78,17 @@ static inline struct fl2000_drm_if *fl2000_pipe_to_drm_if(
 	return container_of(pipe, struct fl2000_drm_if, pipe);
 }
 
-DEFINE_DRM_GEM_CMA_FOPS(fl2000_drm_driver_fops);
+static const struct file_operations fl2000_drm_driver_fops = {\
+	.owner = THIS_MODULE,
+	.open = drm_open,
+	.release = drm_release,
+	.unlocked_ioctl = drm_ioctl,
+	.compat_ioctl = drm_compat_ioctl,
+	.poll = drm_poll,
+	.read = drm_read,
+	.llseek = noop_llseek,
+	.mmap = fl2000_gem_mmap,
+};
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
@@ -80,15 +105,20 @@ static struct drm_driver fl2000_drm_driver = {
 	.fops = &fl2000_drm_driver_fops,
 	.release = fl2000_drm_release,
 
-	DRM_GEM_CMA_VMAP_DRIVER_OPS,
+	.gem_create_object = fl2000_gem_create_object_default_funcs,
+	.dumb_create = fl2000_gem_dumb_create,
+	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
+	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
+	.gem_prime_import_sg_table = fl2000_gem_prime_import_sg_table,
+	.gem_prime_mmap	= drm_gem_prime_mmap,
 
-	.gem_free_object_unlocked = drm_gem_cma_free_object,
-	.gem_vm_ops = &drm_gem_cma_vm_ops,
+	.gem_free_object_unlocked = fl2000_gem_free,
+	.gem_vm_ops = &fl2000_gem_vm_ops,
 	.gem_prime_import = drm_gem_prime_import,
 	.gem_prime_export = drm_gem_prime_export,
-	.gem_prime_get_sg_table = drm_gem_cma_prime_get_sg_table,
-	.gem_prime_vmap = drm_gem_cma_prime_vmap,
-	.gem_prime_vunmap = drm_gem_cma_prime_vunmap,
+	.gem_prime_get_sg_table = fl2000_gem_prime_get_sg_table,
+	.gem_prime_vmap = fl2000_gem_prime_vmap,
+	.gem_prime_vunmap = fl2000_gem_prime_vunmap,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
@@ -185,7 +215,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 
 	if (fb) {
 		/* We support only RGB pixel formats, so only #0 */
-		dma_addr_t addr = drm_fb_cma_get_gem_addr(fb, pstate, 0);
+		void* addr = fl2000_gem_get_fb_addr(fb, pstate, 0);
 		size_t fb_size = fb->format->cpp[0] * fb->height * fb->width;
 
 		fl2000_stream_update(drm->dev_private, addr, fb_size, pipe);
