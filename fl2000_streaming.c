@@ -139,7 +139,7 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev)
 	return 0;
 }
 
-int fl2000_stream_update(struct usb_device *usb_dev, dma_addr_t addr,
+int fl2000_stream_update(struct usb_device *usb_dev, void *addr,
 		size_t fb_size, struct drm_simple_display_pipe *pipe)
 {
 	int ret = 0;
@@ -149,7 +149,7 @@ int fl2000_stream_update(struct usb_device *usb_dev, dma_addr_t addr,
 	if (!stream)
 		return -ENODEV;
 
-	//memcpy(stream->urb->transfer_buffer, addr, fb_size);
+	memcpy(stream->urb->transfer_buffer, addr, fb_size);
 
 	stream->urb->context = pipe;
 
