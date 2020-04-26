@@ -10,7 +10,7 @@ Debugging and development of kernel module may be an issue - crashes or resource
  * scripts/emulate.sh - starts a vm with current host's kernel (so you need to build the driver using its headers) and passes to it USB host controller that is used to connect FL2000 to
  * scripts/startup.sh - loads kernel modules and dependenceis for debugging/testing (execution can be automated with virtme in future)
 
-It seems that QEMU has some issues with isochronous transfers: when scheduling a series 16x3x1024 transfers for 1152000 bytes I saw only handful of threm actually transmitted. In order to enable isochronous transfers debug & development, I give whole USB Host Controller to VM and avoid using qemu-xhci model.
+It seems that QEMU has some issues with isochronous transfers: when scheduling a series 16x3x1024 transfers for 1152000 bytes I saw only handful of threm actually transmitted. In order to enable isochronous transfers debug & development, I give whole USB Host Controller to VM and avoid using qemu-xhci model. Similar problem was discovered with USB Interrupt IN transfers - endpoint is always stalling during debug after couple transactions.
 
 Make sure you have IOMMU enabled on kernel boot: `amd_iommu=on"` on AMD host or `intel_iommu=on` on Intel host. For distros with VFIO builtin (e.g. Ubuntu 20.04) you also need to add kernel boot arg; `vfio-pci.ids=$PCI_ID` where PCI_ID is identifier of your USB Host Controller that you want to debug with. In case if you do not have VFIO built into the kernel (e.g. Ubuntu 19.10), you need to start it before running emulation:
 
