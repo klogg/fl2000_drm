@@ -20,16 +20,12 @@ extern const struct vm_operations_struct fl2000_gem_vm_ops;
 struct sg_table *fl2000_gem_prime_get_sg_table(struct drm_gem_object *gem_obj);
 void *fl2000_gem_prime_vmap(struct drm_gem_object *gem_obj);
 void fl2000_gem_prime_vunmap(struct drm_gem_object *gem_obj, void *vaddr);
-void *fl2000_gem_get_fb_addr(struct drm_framebuffer *fb,
-		struct drm_plane_state *state, unsigned int plane);
 
 int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev);
-void fl2000_stream_update(struct usb_device *usb_dev, void *addr,
-		size_t fb_size, struct drm_simple_display_pipe *pipe);
 int fl2000_stream_enable(struct usb_device *usb_dev);
 void fl2000_stream_disable(struct usb_device *usb_dev);
 
@@ -43,29 +39,30 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 
 #define MAX_WIDTH		4000
 #define MAX_HEIGHT		4000
-#define BPP			32
+
+/* Stick to 24-bit RGB for now */
+/* XXX: If we use compression, do we need to change this? */
+#define BPP			24
+static const u32 fl2000_pixel_formats[] = {
+	/* 24-bit RGB le */
+	DRM_FORMAT_RGB888,
+};
 
 /* List all supported bridges */
 static const char *fl2000_supported_bridges[] = {
 	"it66121", /* IT66121 driver name*/
 };
 
-static const u32 fl2000_pixel_formats[] = {
-	/* 24-bit RGB le */
-	DRM_FORMAT_RGB888,
-	DRM_FORMAT_ARGB8888,
-	DRM_FORMAT_XRGB8888,
-	/* 16-bit RGB le */
-	DRM_FORMAT_RGB565,
-	/* 15-bit RGB le */
-	DRM_FORMAT_XRGB1555,
-	DRM_FORMAT_ARGB1555,
-};
-
 struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
+	atomic_t update_pending;
 };
+
+static void fl2000_drm_if_release(struct device *dev, void *res)
+{
+	/* Noop */
+}
 
 static inline struct fl2000_drm_if *fl2000_drm_to_drm_if(struct drm_device *drm)
 {
@@ -200,25 +197,88 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 	return 0;
 }
 
+/* TODO: Somehow we need to ensure we are using only framebuffer plane 0 */
+int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
+		size_t dest_size)
+{
+	struct fl2000_drm_if *drm_if;
+	struct drm_device *drm;
+	struct drm_framebuffer *fb;
+	struct drm_gem_object *gem_obj;
+	u32 block_w, block_h, block_size, block_start_y, num_hblocks,
+		sample_x, sample_y, offset;
+	size_t fb_size;
+	void *vaddr;
+
+	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
+	if (!drm_if)
+		return -ENODEV;
+
+	if (atomic_read(&drm_if->update_pending)) {
+		drm = &drm_if->drm;
+		if (!drm)
+			return -ENODEV;
+
+		fb = drm_if->pipe.plane.state->fb;
+		if (!fb)
+			return -ENODEV;
+
+		fb_size = fb->format->cpp[0] * fb->height * fb->width;
+		if (fb_size != dest_size) {
+			dev_err(drm->dev, "Framebuffer size wrong %zd != %zd " \
+					"height %d, width  %d",
+					fb_size, dest_size,
+					fb->height, fb->width);
+		}
+
+		gem_obj = drm_gem_fb_get_obj(fb, 0);
+		if (!gem_obj)
+			return -EINVAL;
+
+		vaddr = fl2000_gem_prime_vmap(gem_obj);
+		if (!vaddr)
+			return -EINVAL;
+
+		block_w = drm_format_info_block_width(fb->format, 0);
+		block_h = drm_format_info_block_height(fb->format, 0);
+		block_size = fb->format->char_per_block[0];
+
+		offset = fb->offsets[0];
+
+		sample_x = drm_if->pipe.plane.state->src_x >> 16;
+		sample_y = drm_if->pipe.plane.state->src_y >> 16;
+		block_start_y = (sample_y / block_h) * block_h;
+		num_hblocks = sample_x / block_w;
+
+		offset += fb->pitches[0] * block_start_y;
+		offset += block_size * num_hblocks;
+
+		memcpy(dest, vaddr + offset, dest_size);
+
+		fl2000_gem_prime_vunmap(gem_obj, vaddr);
+
+		atomic_set(&drm_if->update_pending, 0);
+	}
+
+	drm_crtc_handle_vblank(&drm_if->pipe.crtc);
+
+	return 0;
+}
+
 static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 		struct drm_plane_state *old_pstate)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
 	struct drm_pending_vblank_event *event = crtc->state->event;
-	struct drm_plane *plane = &pipe->plane;
-	struct drm_plane_state *pstate = plane->state;
+	struct drm_plane_state *pstate = pipe->plane.state;
 	struct drm_framebuffer *fb = pstate->fb;
+	struct fl2000_drm_if *drm_if = fl2000_drm_to_drm_if(drm);
 
 	dev_info(drm->dev, "fl2000_display_update");
 
-	if (fb) {
-		/* We support only RGB pixel formats, so only #0 */
-		void* addr = fl2000_gem_get_fb_addr(fb, pstate, 0);
-		size_t fb_size = fb->format->cpp[0] * fb->height * fb->width;
-
-		fl2000_stream_update(drm->dev_private, addr, fb_size, pipe);
-	}
+	if (fb && !atomic_read(&drm_if->update_pending))
+		atomic_set(&drm_if->update_pending, 1);
 
 	if (event) {
 		crtc->state->event = NULL;
@@ -285,8 +345,6 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	aclk.use_zero_pkt_len = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_zero_pkt_len);
 	aclk.vga_err_int_en = true;
-	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, vga_err_int_en);
-	aclk.lbuf_err_int_en = true;
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 
 	mask = 0;
@@ -329,9 +387,6 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	vsync2.start_latency = vsync2.vstart;
 	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
 	regmap_read(regmap, FL2000_VGA_PLL_REG, &vsync2.val);
-
-	regmap_write(regmap, FL2000_VGA_HI_MARK, (480+1));
-	regmap_write(regmap, FL2000_VGA_LO_MARK, 1);
 
 	fl2000_afe_magic(usb_dev);
 
@@ -387,11 +442,6 @@ static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
 	.disable = fl2000_output_disable,
 };
 
-static void fl2000_drm_if_release(struct device *dev, void *res)
-{
-	/* Noop */
-}
-
 static int fl2000_bind(struct device *master)
 {
 	int ret = 0;
@@ -413,12 +463,13 @@ static int fl2000_bind(struct device *master)
 	devres_add(master, drm_if);
 
 	drm = &drm_if->drm;
-
 	ret = drm_dev_init(drm, &fl2000_drm_driver, master);
 	if (ret) {
 		dev_err(master, "Cannot initialize DRM device (%d)", ret);
 		return ret;
 	}
+
+	arch_atomic_set(&drm_if->update_pending, 0);
 
 	/* For register operations */
 	drm->dev_private = usb_dev;
@@ -563,31 +614,11 @@ void fl2000_inter_check(struct usb_device *usb_dev)
 				ret);
 	} else {
 		dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X", status.val);
-
 		if (status.hdmi_event || status.monitor_event ||
 				status.edid_event) {
 			drm_kms_helper_hotplug_event(&drm_if->drm);
 		}
-		if (status.lbuf_halt) {
-			dev_info(&usb_dev->dev, "!!! LBUF halt");
-			regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, (1<<20), (1<<20));
-		}
-		if (status.lbuf_overflow) {
-			dev_info(&usb_dev->dev, "!!! LBUF overflow");
-			regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, (1<<31), (1<<31));
-		}
-		if (status.lbuf_underflow) {
-			dev_info(&usb_dev->dev, "!!! LBUF underflow");
-			regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, (1<<31), (1<<31));
-		}
 	}
-}
-
-void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe)
-{
-	struct drm_crtc *crtc = &pipe->crtc;
-
-	drm_crtc_handle_vblank(crtc);
 }
 
 int fl2000_drm_init(struct usb_device *usb_dev)

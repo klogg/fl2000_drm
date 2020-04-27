@@ -112,6 +112,8 @@ void fl2000_gem_free(struct drm_gem_object *gem_obj)
 {
 	struct fl2000_gem_object *obj;
 
+	dev_info(gem_obj->dev->dev, "fl2000_gem_free");
+
 	obj = to_fl2000_gem_obj(gem_obj);
 
 	if (gem_obj->import_attach) {
@@ -131,6 +133,8 @@ int fl2000_gem_dumb_create(struct drm_file *file_priv, struct drm_device *drm,
 		struct drm_mode_create_dumb *args)
 {
 	struct fl2000_gem_object *obj;
+
+	dev_info(drm->dev, "fl2000_gem_dumb_create");
 
 	args->pitch = DIV_ROUND_UP(args->width * args->bpp, 8);
 	args->size = args->pitch * args->height;
@@ -198,14 +202,14 @@ struct sg_table *fl2000_gem_prime_get_sg_table(struct drm_gem_object *gem_obj)
 	return drm_prime_pages_to_sg(obj->pages, obj->num_pages);
 }
 
-struct drm_gem_object *fl2000_gem_prime_import_sg_table(struct drm_device *dev,
+struct drm_gem_object *fl2000_gem_prime_import_sg_table(struct drm_device *drm,
 		struct dma_buf_attachment *attach, struct sg_table *sgt)
 {
 	int ret;
 	struct fl2000_gem_object *obj;
 	size_t size = attach->dmabuf->size;
 
-	obj = fl2000_gem_allocate_object(dev, size);
+	obj = fl2000_gem_allocate_object(drm, size);
 	if (IS_ERR(obj))
 		return ERR_CAST(obj);
 
@@ -257,9 +261,11 @@ static const struct drm_gem_object_funcs fl2000_gem_default_funcs = {
  * A pointer to a allocated GEM object or an error pointer on failure.
  */
 struct drm_gem_object *
-fl2000_gem_create_object_default_funcs(struct drm_device *dev, size_t size)
+fl2000_gem_create_object_default_funcs(struct drm_device *drm, size_t size)
 {
 	struct fl2000_gem_object *obj;
+
+	dev_info(drm->dev, "fl2000_gem_get_fb_addr");
 
 	obj = kzalloc(sizeof(*obj), GFP_KERNEL);
 	if (!obj)
@@ -268,49 +274,4 @@ fl2000_gem_create_object_default_funcs(struct drm_device *dev, size_t size)
 	obj->base.funcs = &fl2000_gem_default_funcs;
 
 	return &obj->base;
-}
-
-void *fl2000_gem_get_fb_addr(struct drm_framebuffer *fb,
-		struct drm_plane_state *state, unsigned int plane)
-{
-	struct fl2000_gem_object *obj;
-	struct drm_gem_object *gem_obj;
-	void *vaddr;
-	u8 h_div = 1, v_div = 1;
-	u32 block_w = drm_format_info_block_width(fb->format, plane);
-	u32 block_h = drm_format_info_block_height(fb->format, plane);
-	u32 block_size = fb->format->char_per_block[plane];
-	u32 sample_x;
-	u32 sample_y;
-	u32 block_start_y;
-	u32 num_hblocks;
-
-	gem_obj = drm_gem_fb_get_obj(fb, plane);
-	if (!gem_obj) {
-		return NULL;
-	}
-
-	obj = to_fl2000_gem_obj(gem_obj);
-
-	vaddr = vmap(obj->pages, obj->num_pages, VM_MAP, PAGE_KERNEL);
-	if (!vaddr) {
-		return NULL;
-	}
-
-	vaddr += fb->offsets[plane];
-
-	if (plane > 0) {
-		h_div = fb->format->hsub;
-		v_div = fb->format->vsub;
-	}
-
-	sample_x = (state->src_x >> 16) / h_div;
-	sample_y = (state->src_y >> 16) / v_div;
-	block_start_y = (sample_y / block_h) * block_h;
-	num_hblocks = sample_x / block_w;
-
-	vaddr += fb->pitches[plane] * block_start_y;
-	vaddr += block_size * num_hblocks;
-
-	return vaddr;
 }

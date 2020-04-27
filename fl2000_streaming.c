@@ -17,7 +17,8 @@
 
 #include "fl2000.h"
 
-void fl2000_handle_vblank(struct drm_simple_display_pipe *pipe);
+int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
+		size_t dest_size);
 
 /* Streaming is implemented with a single URB for each frame. USB is configured
  * to send NULL URB automatically after each data URB */
@@ -41,30 +42,33 @@ static void fl2000_stream_work(struct work_struct *work)
 	int ret;
 	struct fl2000_stream *stream = container_of(work,
 			struct fl2000_stream, work);
-	struct urb *urb;
+	struct urb *urb = stream->urb;
+	struct usb_device *usb_dev;
 
-	if (!stream)
-		return;
-
-	urb = stream->urb;
 	if (!urb)
 		return;
 
-	fl2000_handle_vblank(urb->context);
+	/* TODO: handle USB errors in status */
+
+	usb_dev = urb->dev;
+
+	fl2000_framebuffer_get(usb_dev, urb->transfer_buffer,
+			urb->transfer_buffer_length);
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret) {
-		dev_err(&urb->dev->dev, "Data URB error %d", ret);
+		dev_err(&usb_dev->dev, "Data URB error %d", ret);
 	}
 
 	ret = usb_submit_urb(stream->zero_len_urb, GFP_KERNEL);
 	if (ret) {
-		dev_err(&urb->dev->dev, "Zero length URB error %d", ret);
+		dev_err(&usb_dev->dev, "Zero length URB error %d", ret);
 	}
 }
 
 static void fl2000_stream_completion(struct urb *urb)
 {
+	/* TODO: handle USB errors in status */
 }
 
 static void fl2000_stream_zero_len_completion(struct urb *urb)
@@ -122,7 +126,6 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev)
 			usb_sndbulkpipe(usb_dev, 1),
 			buf, FL2000_DBG_FRAME_SIZE,
 			fl2000_stream_completion, NULL);
-	stream->urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
 	/* Zero-length URB must be sent after FB data to indicate EOF */
 	stream->zero_len_urb = usb_alloc_urb(0, GFP_KERNEL);
@@ -137,23 +140,6 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev)
 			fl2000_stream_zero_len_completion, NULL);
 
 	return 0;
-}
-
-int fl2000_stream_update(struct usb_device *usb_dev, void *addr,
-		size_t fb_size, struct drm_simple_display_pipe *pipe)
-{
-	int ret = 0;
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
-			fl2000_stream_release, NULL, NULL);
-
-	if (!stream)
-		return -ENODEV;
-
-	memcpy(stream->urb->transfer_buffer, addr, fb_size);
-
-	stream->urb->context = pipe;
-
-	return ret;
 }
 
 int fl2000_stream_enable(struct usb_device *usb_dev)
@@ -216,7 +202,6 @@ int fl2000_stream_create(struct usb_interface *interface)
 
 	/* No URB allocated so far */
 	stream->urb = NULL;
-
 
 	stream->work_queue = create_workqueue("fl2000_stream");
 
