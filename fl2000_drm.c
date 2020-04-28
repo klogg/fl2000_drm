@@ -8,19 +8,6 @@
 
 #include "fl2000.h"
 
-int fl2000_gem_mmap(struct file *filp, struct vm_area_struct *vma);
-struct drm_gem_object *
-fl2000_gem_create_object_default_funcs(struct drm_device *dev, size_t size);
-int fl2000_gem_dumb_create(struct drm_file *file_priv, struct drm_device *drm,
-		struct drm_mode_create_dumb *args);
-struct drm_gem_object *fl2000_gem_prime_import_sg_table(struct drm_device *dev,
-		struct dma_buf_attachment *attach, struct sg_table *sgt);
-void fl2000_gem_free(struct drm_gem_object *gem_obj);
-extern const struct vm_operations_struct fl2000_gem_vm_ops;
-struct sg_table *fl2000_gem_prime_get_sg_table(struct drm_gem_object *gem_obj);
-void *fl2000_gem_prime_vmap(struct drm_gem_object *gem_obj);
-void fl2000_gem_prime_vunmap(struct drm_gem_object *gem_obj, void *vaddr);
-
 int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
@@ -75,17 +62,7 @@ static inline struct fl2000_drm_if *fl2000_pipe_to_drm_if(
 	return container_of(pipe, struct fl2000_drm_if, pipe);
 }
 
-static const struct file_operations fl2000_drm_driver_fops = {\
-	.owner = THIS_MODULE,
-	.open = drm_open,
-	.release = drm_release,
-	.unlocked_ioctl = drm_ioctl,
-	.compat_ioctl = drm_compat_ioctl,
-	.poll = drm_poll,
-	.read = drm_read,
-	.llseek = noop_llseek,
-	.mmap = fl2000_gem_mmap,
-};
+DEFINE_DRM_GEM_SHMEM_FOPS(fl2000_drm_driver_fops);
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
@@ -101,20 +78,7 @@ static struct drm_driver fl2000_drm_driver = {
 	.fops = &fl2000_drm_driver_fops,
 	.release = fl2000_drm_release,
 
-	.gem_create_object = fl2000_gem_create_object_default_funcs,
-	.dumb_create = fl2000_gem_dumb_create,
-	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
-	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
-	.gem_prime_import_sg_table = fl2000_gem_prime_import_sg_table,
-	.gem_prime_mmap	= drm_gem_prime_mmap,
-
-	.gem_free_object_unlocked = fl2000_gem_free,
-	.gem_vm_ops = &fl2000_gem_vm_ops,
-	.gem_prime_import = drm_gem_prime_import,
-	.gem_prime_export = drm_gem_prime_export,
-	.gem_prime_get_sg_table = fl2000_gem_prime_get_sg_table,
-	.gem_prime_vmap = fl2000_gem_prime_vmap,
-	.gem_prime_vunmap = fl2000_gem_prime_vunmap,
+	DRM_GEM_SHMEM_DRIVER_OPS,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
@@ -224,10 +188,6 @@ int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct drm_framebuffer *fb;
-	struct drm_gem_object *gem_obj;
-	u32 block_w, block_h, block_size, block_start_y, num_hblocks,
-		sample_x, sample_y, offset;
-	size_t fb_size;
 	void *vaddr;
 
 	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
@@ -243,37 +203,15 @@ int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
 		if (!fb)
 			return -ENODEV;
 
-		fb_size = fb->format->cpp[0] * fb->height * fb->width;
-
-		gem_obj = drm_gem_fb_get_obj(fb, 0);
-		if (!gem_obj)
-			return -EINVAL;
-
-		vaddr = fl2000_gem_prime_vmap(gem_obj);
+		vaddr = drm_gem_shmem_vmap(fb->obj[0]);
 		if (!vaddr)
 			return -EINVAL;
 
-		block_w = drm_format_info_block_width(fb->format, 0);
-		block_h = drm_format_info_block_height(fb->format, 0);
-		block_size = fb->format->char_per_block[0];
-
-		offset = fb->offsets[0];
-
-		sample_x = drm_if->pipe.plane.state->src_x >> 16;
-		sample_y = drm_if->pipe.plane.state->src_y >> 16;
-		block_start_y = (sample_y / block_h) * block_h;
-		num_hblocks = sample_x / block_w;
-
-		offset += fb->pitches[0] * block_start_y;
-		offset += block_size * num_hblocks;
-
-		fl2000_framebuffer_decompress(dest, vaddr + offset,
+		fl2000_framebuffer_decompress(dest, vaddr,
 				fb->format->format, fb->pitches[0],
 				fb->height, fb->width);
 
-		fl2000_gem_prime_vunmap(gem_obj, vaddr);
-
-		atomic_set(&drm_if->update_pending, 0);
+		drm_gem_shmem_vunmap(fb->obj[0], vaddr);
 	}
 
 	drm_crtc_handle_vblank(&drm_if->pipe.crtc);
