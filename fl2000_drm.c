@@ -181,7 +181,6 @@ static void fl2000_framebuffer_decompress(u8 *dst, u32 *src, u32 format,
 	}
 }
 
-/* TODO: Somehow we need to ensure we are using only framebuffer plane 0 */
 int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
 		size_t dest_size)
 {
@@ -201,7 +200,7 @@ int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
 
 		fb = drm_if->pipe.plane.state->fb;
 		if (!fb)
-			return -ENODEV;
+			return -EINVAL;
 
 		vaddr = drm_gem_shmem_vmap(fb->obj[0]);
 		if (!vaddr)
