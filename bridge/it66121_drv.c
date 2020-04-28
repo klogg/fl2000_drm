@@ -39,6 +39,7 @@ struct it66121_priv {
 	struct regmap_field *ddc_error;
 	struct regmap_field *clr_irq;
 
+	struct edid *edid;
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
 };
 
@@ -426,13 +427,16 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
 	int ret;
-	struct edid *edid;
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv,
 			connector);
+	struct edid *edid = priv->edid;
 
-	edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
-	if (!edid)
-		return -ENOMEM;
+	if (!edid) {
+		edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
+		if (!edid)
+			return -ENOMEM;
+		priv->edid = edid;
+	}
 
 	ret = drm_add_edid_modes(connector, edid);
 	if (ret)
