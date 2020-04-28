@@ -42,10 +42,10 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 
 /* Stick to 24-bit RGB for now */
 /* XXX: If we use compression, do we need to change this? */
-#define BPP			24
+#define BPP			32
 static const u32 fl2000_pixel_formats[] = {
-	/* 24-bit RGB le */
-	DRM_FORMAT_RGB888,
+	/* 32 bpp RGB */
+	DRM_FORMAT_XRGB8888,
 };
 
 /* List all supported bridges */
@@ -182,8 +182,6 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 	struct drm_framebuffer *fb = plane_state->fb;
 	int n;
 
-	dev_info(drm->dev, "fl2000_display_check");
-
 	n = fb->format->num_planes;
 	if (n > 1) {
 		/* TODO: Check real buffer area for transmission */
@@ -195,6 +193,28 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 		return -EINVAL;
 	}
 	return 0;
+}
+
+static void fl2000_framebuffer_decompress(u8 *dst, u32 *src, u32 format,
+		u32 pitch, u32 height, u32 width)
+{
+	unsigned int x, y;
+
+	switch(format){
+	case DRM_FORMAT_XRGB8888:
+		for (y = 0; y < height; y++) {
+			for (x = 0; x < width; x++) {
+				*dst++ = (src[x] & 0x000000FF) >>  0;
+				*dst++ = (src[x] & 0x0000FF00) >>  8;
+				*dst++ = (src[x] & 0x00FF0000) >> 16;
+			}
+			src += pitch / 4;
+		}
+		break;
+	default:
+		/* Unknown format, do nothing */
+		break;
+	}
 }
 
 /* TODO: Somehow we need to ensure we are using only framebuffer plane 0 */
@@ -224,12 +244,6 @@ int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
 			return -ENODEV;
 
 		fb_size = fb->format->cpp[0] * fb->height * fb->width;
-		if (fb_size != dest_size) {
-			dev_err(drm->dev, "Framebuffer size wrong %zd != %zd " \
-					"height %d, width  %d",
-					fb_size, dest_size,
-					fb->height, fb->width);
-		}
 
 		gem_obj = drm_gem_fb_get_obj(fb, 0);
 		if (!gem_obj)
@@ -253,7 +267,9 @@ int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
 		offset += fb->pitches[0] * block_start_y;
 		offset += block_size * num_hblocks;
 
-		memcpy(dest, vaddr + offset, dest_size);
+		fl2000_framebuffer_decompress(dest, vaddr + offset,
+				fb->format->format, fb->pitches[0],
+				fb->height, fb->width);
 
 		fl2000_gem_prime_vunmap(gem_obj, vaddr);
 
@@ -274,8 +290,6 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	struct drm_plane_state *pstate = pipe->plane.state;
 	struct drm_framebuffer *fb = pstate->fb;
 	struct fl2000_drm_if *drm_if = fl2000_drm_to_drm_if(drm);
-
-	dev_info(drm->dev, "fl2000_display_update");
 
 	if (fb && !atomic_read(&drm_if->update_pending))
 		atomic_set(&drm_if->update_pending, 1);
