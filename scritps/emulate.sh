@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Intel or AMD IOMMU driver for qemu
 IOMMU="intel-iommu"
@@ -13,6 +13,7 @@ fi
 
 # Start virtme
 virtme-run --pwd --installed-kernel --qemu-opts -cpu host \
+	-m 4G \
 	-nic user,ipv6=off,model=e1000 \
 	-machine q35,accel=kvm,kernel_irqchip=split \
 	-device $IOMMU,intremap=on,caching-mode=on \
