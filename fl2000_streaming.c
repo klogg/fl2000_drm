@@ -29,8 +29,6 @@ struct fl2000_stream {
 };
 
 #define FL2000_DBG_FRAME_SIZE		1152000
-#define FL2000_DBG_BYTES_INTERVAL	49152
-#define FL2000_DBG_PACKETS		24
 
 static void fl2000_stream_release(struct device *dev, void *res)
 {
