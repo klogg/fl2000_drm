@@ -12,12 +12,14 @@ Debugging and development of kernel module may be an issue - crashes or resource
 
 It seems that QEMU has some issues with isochronous transfers: when scheduling a series 16x3x1024 transfers for 1152000 bytes I saw only handful of threm actually transmitted. In order to enable isochronous transfers debug & development, I give whole USB Host Controller to VM and avoid using qemu-xhci model. Similar problem was discovered with USB Interrupt IN transfers - endpoint is always stalling during debug after couple transactions.
 
-Make sure you have IOMMU enabled on kernel boot: `amd_iommu=on"` on AMD host or `intel_iommu=on` on Intel host. For distros with VFIO builtin (e.g. Ubuntu 20.04) you also need to add kernel boot arg; `vfio-pci.ids=$PCI_ID` where PCI_ID is identifier of your USB Host Controller that you want to debug with. In case if you do not have VFIO built into the kernel (e.g. Ubuntu 19.10), you need to start it before running emulation:
+Make sure you have IOMMU enabled on kernel boot: `amd_iommu=on"` on AMD host or `intel_iommu=on` on Intel host. For distros with VFIO builtin (e.g. Ubuntu 20.04) you also need to add kernel boot arg; `vfio-pci.ids=$PCI_ID` where PCI_ID is identifier of your USB Host Controller that you want to debug with. In case if you do not have VFIO built into the kernel (e.g. Ubuntu 19.10), you need to start it before running emulation:<br>
+```bash
+modprobe vfio
+modprobe vfio_iommu_type1
+modprobe vfio_pci ids=$PCI_ID
+modprobe vfio_virqfd
+```
 
-     modprobe vfio
-     modprobe vfio_iommu_type1
-     modprobe vfio_pci ids=$PCI_ID
-     modprobe vfio_virqfd
 Examples above were tested with ASMedia Technology Inc. ASM1142 USB 3.1 Host Controller.
 
 ## Register & I2C programming
@@ -43,5 +45,26 @@ Following functions are already implemented in the driver code:
 
 *TODO* Add buffer for sending arbitrary frame without using DRM
 
+## USB bus debug
+Capture 10000 packets and store in temp folderof virtual machine
+```bash
+tcpdump -i usbmon2 -nn -w /tmp/usb.pcap -c 10000 &
+```
+then upload to host via `scp` (sshd must be runningand configured), e.g.
+```bash
+scp /tmp/usb.pcap klogg@10.0.2.2:/home/klogg/Downloads
+```
+
 ## DRM implementation
-*TODO* Support for DRM development tools
+
+### kmscube
+Test with kmscube built with default settings (see https://gitlab.freedesktop.org/mesa/kmscube/)
+```bash
+kmscube -D /dev/dri/card0 -v 800x480-66
+```
+
+### mplayer
+Default installation of mplayer and some demo media file (Google it)
+```bash
+mplayer -nolirc -nosound -vo fbdev2:/dev/fb0 -vf scale=800:-3 file_example_MP4_640_3MG.mp4
+```
