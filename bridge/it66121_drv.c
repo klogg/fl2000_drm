@@ -703,6 +703,10 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		return;
 	}
 
+	/* TODO: Is this the right place? or connector's mode_set()? */
+	drm_hdmi_avi_infoframe_colorspace(&priv->hdmi_avi_infoframe,
+			priv->connector.state);
+
 	frame_size = hdmi_avi_infoframe_pack(&priv->hdmi_avi_infoframe, buf,
 			sizeof(buf));
 	if (frame_size < 0) {
