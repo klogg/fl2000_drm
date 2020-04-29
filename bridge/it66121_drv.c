@@ -774,7 +774,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
 			IT66121_HDMI_MODE_DVI);
 	if (ret) {
-		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
+		dev_err(bridge->dev->dev, "Cannot enable DVI mode " \
 				"(%d)", ret);
 		return;
 	}
