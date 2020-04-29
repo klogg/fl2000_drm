@@ -703,9 +703,10 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		return;
 	}
 
+	/* Original driver just sets it this way, according to resolution */
 	/* TODO: Is this the right place? or connector's mode_set()? */
-	drm_hdmi_avi_infoframe_colorspace(&priv->hdmi_avi_infoframe,
-			priv->connector.state);
+	priv->hdmi_avi_infoframe.colorimetry = HDMI_COLORIMETRY_ITU_709;
+	priv->hdmi_avi_infoframe.picture_aspect = HDMI_PICTURE_ASPECT_4_3;
 
 	frame_size = hdmi_avi_infoframe_pack(&priv->hdmi_avi_infoframe, buf,
 			sizeof(buf));
