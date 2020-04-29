@@ -415,6 +415,7 @@ static int it66121_connector_get_modes(struct drm_connector *connector)
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv,
 			connector);
 	struct edid *edid = priv->edid;
+	struct drm_device *drm = connector->dev;
 
 	if (!edid) {
 		edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
@@ -422,6 +423,12 @@ static int it66121_connector_get_modes(struct drm_connector *connector)
 			return -ENOMEM;
 		priv->edid = edid;
 	}
+
+	/* TODO: Move this to where we set "_DVI" flag to IT66121 */
+	if (drm_detect_hdmi_monitor(edid))
+		dev_info(drm->dev, "HDMI monitor detected by EDID");
+
+	drm_connector_update_edid_property(connector, edid);
 
 	ret = drm_add_edid_modes(connector, edid);
 	if (ret)
