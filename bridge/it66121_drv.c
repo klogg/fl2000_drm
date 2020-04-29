@@ -354,27 +354,15 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		offset++;
 	}
 
+	/* Abort DDC */
+	ret = it66121_abort_ddc_ops(priv);
+	if (ret)
+		return ret;
+
 	while (remain > 0) {
 		/* Add bytes that will be lost during EDID read */
 		int size = ((remain + EDID_LOSS_LEN) > EDID_FIFO_SIZE) ?
 				EDID_FIFO_SIZE : (remain + EDID_LOSS_LEN);
-
-		/* Clear DDC FIFO */
-		ret = it66121_clear_ddc_fifo(priv);
-		if (ret)
-			return ret;
-
-		/* Power up CRCLK */
-		regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
-				IT66121_SYS_CRCLK_OFF,
-				IT66121_SYS_CRCLK_OFF);
-		if (ret)
-			return ret;
-
-		/* Abort DDC */
-		ret = it66121_abort_ddc_ops(priv);
-		if (ret)
-			return ret;
 
 		/* Clear DDC FIFO */
 		ret = it66121_clear_ddc_fifo(priv);
