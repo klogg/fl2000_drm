@@ -64,17 +64,20 @@ static const struct regmap_range_cfg it66121_regmap_banks[] = {
 	},
 };
 
-/* TODO: Move to RBTREE cache */
+static bool it66121_reg_volatile(struct device *dev, unsigned int reg)
+{
+	return IT66121_REG_VOLATILE(reg);
+}
+
 static const struct regmap_config it66121_regmap_config = {
 	.val_bits = 8, /* 8-bit register size */
 	.reg_bits = 8, /* 8-bit register address space */
 	.reg_stride = 1,
 	.max_register = 2 * IT66121_BANK_SIZE - 1, /* 2 banks of registers */
 
-	.cache_type = REGCACHE_NONE,
+	.cache_type = REGCACHE_RBTREE,
 
-	//.precious_reg = it66121_precious_reg,
-	//.volatile_reg = it66121_volatile_reg,
+	.volatile_reg = it66121_reg_volatile,
 
 	.ranges = it66121_regmap_banks,
 	.num_ranges = ARRAY_SIZE(it66121_regmap_banks),

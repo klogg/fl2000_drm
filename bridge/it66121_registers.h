@@ -265,4 +265,30 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 
 /* CEC registers ignored (must be configured as a separate regmap / device) */
 
+/*
+ * List of volatile registers that shall not be cached
+ * */
+static inline bool IT66121_REG_VOLATILE(u32 reg)
+{
+	switch (reg) {
+	case IT66121_INT_STATUS_1:
+	case IT66121_INT_STATUS_2:
+	case IT66121_INT_STATUS_3:
+	case IT66121_SYS_STATUS:
+	case IT66121_DDC_STATUS:
+	case IT66121_DDC_RD_FIFO:
+	case IT66121_ROM_STATUS:
+	case IT66121_OS_FREQ_NUM_2:
+	case IT66121_OS_FREQ_NUM_1:
+	case IT66121_TX_CLK_COUNT:
+	case IT66121_PLL_LOCK_STATUS:
+	case IT66121_AUDIO_FREQ_COUNT:
+	case IT66121_HDMI_PCLK_CONTROL:
+	case IT66121_HDMI_PCLK_COUNT:
+		return true;
+	default:
+		return false;
+	}
+}
+
 #endif /* __FL2000_REGISTERS_H__ */
