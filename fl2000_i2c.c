@@ -18,8 +18,8 @@
 #define I2C_XFER_ADDR_MASK	(~0x3ul)
 
 /* Timeout in us for I2C read/write operations */
-#define I2C_RDWR_INTERVAL	(8 * 1000) 			/* 8ms */
-#define I2C_RDWR_TIMEOUT	(32 * I2C_RDWR_INTERVAL)	/* 256ms */
+#define I2C_RDWR_INTERVAL	(200)
+#define I2C_RDWR_TIMEOUT	(256 * 1000)
 
 struct fl2000_i2c_algo_data {
 	struct usb_device *usb_dev;
