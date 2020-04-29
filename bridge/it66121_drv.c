@@ -212,9 +212,6 @@ static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 	int ret;
 	unsigned int ddc_control_val;
 
-	struct device *dev = priv->bridge.dev->dev;
-	dev_info(dev, "Clear DDC FIFO");
-
 	ret = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
 	if (ret)
 		return ret;
@@ -241,9 +238,6 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 {
 	int i, ret;
 	unsigned int ddc_control_val;
-
-	struct device *dev = priv->bridge.dev->dev;
-	dev_info(dev, "Abort DDC Operations");
 
 	/* XXX: Prior to DDC abort command there was also a reset of HDCP:
 	 *  1. HDCP_DESIRE clear bit CP DESIRE
