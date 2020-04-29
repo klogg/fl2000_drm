@@ -31,7 +31,7 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 /* XXX: If we use compression, do we need to change this? */
 #define BPP			32
 static const u32 fl2000_pixel_formats[] = {
-	/* 32 bpp RGB */
+	DRM_FORMAT_RGB888,
 	DRM_FORMAT_XRGB8888,
 };
 
@@ -165,6 +165,13 @@ static void fl2000_framebuffer_decompress(u8 *dst, u32 *src, u32 format,
 	unsigned int x, y;
 
 	switch(format){
+	case DRM_FORMAT_RGB888:
+		for (y = 0; y < height; y++) {
+			memcpy(dst, src, width * 3);
+			src += pitch / 4;
+			dst += width * 3;
+		}
+		break;
 	case DRM_FORMAT_XRGB8888:
 		for (y = 0; y < height; y++) {
 			for (x = 0; x < width; x++) {
