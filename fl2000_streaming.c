@@ -46,8 +46,6 @@ static void fl2000_stream_work(struct work_struct *work)
 	if (!urb)
 		return;
 
-	/* TODO: handle USB errors in status */
-
 	usb_dev = urb->dev;
 
 	fl2000_framebuffer_get(usb_dev, urb->transfer_buffer,
@@ -55,11 +53,13 @@ static void fl2000_stream_work(struct work_struct *work)
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret) {
+		/* TODO: handle USB errors in ret */
 		dev_err(&usb_dev->dev, "Data URB error %d", ret);
 	}
 
 	ret = usb_submit_urb(stream->zero_len_urb, GFP_KERNEL);
 	if (ret) {
+		/* TODO: handle USB errors in ret */
 		dev_err(&usb_dev->dev, "Zero length URB error %d", ret);
 	}
 }
@@ -74,6 +74,8 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 	struct usb_device *usb_dev = urb->dev;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
+
+	/* TODO: handle USB errors in status */
 
 	if (!stream)
 		return;
@@ -151,11 +153,13 @@ int fl2000_stream_enable(struct usb_device *usb_dev)
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret) {
+		/* TODO: handle USB errors in ret */
 		dev_err(&usb_dev->dev, "Data URB error %d", ret);
 	}
 
 	ret = usb_submit_urb(stream->zero_len_urb, GFP_KERNEL);
 	if (ret) {
+		/* TODO: handle USB errors in ret */
 		dev_err(&usb_dev->dev, "Zero length URB error %d", ret);
 	}
 

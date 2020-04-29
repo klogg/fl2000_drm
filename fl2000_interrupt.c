@@ -97,6 +97,8 @@ static void fl2000_intr_completion(struct urb *urb)
 	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
 			fl2000_intr_release, NULL, NULL);
 
+	/* TODO: Process URB status */
+
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 	queue_work(intr->work_queue, &intr->work);
 }
@@ -135,7 +137,6 @@ int fl2000_intr_create(struct usb_interface *interface)
 	}
 	devres_add(&usb_dev->dev, intr);
 
-	/* TODO: Do we need a different interval? */
 	intr->poll_interval = desc->bInterval;
 
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
