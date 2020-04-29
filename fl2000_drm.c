@@ -120,7 +120,7 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 
 	dev_info(drm->dev, "fl2000_display_enable");
 
-	/* TODO: Kick off ISO queue */
+	/* TODO: Kick off streaming queue */
 
 	drm_crtc_vblank_on(crtc);
 }
@@ -132,7 +132,7 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 
 	dev_info(drm->dev, "fl2000_display_disable");
 
-	/* TODO: Stop ISO queue */
+	/* TODO: Stop streaming queue */
 
 	drm_crtc_vblank_off(crtc);
 }
