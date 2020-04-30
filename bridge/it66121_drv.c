@@ -39,6 +39,11 @@ struct it66121_priv {
 	struct regmap_field *ddc_error;
 	struct regmap_field *clr_irq;
 
+	struct regmap_field *swap_pack;
+	struct regmap_field *swap_ml;
+	struct regmap_field *swap_yc;
+	struct regmap_field *swap_rb;
+
 	struct edid *edid;
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
 };
@@ -841,6 +846,15 @@ static int it66121_probe(struct i2c_client *client)
 			priv->regmap, IT66121_DDC_STATUS_ddc_done);
 	priv->ddc_error = devm_regmap_field_alloc(&client->dev,
 			priv->regmap, IT66121_DDC_STATUS_ddc_error);
+
+	priv->swap_pack = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_HDMI_DATA_SWAP_pack);
+	priv->swap_ml = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_HDMI_DATA_SWAP_ml);
+	priv->swap_yc = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_HDMI_DATA_SWAP_yc);
+	priv->swap_rb = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_HDMI_DATA_SWAP_rb);
 
 	/* Dont really care which one failed */
 	if (IS_ERR(priv->irq_pending) ||

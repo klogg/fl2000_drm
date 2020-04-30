@@ -182,7 +182,18 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 #define IT66121_PCI2C_CEC_ADDRESS	0x08D
 /* reserved */
 /* reserved */
-/* 090 - 0BF Pattern generation registers, ignored */
+/* 090 - 0B2 Pattern generation registers, ignored */
+/* reserved */
+#define IT66121_HDMI_DATA_SWAP		0x0BF
+static const struct reg_field IT66121_HDMI_DATA_SWAP_pack =
+		REG_FIELD(IT66121_HDMI_DATA_SWAP, 3, 3);
+static const struct reg_field IT66121_HDMI_DATA_SWAP_ml =
+		REG_FIELD(IT66121_HDMI_DATA_SWAP, 2, 2);
+static const struct reg_field IT66121_HDMI_DATA_SWAP_yc =
+		REG_FIELD(IT66121_HDMI_DATA_SWAP, 1, 1);
+static const struct reg_field IT66121_HDMI_DATA_SWAP_rb =
+		REG_FIELD(IT66121_HDMI_DATA_SWAP, 0, 0);
+
 #define IT66121_HDMI_MODE		0x0C0
 #define IT66121_HDMI_MODE_HDMI		(1<<0)
 #define IT66121_HDMI_MODE_DVI		(0<<0)
