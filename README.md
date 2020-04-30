@@ -17,7 +17,7 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 
 All registers (both FL2000 and IT66121) access is implemented via regmaps. It is assumed that FL2000DX outputs DPI interface (kind of "crtc" output, not "encoder") that is connected to HDMI or other transciever. USB Bulk Streams are not supported by FL2000DX, so implementation will simly use Bulk endpoint.
 
-See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) for more details on development.
+See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) and [analysis section](https://github.com/klogg/fl2000_drm/blob/master/ANALYSIS.md) for more details on development.
 
 ### Endpoints addresses HW bug
 Recent kernels have a fix that checks duplication of USB endpoint numbers across interfaces which is an issue due to HW design bug: it uses same endpoint #1 across interfaces 1 and 2, which is not allowed by USB specification:endpoint addresses can be shared only between alternate settings, not between interfaces. Kernel log with issue looks like this:
@@ -41,7 +41,7 @@ config 1 interface 1 altsetting 6 has a duplicate endpoint with address 0x1, ski
 In order to workaround this same as original driver we use default altsetting (#0) of streaming interface (#1) with bulk transfers.
 
 ## How to use
-**IMPORTANT!** As it is seen from the original driver sources FL2000 does not properly support USB3 U1/U2 LPM. While the dongle was working properly woth desktop Linux machine, on the laptop with Linux the dongle had issues because USB hub was setting U1/U2 timers despite LPM configuration was disabled in the driver. Issues observed were: all interrupt URBs were not delivered, sometimes control URBs were not delivered. This can *probably* be fixed using [Linux USB device quirks](elixir.bootlin.com/linux/latest/source/drivers/usb/core/quirks.c), e.g. with kernel boot param:<br> `quirks=1D5C:2000:USB_QUIRK_NO_LPM`
+**IMPORTANT!** As it is seen from the original driver sources FL2000 does not properly support USB3 U1/U2 LPM. While the dongle was working properly woth desktop Linux machine, on the laptop with Linux the dongle had issues because USB hub was setting U1/U2 timers despite LPM configuration was disabled in the driver. Issues observed were: all interrupt URBs were not delivered, sometimes control URBs were not delivered. This can *probably* be fixed using [Linux USB device quirks](https://elixir.bootlin.com/linux/latest/source/drivers/usb/core/quirks.c), e.g. with kernel boot param:<br> `quirks=1D5C:2000:USB_QUIRK_NO_LPM`
 
 ## Limitations (not implemented)
  * D-sub
