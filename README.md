@@ -72,6 +72,7 @@ Not shared here due to NDAs, Copyrights, etc.
  * IT66121FN Datasheet v1.02
  * IT66121 Programming Guide v1.05
  * IT66121 Register List Release V1.0
+ * AV BDP v1.0
  * CEA-861-D
 
 ## Notes
@@ -86,3 +87,6 @@ Not shared here due to NDAs, Copyrights, etc.
  * Allow driver to be builtin to kernel
  * Refactor for better / cleaner structure and modularity
  * Implement unit testing with latest kernel & DRM unit testing tools, target coverage shall be 100%
+ * Switch to isochronous transfers
+ * Add computation for PLL settings from selected monitor mode
+ * Implement suspend / resume
