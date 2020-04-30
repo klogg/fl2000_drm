@@ -17,10 +17,10 @@ The IT66121 is a high-performance and low-power single channel HDMI transmitter,
 
 All registers (both FL2000 and IT66121) access is implemented via regmaps. It is assumed that FL2000DX outputs DPI interface (kind of "crtc" output, not "encoder") that is connected to HDMI or other transciever. USB Bulk Streams are not supported by FL2000DX, so implementation will simly use Bulk endpoint.
 
-See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) for more details on development.
+See [debug section](https://github.com/klogg/fl2000_drm/blob/master/DEBUG.md) and [analysis section](https://github.com/klogg/fl2000_drm/blob/master/ANALYSIS.md) for more details on development.
 
-### Bulk vs. Isochronous transfers
-Recent kernels have a fix that checks duplication of USB endpoint numbers across interfaces which is an issue due to HW design bug: it uses same endpoint #1 across interfaces 1 and 2, which is not allowed by USB specification:endpoint addresses can be shared only between alternate settings, not between interfaces. In order to workaround this we use isochronous transfers, while original driver uses default altsetting (#0) of streaming interface (#1) with bulk transfers. Kernel log with issue looks like this:
+### Endpoints addresses HW bug
+Recent kernels have a fix that checks duplication of USB endpoint numbers across interfaces which is an issue due to HW design bug: it uses same endpoint #1 across interfaces 1 and 2, which is not allowed by USB specification:endpoint addresses can be shared only between alternate settings, not between interfaces. Kernel log with issue looks like this:
 ```
 new SuperSpeed Gen 1 USB device number 2 using xhci_hcd
 config 1 interface 1 altsetting 0 has a duplicate endpoint with address 0x81, skipping
@@ -38,24 +38,18 @@ config 1 interface 1 altsetting 5 has a duplicate endpoint with address 0x1, ski
 config 1 interface 1 altsetting 6 has a duplicate endpoint with address 0x81, skipping
 config 1 interface 1 altsetting 6 has a duplicate endpoint with address 0x1, skipping
 ```
-### DRM initialization flow
- * mode_set for simple display pipe's encoder - configure FL2000 PLL and timings, enable bridge configuration
- * mode_set for bridge - configure IT66121 AVI infoframe
- * enable for for simple display pipe - disable bridge configuration
- * enable for bridge - unmute AVI
+In order to workaround this same as original driver we use default altsetting (#0) of streaming interface (#1) with bulk transfers.
 
 ## How to use
-**IMPORTANT!** As it is seen from the original driver sources FL2000 does not properly support USB3 U1/U2 LPM. While the dongle was working properly woth desktop Linux machine, on the laptop with Linux the dongle had issues because USB hub was setting U1/U2 timers despite LPM configuration was disabled in the driver. Issues observed were: all interrupt URBs were not delivered, sometimes control URBs were not delivered. This can *probably* be fixed using [Linux USB device quirks](elixir.bootlin.com/linux/latest/source/drivers/usb/core/quirks.c), e.g. with kernel boot param:<br> `quirks=1D5C:2000:USB_QUIRK_NO_LPM`
+**IMPORTANT!** As it is seen from the original driver sources FL2000 does not properly support USB3 U1/U2 LPM. While the dongle was working properly woth desktop Linux machine, on the laptop with Linux the dongle had issues because USB hub was setting U1/U2 timers despite LPM configuration was disabled in the driver. Issues observed were: all interrupt URBs were not delivered, sometimes control URBs were not delivered. This can *probably* be fixed using [Linux USB device quirks](https://elixir.bootlin.com/linux/latest/source/drivers/usb/core/quirks.c), e.g. with kernel boot param:<br> `quirks=1D5C:2000:USB_QUIRK_NO_LPM`
 
-## Limitations
- * D-sub is not supported
- * DVI is not supported
- * HDMI CEC is not supported
- * HDMI Audio is not supported
- * HDCP is not supported
- * USB2.0 is not supported
- * Color/format conversion is not supported (limited to RGB)
- * Dongle onboard SPI EEPROM access via USB Mass Storage is not implemented
+## Limitations (not implemented)
+ * D-sub
+ * HDMI CEC
+ * HDMI Audio
+ * HDCP
+ * USB 2.0
+ * Dongle onboard SPI EEPROM access via USB Mass Storage
 
 ## Known issues
  * Connecting more than one dongle to the same USB bus may not work
@@ -72,9 +66,18 @@ Considering, no firm decision yet. Current design uses unsafe components linking
  * Reference USB DRM implementation of DisplayLink driver: https://elixir.bootlin.com/linux/latest/source/drivers/gpu/drm/udl
  * Reference simple DRM implementation of PL111 driver: https://elixir.bootlin.com/linux/latest/source/drivers/gpu/drm/pl111
 
+## Documentation
+Not shared here due to NDAs, Copyrights, etc.
+ * FL2000 MP Memory Mapped Address Space Registers
+ * IT66121FN Datasheet v1.02
+ * IT66121 Programming Guide v1.05
+ * IT66121 Register List Release V1.0
+ * AV BDP v1.0
+ * CEA-861-D
+
 ## Notes
  * VGA (D-Sub) DAC output of FL2000DX can be implemented as a DRM bridge (dumb_vga_dac)
- * For registration of sibling I2C devices of IT66121 (CEC, DDC, ...) i2c\_new\_dummy() function may be used
+ * For registration of sibling I2C devices of IT66121 (CEC, ...) i2c\_new\_dummy() function may be used
 
 ## TODO
  * Review, test and cleanup init/cleanup procedures to ensure no leaks or races or other issues
@@ -83,6 +86,7 @@ Considering, no firm decision yet. Current design uses unsafe components linking
  * Replace bus detection & components linking with configuration (modprobe / udev)
  * Allow driver to be builtin to kernel
  * Refactor for better / cleaner structure and modularity
- * Minimize debugfs implementation
- * Move all regmaps to RBTREE, review default values, volatile and precious register sets
  * Implement unit testing with latest kernel & DRM unit testing tools, target coverage shall be 100%
+ * Switch to isochronous transfers
+ * Add computation for PLL settings from selected monitor mode
+ * Implement suspend / resume
