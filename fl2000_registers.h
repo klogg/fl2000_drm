@@ -10,6 +10,8 @@
 #ifndef __FL2000_REGISTERS_H__
 #define __FL2000_REGISTERS_H__
 
+#include <linux/types.h>
+
 #define regmap_reg_default(addr, val) {.reg = addr, .def = val}
 
 /* #### USB Control Registers Bank #### */
