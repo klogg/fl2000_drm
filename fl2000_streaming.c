@@ -23,30 +23,38 @@ int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
 /* Streaming is implemented with a single URB for each frame. USB is configured
  * to send NULL URB automatically after each data URB */
 struct fl2000_stream {
-	struct work_struct work;
-	struct workqueue_struct *work_queue;
 	struct urb *urb, *zero_len_urb;
 };
-
-#define FL2000_DBG_FRAME_SIZE		1152000
 
 static void fl2000_stream_release(struct device *dev, void *res)
 {
 	/* Noop */
 }
 
-static void fl2000_stream_work(struct work_struct *work)
+static void fl2000_stream_completion(struct urb *urb)
 {
 	int ret;
-	struct fl2000_stream *stream = container_of(work,
-			struct fl2000_stream, work);
-	struct urb *urb = stream->urb;
-	struct usb_device *usb_dev;
+	struct usb_device *usb_dev = urb->dev;
+	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
+			fl2000_stream_release, NULL, NULL);
 
-	if (!urb)
-		return;
+	/* TODO: handle USB errors in URB status */
 
-	usb_dev = urb->dev;
+	ret = usb_submit_urb(stream->zero_len_urb, GFP_KERNEL);
+	if (ret) {
+		/* TODO: handle USB errors in ret */
+		dev_err(&usb_dev->dev, "Zero length URB error %d", ret);
+	}
+}
+
+static void fl2000_stream_zero_len_completion(struct urb *urb)
+{
+	int ret;
+	struct usb_device *usb_dev = urb->dev;
+	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
+			fl2000_stream_release, NULL, NULL);
+
+	/* TODO: handle USB errors in URB status */
 
 	fl2000_framebuffer_get(usb_dev, urb->transfer_buffer,
 			urb->transfer_buffer_length);
@@ -56,88 +64,34 @@ static void fl2000_stream_work(struct work_struct *work)
 		/* TODO: handle USB errors in ret */
 		dev_err(&usb_dev->dev, "Data URB error %d", ret);
 	}
-
-	ret = usb_submit_urb(stream->zero_len_urb, GFP_KERNEL);
-	if (ret) {
-		/* TODO: handle USB errors in ret */
-		dev_err(&usb_dev->dev, "Zero length URB error %d", ret);
-	}
 }
 
-static void fl2000_stream_completion(struct urb *urb)
+int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t size)
 {
-	/* TODO: handle USB errors in status */
-}
-
-static void fl2000_stream_zero_len_completion(struct urb *urb)
-{
-	struct usb_device *usb_dev = urb->dev;
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
-			fl2000_stream_release, NULL, NULL);
-
-	/* TODO: handle USB errors in status */
-
-	if (!stream)
-		return;
-
-	INIT_WORK(&stream->work, &fl2000_stream_work);
-	queue_work(stream->work_queue, &stream->work);
-}
-
-int fl2000_stream_mode_set(struct usb_device *usb_dev)
-{
-	int ret;
 	u8 *buf;
 	dma_addr_t buf_addr;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
+	struct urb *urb;
 
 	if (!stream)
 		return -ENODEV;
 
-	ret = usb_set_interface(usb_dev, 0, 1);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot set streaming interface " \
-				"altstting for ISO transfers");
-		return ret;
-	}
+	urb = stream->urb;
 
-	/* There shall be no URB active on "mode_set" */
-	if (stream->urb || stream->zero_len_urb)
-		return -EBUSY;
+	/* Destroy existing data buffer */
+	if (urb->transfer_buffer)
+		usb_free_coherent(usb_dev, urb->transfer_buffer_length,
+				urb->transfer_buffer, urb->transfer_dma);
 
-	/* XXX: Right now we have an intermediate buffer that keeps the frame
-	 * between updates to buffer. This can probably be improved with proper
-	 * GEM implementation */
-	buf = usb_alloc_coherent(usb_dev, FL2000_DBG_FRAME_SIZE, GFP_KERNEL,
-			&buf_addr);
+	buf = usb_alloc_coherent(usb_dev, size, GFP_KERNEL, &buf_addr);
 	if (!buf) {
 		dev_err(&usb_dev->dev, "Allocate stream FB buffer failed");
 		return -ENOMEM;
 	}
 
-	stream->urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!stream->urb) {
-		dev_err(&usb_dev->dev, "Allocate data URB failed");
-		return -ENOMEM;
-	}
-
-	usb_fill_bulk_urb(stream->urb, usb_dev,
-			usb_sndbulkpipe(usb_dev, 1),
-			buf, FL2000_DBG_FRAME_SIZE,
-			fl2000_stream_completion, NULL);
-
-	/* Zero-length URB must be sent after FB data to indicate EOF */
-	stream->zero_len_urb = usb_alloc_urb(0, GFP_KERNEL);
-	if (!stream->zero_len_urb) {
-		dev_err(&usb_dev->dev, "Allocate zero length URB failed");
-		return -ENOMEM;
-	}
-
-	usb_fill_bulk_urb(stream->zero_len_urb, usb_dev,
-			usb_sndbulkpipe(usb_dev, 1),
-			NULL, 0,
-			fl2000_stream_zero_len_completion, NULL);
+	urb->transfer_buffer = buf;
+	urb->transfer_dma = buf_addr;
 
 	return 0;
 }
@@ -155,12 +109,6 @@ int fl2000_stream_enable(struct usb_device *usb_dev)
 	if (ret) {
 		/* TODO: handle USB errors in ret */
 		dev_err(&usb_dev->dev, "Data URB error %d", ret);
-	}
-
-	ret = usb_submit_urb(stream->zero_len_urb, GFP_KERNEL);
-	if (ret) {
-		/* TODO: handle USB errors in ret */
-		dev_err(&usb_dev->dev, "Zero length URB error %d", ret);
 	}
 
 	return ret;
@@ -195,6 +143,13 @@ int fl2000_stream_create(struct usb_interface *interface)
 	struct fl2000_stream *stream;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
+	ret = usb_set_interface(usb_dev, 0, 1);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot set streaming interface " \
+				"altstting for bulk transfers");
+		return ret;
+	}
+
 	stream = devres_alloc(&fl2000_stream_release, sizeof(*stream),
 			GFP_KERNEL);
 	if (!stream) {
@@ -203,10 +158,27 @@ int fl2000_stream_create(struct usb_interface *interface)
 	}
 	devres_add(&usb_dev->dev, stream);
 
-	/* No URB allocated so far */
-	stream->urb = NULL;
+	stream->urb = usb_alloc_urb(0, GFP_KERNEL);
+	if (!stream->urb) {
+		dev_err(&usb_dev->dev, "Allocate data URB failed");
+		return -ENOMEM;
+	}
 
-	stream->work_queue = create_workqueue("fl2000_stream");
+	usb_fill_bulk_urb(stream->urb, usb_dev,
+			usb_sndbulkpipe(usb_dev, 1),
+			NULL, 0,
+			fl2000_stream_completion, NULL);
+
+	stream->zero_len_urb = usb_alloc_urb(0, GFP_KERNEL);
+	if (!stream->zero_len_urb) {
+		dev_err(&usb_dev->dev, "Allocate zero length URB failed");
+		return -ENOMEM;
+	}
+
+	usb_fill_bulk_urb(stream->zero_len_urb, usb_dev,
+			usb_sndbulkpipe(usb_dev, 1),
+			NULL, 0,
+			fl2000_stream_zero_len_completion, NULL);
 
 	dev_info(&usb_dev->dev, "Streaming interface up");
 
@@ -218,14 +190,19 @@ void fl2000_stream_destroy(struct usb_interface *interface)
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
+	struct urb *urb;
 
-	if (!stream)
-		return;
+	if (stream) {
+		urb = stream->urb;
 
-	usb_kill_urb(stream->urb);
-	usb_free_urb(stream->urb);
+		/* Destroy existing data buffer */
+		if (urb && urb->transfer_buffer)
+			usb_free_coherent(usb_dev, urb->transfer_buffer_length,
+					urb->transfer_buffer, urb->transfer_dma);
 
-	destroy_workqueue(stream->work_queue);
+		usb_free_urb(stream->urb);
+		usb_free_urb(stream->zero_len_urb);
+	}
 
 	devres_release(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 }
