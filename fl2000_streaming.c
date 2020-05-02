@@ -175,6 +175,7 @@ void fl2000_stream_disable(struct usb_device *usb_dev)
 		return;
 
 	usb_kill_urb(stream->urb);
+	usb_kill_urb(stream->zero_len_urb);
 }
 
 /**
