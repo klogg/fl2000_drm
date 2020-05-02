@@ -13,6 +13,7 @@ void fl2000_inter_check(struct usb_device *usb_dev);
 #define INTR_BUFSIZE	1
 
 struct fl2000_intr {
+	struct usb_device *usb_dev;
 	u8 poll_interval;
 	struct urb *urb;
 	struct work_struct work;
@@ -21,22 +22,30 @@ struct fl2000_intr {
 
 static void fl2000_intr_work(struct work_struct *work)
 {
-	int ret;
 	struct fl2000_intr *intr = container_of(work, struct fl2000_intr, work);
-	struct urb *urb = intr->urb;
-	struct usb_device *usb_dev;
 
-	if (urb == NULL)
-		return;
+	fl2000_inter_check(intr->usb_dev);
+}
 
-	usb_dev = urb->dev;
+static void fl2000_intr_release(struct device *dev, void *res)
+{
+	/* Noop */
+}
+
+static void fl2000_intr_completion(struct urb *urb)
+{
+	int ret;
+	struct usb_device *usb_dev = urb->dev;
+	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
+			fl2000_intr_release, NULL, NULL);
 
 	switch (urb->status) {
 	/* All went well */
 	case 0:
-		/* This possibly involves reading I2C registers, etc. so shall be
-		 * scheduled as a work queue */
-		fl2000_inter_check(usb_dev);
+		/* This possibly involves reading I2C registers, etc. so better
+		 * to schedule a work queue */
+		INIT_WORK(&intr->work, &fl2000_intr_work);
+		queue_work(intr->work_queue, &intr->work);
 		break;
 
 	/* URB was unlinked or device shutdown in progress, do nothing */
@@ -86,23 +95,6 @@ static void fl2000_intr_work(struct work_struct *work)
 	}
 }
 
-static void fl2000_intr_release(struct device *dev, void *res)
-{
-	/* Noop */
-}
-
-static void fl2000_intr_completion(struct urb *urb)
-{
-	struct usb_device *usb_dev = urb->dev;
-	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
-			fl2000_intr_release, NULL, NULL);
-
-	/* TODO: Process URB status */
-
-	INIT_WORK(&intr->work, &fl2000_intr_work);
-	queue_work(intr->work_queue, &intr->work);
-}
-
 /**
  * fl2000_intr_create() - interrupt processing context creation
  * @interface:	USB interrupt transfers interface
@@ -138,6 +130,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 	devres_add(&usb_dev->dev, intr);
 
 	intr->poll_interval = desc->bInterval;
+	intr->usb_dev = usb_dev;
 
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!intr->urb) {
