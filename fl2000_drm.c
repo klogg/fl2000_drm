@@ -12,7 +12,7 @@ int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
-int fl2000_stream_mode_set(struct usb_device *usb_dev);
+int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t size);
 int fl2000_stream_enable(struct usb_device *usb_dev);
 void fl2000_stream_disable(struct usb_device *usb_dev);
 
@@ -27,7 +27,7 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 #define MAX_WIDTH		4000
 #define MAX_HEIGHT		4000
 
-/* Stick to 24-bit RGB for now */
+/* Stick to 24-bit RGB output for now */
 /* XXX: If we use compression, do we need to change this? */
 #define BPP			32
 static const u32 fl2000_pixel_formats[] = {
@@ -354,7 +354,8 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 
-	fl2000_stream_mode_set(usb_dev);
+	/* XXX: Assume 24-bit RGB output mode */
+	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay * 3);
 }
 
 static void fl2000_output_enable(struct drm_encoder *encoder)
