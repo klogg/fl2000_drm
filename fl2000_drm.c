@@ -278,8 +278,6 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	fl2000_vga_isoch_reg isoch = {.val = 0};
 	u32 mask;
 
-	dev_info(drm->dev, "fl2000_output_mode_set");
-
 	mask = 0;
 	aclk.force_pll_up = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_pll_up);
