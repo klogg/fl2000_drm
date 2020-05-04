@@ -56,8 +56,8 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 
 	/* TODO: handle USB errors in URB status */
 
-	fl2000_framebuffer_get(usb_dev, urb->transfer_buffer,
-			urb->transfer_buffer_length);
+	fl2000_framebuffer_get(usb_dev, stream->urb->transfer_buffer,
+			stream->urb->transfer_buffer_length);
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret) {
@@ -79,7 +79,11 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t size)
 
 	urb = stream->urb;
 
-	/* Destroy existing data buffer */
+	/* If there's a buffer with same size - keep it */
+	if (urb->transfer_buffer_length == size)
+		return 0;
+
+	/* Destroy existing data buffer if it has the wrong size*/
 	if (urb->transfer_buffer)
 		usb_free_coherent(usb_dev, urb->transfer_buffer_length,
 				urb->transfer_buffer, urb->transfer_dma);
@@ -92,6 +96,7 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t size)
 
 	urb->transfer_buffer = buf;
 	urb->transfer_dma = buf_addr;
+	urb->transfer_buffer_length = size;
 
 	return 0;
 }
