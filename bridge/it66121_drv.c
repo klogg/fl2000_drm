@@ -342,9 +342,6 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 	unsigned int rd_fifo_val;
 	static u8 header[EDID_LOSS_LEN] = {0x00, 0xFF, 0xFF};
 	struct it66121_priv *priv = context;
-	struct device *dev = priv->bridge.dev->dev;
-
-	dev_info(dev, "Reading EDID block %d (%zd bytes)", block, len);
 
 	/* Statically fill first 3 bytes (due to EDID reading HW bug) */
 	for (i = 0; (i < EDID_LOSS_LEN) && (remain > 0); i++) {
