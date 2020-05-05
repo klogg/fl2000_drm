@@ -44,6 +44,7 @@ struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
 	atomic_t update_pending;
+	void *vaddr;
 };
 
 static void fl2000_drm_if_release(struct device *dev, void *res)
@@ -188,39 +189,53 @@ static void fl2000_framebuffer_decompress(u8 *dst, u32 *src, u32 format,
 	}
 }
 
+void fl2000_framebuffer_put(struct usb_device *usb_dev)
+{
+	struct fl2000_drm_if *drm_if;
+	struct drm_framebuffer *fb;
+
+	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
+	if (!drm_if)
+		return;
+
+	fb = drm_if->pipe.plane.state->fb;
+	if (!fb)
+		return;
+
+	if (atomic_read(&drm_if->update_pending)) {
+		drm_gem_shmem_vunmap(fb->obj[0], drm_if->vaddr);
+
+		arch_atomic_set(&drm_if->update_pending, 0);
+	}
+
+	drm_crtc_handle_vblank(&drm_if->pipe.crtc);
+
+}
+
 int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
 		size_t dest_size)
 {
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct drm_framebuffer *fb;
-	void *vaddr;
 
 	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
 	if (!drm_if)
 		return -ENODEV;
 
-	if (atomic_read(&drm_if->update_pending)) {
-		drm = &drm_if->drm;
-		if (!drm)
-			return -ENODEV;
+	if (!atomic_read(&drm_if->update_pending))
+		return -1;
 
-		fb = drm_if->pipe.plane.state->fb;
-		if (!fb)
-			return -EINVAL;
+	drm = &drm_if->drm;
+	if (!drm)
+		return -ENODEV;
 
-		vaddr = drm_gem_shmem_vmap(fb->obj[0]);
-		if (!vaddr)
-			return -EINVAL;
+	fb = drm_if->pipe.plane.state->fb;
+	if (!fb)
+		return -EINVAL;
 
-		fl2000_framebuffer_decompress(dest, vaddr,
-				fb->format->format, fb->pitches[0],
-				fb->height, fb->width);
-
-		drm_gem_shmem_vunmap(fb->obj[0], vaddr);
-	}
-
-	drm_crtc_handle_vblank(&drm_if->pipe.crtc);
+	fl2000_framebuffer_decompress(dest, drm_if->vaddr, fb->format->format,
+			fb->pitches[0], fb->height, fb->width);
 
 	return 0;
 }
@@ -235,8 +250,13 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	struct drm_framebuffer *fb = pstate->fb;
 	struct fl2000_drm_if *drm_if = fl2000_drm_to_drm_if(drm);
 
-	if (fb && !atomic_read(&drm_if->update_pending))
-		atomic_set(&drm_if->update_pending, 1);
+	if (fb && !atomic_read(&drm_if->update_pending)) {
+		drm_if->vaddr = drm_gem_shmem_vmap(fb->obj[0]);
+		if (drm_if->vaddr)
+			atomic_set(&drm_if->update_pending, 1);
+		else
+			dev_err(drm->dev, "FB vmap failed!");
+	}
 
 	if (event) {
 		crtc->state->event = NULL;
@@ -468,7 +488,6 @@ static int fl2000_bind(struct device *master)
 
 	drm_mode_config_reset(drm);
 
-	dev_info(master, "drm_vblank_init");
 	ret = drm_vblank_init(drm, drm->mode_config.num_crtc);
 	if (ret) {
 		dev_err(drm->dev, "Failed to initialize %d VBLANK(s) (%d)",
@@ -478,18 +497,15 @@ static int fl2000_bind(struct device *master)
 
 	drm_kms_helper_poll_init(drm);
 
-	dev_info(master, "drm_dev_register");
 	ret = drm_dev_register(drm, 0);
 	if (ret) {
 		dev_err(drm->dev, "Cannot register DRM device (%d)", ret);
 		return ret;
 	}
 
-	dev_info(master, "fl2000_reset");
 	fl2000_reset(usb_dev);
 	fl2000_usb_magic(usb_dev);
 
-	dev_info(master, "drm_fbdev_generic_setup");
 	ret = drm_fbdev_generic_setup(drm, BPP);
 	if (ret) {
 		dev_err(drm->dev, "Cannot initialize framebuffer (%d)", ret);
