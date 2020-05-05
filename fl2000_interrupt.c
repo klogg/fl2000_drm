@@ -158,9 +158,6 @@ int fl2000_intr_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 
-	dev_info(&usb_dev->dev, "Interrupt pipe number %d",
-			usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)));
-
 	/* Interrupt URB configuration is static, including allocated buffer
 	 * NOTE: We are setting 'transfer_dma' during coherent buffer
 	 * allocation above */

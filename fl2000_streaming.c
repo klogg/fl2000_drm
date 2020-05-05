@@ -17,12 +17,10 @@
 
 #include "fl2000.h"
 
+#define FL2000_FB_NUM			2
+#define FL2000_BYTES_PER_PIX		2
+
 void fl2000_display_vblank(struct usb_device *usb_dev);
-
-/* Streaming is implemented with a single URB for each frame. USB is configured
- * to send NULL URB automatically after each data URB */
-
-#define FL2000_FB_NUM	2
 
 struct fl2000_fb {
      struct list_head list;
@@ -208,7 +206,6 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 
 	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
 	stream->urb->transfer_buffer = cursor->buf;
-	list_rotate_left(&stream->fb_list);
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret) {
@@ -217,35 +214,42 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 	}
 }
 
-void fl2000_framebuffer_decompress(struct usb_device *usb_dev,
-		struct drm_framebuffer *fb, u32 *src)
+static inline void fl2000_xrgb8888_to_rgb565_line(u16 *dbuf, u32 *sbuf,
+		u32 pixels)
+{
+	unsigned int x;
+	u16 val565;
+
+	for (x = 0; x < pixels; x++) {
+		val565 = ((sbuf[x] & 0x00F80000) >> 8) |
+			((sbuf[x] & 0x0000FC00) >> 5) |
+			((sbuf[x] & 0x000000F8) >> 3);
+		dbuf[x ^ 2] = val565;
+	}
+}
+
+void fl2000_stream_compress(struct usb_device *usb_dev,
+		struct drm_framebuffer *fb, void *src)
 {
 	struct fl2000_fb *cursor;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
-	unsigned int x, y;
-	u8 *dst;
+	unsigned int y;
+	void *dst;
+	size_t dst_len = fb->width * FL2000_BYTES_PER_PIX;
 
+	list_rotate_left(&stream->fb_list);
 	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
 	dst = cursor->buf;
 
 	switch (fb->format->format) {
-	case DRM_FORMAT_RGB888:
-		for (y = 0; y < fb->height; y++) {
-			memcpy(dst, src, fb->width * 3);
-			src += fb->pitches[0] / 4;
-			dst += fb->width * 3;
-		}
-		break;
 	case DRM_FORMAT_XRGB8888:
 		for (y = 0; y < fb->height; y++) {
-			for (x = 0; x < fb->width; x++) {
-				*dst++ = (src[x] & 0x000000FF) >>  0;
-				*dst++ = (src[x] & 0x0000FF00) >>  8;
-				*dst++ = (src[x] & 0x00FF0000) >> 16;
-			}
-			src += fb->pitches[0] / 4;
+			fl2000_xrgb8888_to_rgb565_line(dst, src, fb->width);
+			src += fb->pitches[0];
+			dst += dst_len;
 		}
+
 		break;
 	default:
 		/* Unknown format, do nothing */
@@ -253,10 +257,11 @@ void fl2000_framebuffer_decompress(struct usb_device *usb_dev,
 	}
 }
 
-int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t size)
+int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t pixels)
 {
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
+	ssize_t size = pixels * FL2000_BYTES_PER_PIX;
 
 	if (!stream)
 		return -ENODEV;
@@ -289,7 +294,6 @@ int fl2000_stream_enable(struct usb_device *usb_dev)
 
 	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
 	stream->urb->transfer_buffer = cursor->buf;
-	list_rotate_left(&stream->fb_list);
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret) {
