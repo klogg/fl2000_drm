@@ -60,7 +60,7 @@ void fl2000_avcontrol_destroy(struct usb_interface *interface)
 
 int fl2000_avcontrol_create(struct usb_interface *interface)
 {
-	int i = 0, ret;
+	int i, ret = 0;
 	struct fl2000_drv *drv;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
