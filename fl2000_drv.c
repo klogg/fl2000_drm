@@ -119,12 +119,12 @@ static int fl2000_resume(struct usb_interface *interface)
 }
 
 static struct usb_driver fl2000_driver = {
-	.name 		= USB_DRIVER_NAME,
-	.probe 		= fl2000_probe,
-	.disconnect 	= fl2000_disconnect,
+	.name		= USB_DRIVER_NAME,
+	.probe		= fl2000_probe,
+	.disconnect	= fl2000_disconnect,
 	.suspend	= fl2000_suspend,
 	.resume		= fl2000_resume,
-	.id_table 	= fl2000_id_table,
+	.id_table	= fl2000_id_table,
 };
 
 module_usb_driver(fl2000_driver); /* @suppress("Unused static function")
