@@ -203,14 +203,23 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 	}
 }
 
+static inline void fl2000_rgb565_to_rgb565_line(u16 *dbuf, u16 *sbuf,
+		u32 pixels)
+{
+	unsigned int x;
+
+	for (x = 0; x < pixels; x++) {
+		dbuf[x ^ 2] = sbuf[x];
+	}
+}
+
 static inline void fl2000_xrgb8888_to_rgb565_line(u16 *dbuf, u32 *sbuf,
 		u32 pixels)
 {
 	unsigned int x;
-	u16 val565;
 
 	for (x = 0; x < pixels; x++) {
-		val565 = ((sbuf[x] & 0x00F80000) >> 8) |
+		u16 val565 = ((sbuf[x] & 0x00F80000) >> 8) |
 			((sbuf[x] & 0x0000FC00) >> 5) |
 			((sbuf[x] & 0x000000F8) >> 3);
 		dbuf[x ^ 2] = val565;
@@ -232,13 +241,19 @@ void fl2000_stream_compress(struct usb_device *usb_dev,
 	dst = cursor->buf;
 
 	switch (fb->format->format) {
+	case DRM_FORMAT_RGB565:
+		for (y = 0; y < fb->height; y++) {
+			fl2000_rgb565_to_rgb565_line(dst, src, fb->width);
+			src += fb->pitches[0];
+			dst += dst_len;
+		}
+		break;
 	case DRM_FORMAT_XRGB8888:
 		for (y = 0; y < fb->height; y++) {
 			fl2000_xrgb8888_to_rgb565_line(dst, src, fb->width);
 			src += fb->pitches[0];
 			dst += dst_len;
 		}
-
 		break;
 	default:
 		/* Unknown format, do nothing */

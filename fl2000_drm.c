@@ -29,8 +29,11 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 #define MAX_WIDTH		4000
 #define MAX_HEIGHT		4000
 
-#define BPP			32
+/* Force fbdev to use RGB565 */
+#define FL2000_FB_BPP		16
+
 static const u32 fl2000_pixel_formats[] = {
+	DRM_FORMAT_RGB565,
 	DRM_FORMAT_XRGB8888,
 };
 
@@ -502,7 +505,7 @@ static int fl2000_bind(struct device *master)
 	fl2000_reset(usb_dev);
 	fl2000_usb_magic(usb_dev);
 
-	ret = drm_fbdev_generic_setup(drm, BPP);
+	ret = drm_fbdev_generic_setup(drm, FL2000_FB_BPP);
 	if (ret) {
 		dev_err(drm->dev, "Cannot initialize framebuffer (%d)", ret);
 		return ret;
