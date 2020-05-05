@@ -39,45 +39,16 @@ static void fl2000_intr_completion(struct urb *urb)
 	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
 			fl2000_intr_release, NULL, NULL);
 
-	switch (urb->status) {
-	/* All went well */
-	case 0:
-		/* This possibly involves reading I2C registers, etc. so better
-		 * to schedule a work queue */
-		INIT_WORK(&intr->work, &fl2000_intr_work);
-		queue_work(intr->work_queue, &intr->work);
-		break;
-
-	/* URB was unlinked or device shutdown in progress, do nothing */
-	case -ECONNRESET:
-	case -ENOENT:
-	case -ENODEV:
+	ret = fl2000_urb_status(usb_dev, urb);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Stopping interrupts");
 		return;
-
-	/* Hardware or protocol errors - no recovery, report and do nothing */
-	case -ESHUTDOWN:
-	case -EPROTO:
-	case -EILSEQ:
-	case -ETIME:
-		dev_err(&usb_dev->dev, "USB hardware unrecoverable error %d",
-				urb->status);
-		return;
-
-	/* Stalled endpoint */
-	case -EPIPE:
-		dev_err(&usb_dev->dev, "Interrupt endpoint stalled");
-		ret = usb_clear_halt(usb_dev, urb->pipe);
-		if (ret != 0) {
-			dev_err(&usb_dev->dev, "Cannot reset interrupt " \
-					"endpoint, error %d", ret);
-			return;
-		}
-		break;
-
-	/* All the rest cases - just restart transfer */
-	default:
-		break;
 	}
+
+	/* This possibly involves reading I2C registers, etc. so better
+	 * to schedule a work queue */
+	INIT_WORK(&intr->work, &fl2000_intr_work);
+	queue_work(intr->work_queue, &intr->work);
 
 	/* For interrupt URBs, as part of successful URB submission
 	 * urb->interval is modified to reflect the actual transfer period used,
@@ -87,10 +58,7 @@ static void fl2000_intr_completion(struct urb *urb)
 
 	/* Restart urb */
 	ret = usb_submit_urb(urb, GFP_KERNEL);
-	if (ret) {
-		/* TODO: WTF! Signal general failure, stop driver! Except in
-		 * case of -EPERM, that means we already in progress of
-		 * stopping */
+	if (ret && ret != -EPERM) {
 		dev_err(&usb_dev->dev, "URB submission failed (%d)", ret);
 	}
 }

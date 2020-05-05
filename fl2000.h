@@ -69,4 +69,53 @@ static const umode_t fl2000_debug_umode = 0666;
 	(__mask) |= __data.__val; \
 })
 
+
+static inline int fl2000_urb_status(struct usb_device *usb_dev, struct urb *urb)
+{
+	int ret = 0;
+
+	switch (urb->status) {
+	/* All went well */
+	case 0:
+		break;
+
+	/* URB was unlinked or device shutdown in progress, do nothing */
+	case -ECONNRESET:
+	case -ENOENT:
+	case -ENODEV:
+		ret = -1;
+		break;
+
+	/* Hardware or protocol errors - no recovery, report and do nothing */
+	case -ESHUTDOWN:
+	case -EPROTO:
+	case -EILSEQ:
+	case -ETIME:
+		dev_err(&usb_dev->dev, "USB hardware unrecoverable error %d",
+				urb->status);
+		ret = -1;
+		break;
+
+	/* Stalled endpoint */
+	case -EPIPE:
+		dev_err(&usb_dev->dev, "Endpoint %d stalled",
+				urb->ep->desc.bEndpointAddress);
+		ret = usb_clear_halt(usb_dev, urb->pipe);
+		if (ret != 0) {
+			dev_err(&usb_dev->dev, "Cannot reset endpoint, error " \
+					"%d", ret);
+			ret = -1;
+		}
+		break;
+
+	/* All the rest cases - just restart transfer */
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+
+
 #endif /* __FL2000_DRM_H__ */

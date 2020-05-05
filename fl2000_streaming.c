@@ -104,45 +104,14 @@ static void fl2000_stream_completion(struct urb *urb)
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
 
-	switch (urb->status) {
-	/* All went well */
-	case 0:
-		break;
-
-	/* URB was unlinked or device shutdown in progress, do nothing */
-	case -ECONNRESET:
-	case -ENOENT:
-	case -ENODEV:
+	ret = fl2000_urb_status(usb_dev, urb);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Stopping streaming");
 		return;
-
-	/* Hardware or protocol errors - no recovery, report and do nothing */
-	case -ESHUTDOWN:
-	case -EPROTO:
-	case -EILSEQ:
-	case -ETIME:
-		dev_err(&usb_dev->dev, "USB hardware unrecoverable error %d",
-				urb->status);
-		return;
-
-	/* Stalled endpoint */
-	case -EPIPE:
-		dev_err(&usb_dev->dev, "Interrupt endpoint stalled");
-		ret = usb_clear_halt(usb_dev, urb->pipe);
-		if (ret != 0) {
-			dev_err(&usb_dev->dev, "Cannot reset interrupt " \
-					"endpoint, error %d", ret);
-			return;
-		}
-		break;
-
-	/* All the rest cases - just restart transfer */
-	default:
-		break;
 	}
 
 	ret = usb_submit_urb(stream->zero_len_urb, GFP_KERNEL);
-	if (ret) {
-		/* TODO: handle USB errors in ret */
+	if (ret && ret != -EPERM) {
 		dev_err(&usb_dev->dev, "Zero length URB error %d", ret);
 	}
 }
@@ -155,50 +124,20 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 			fl2000_stream_release, NULL, NULL);
 	struct fl2000_fb *cursor;
 
-	switch (urb->status) {
-	/* All went well */
-	case 0:
-		/* Process vblank */
-		fl2000_display_vblank(stream->usb_dev);
-		break;
-
-	/* URB was unlinked or device shutdown in progress, do nothing */
-	case -ECONNRESET:
-	case -ENOENT:
-	case -ENODEV:
+	ret = fl2000_urb_status(usb_dev, urb);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Stopping streaming");
 		return;
-
-	/* Hardware or protocol errors - no recovery, report and do nothing */
-	case -ESHUTDOWN:
-	case -EPROTO:
-	case -EILSEQ:
-	case -ETIME:
-		dev_err(&usb_dev->dev, "USB hardware unrecoverable error %d",
-				urb->status);
-		return;
-
-	/* Stalled endpoint */
-	case -EPIPE:
-		dev_err(&usb_dev->dev, "Interrupt endpoint stalled");
-		ret = usb_clear_halt(usb_dev, urb->pipe);
-		if (ret != 0) {
-			dev_err(&usb_dev->dev, "Cannot reset interrupt " \
-					"endpoint, error %d", ret);
-			return;
-		}
-		break;
-
-	/* All the rest cases - just restart transfer */
-	default:
-		break;
 	}
+
+	/* Process vblank */
+	fl2000_display_vblank(stream->usb_dev);
 
 	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
 	stream->urb->transfer_buffer = cursor->buf;
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
-	if (ret) {
-		/* TODO: handle USB errors in ret */
+	if (ret && ret != -EPERM) {
 		dev_err(&usb_dev->dev, "Data URB error %d", ret);
 	}
 }
@@ -300,8 +239,7 @@ int fl2000_stream_enable(struct usb_device *usb_dev)
 	stream->urb->transfer_buffer = cursor->buf;
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
-	if (ret) {
-		/* TODO: handle USB errors in ret */
+	if (ret && ret != -EPERM) {
 		dev_err(&usb_dev->dev, "Data URB error %d", ret);
 	}
 
