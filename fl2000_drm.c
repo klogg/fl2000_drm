@@ -203,7 +203,7 @@ void fl2000_framebuffer_put(struct usb_device *usb_dev)
 		return;
 
 	if (atomic_read(&drm_if->update_pending)) {
-		drm_gem_shmem_vunmap(fb->obj[0], drm_if->vaddr);
+		drm_gem_shmem_vunmap(drm_gem_fb_get_obj(fb, 0), drm_if->vaddr);
 
 		arch_atomic_set(&drm_if->update_pending, 0);
 	}
@@ -251,7 +251,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	struct fl2000_drm_if *drm_if = fl2000_drm_to_drm_if(drm);
 
 	if (fb && !atomic_read(&drm_if->update_pending)) {
-		drm_if->vaddr = drm_gem_shmem_vmap(fb->obj[0]);
+		drm_if->vaddr = drm_gem_shmem_vmap(drm_gem_fb_get_obj(fb, 0));
 		if (drm_if->vaddr)
 			atomic_set(&drm_if->update_pending, 1);
 		else
