@@ -260,12 +260,10 @@ static const struct reg_field FL2000_VGA_CTRL_REG_3_wakeup_clr_en =
  * */
 static inline bool FL2000_REG_PRECIOUS(u32 reg)
 {
-	switch (reg) {
-	case FL2000_VGA_STATUS_REG:
+	if (reg == FL2000_VGA_STATUS_REG)
 		return true;
-	default:
+	else
 		return false;
-	}
 }
 
 /*

@@ -229,7 +229,7 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 {
 	int ret;
 	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);;
+			fl2000_reg_data_release, NULL, NULL);
 
 	/* XXX: This is actually some unknown & undocumented FL2000 USB AFE
 	 * register setting */
@@ -244,7 +244,7 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 {
 	int ret;
 	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);;
+			fl2000_reg_data_release, NULL, NULL);
 
 	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
 	if (ret)
