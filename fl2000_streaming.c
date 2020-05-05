@@ -31,8 +31,6 @@ struct fl2000_fb {
 struct fl2000_stream {
 	struct urb *urb, *zero_len_urb;
 	struct usb_device *usb_dev;
-	struct work_struct work;
-	struct workqueue_struct *work_queue;
 	struct list_head fb_list;
 };
 
@@ -99,14 +97,6 @@ static void fl2000_stream_release(struct device *dev, void *res)
 	/* Noop */
 }
 
-static void fl2000_stream_work(struct work_struct *work)
-{
-	struct fl2000_stream *stream = container_of(work, struct fl2000_stream,
-			work);
-
-	fl2000_display_vblank(stream->usb_dev);
-}
-
 static void fl2000_stream_completion(struct urb *urb)
 {
 	int ret;
@@ -169,8 +159,7 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 	/* All went well */
 	case 0:
 		/* Process vblank */
-		INIT_WORK(&stream->work, &fl2000_stream_work);
-		queue_work(stream->work_queue, &stream->work);
+		fl2000_display_vblank(stream->usb_dev);
 		break;
 
 	/* URB was unlinked or device shutdown in progress, do nothing */
@@ -348,12 +337,6 @@ int fl2000_stream_create(struct usb_interface *interface)
 	}
 	devres_add(&usb_dev->dev, stream);
 
-	stream->work_queue = create_workqueue("fl2000_streaming");
-	if (!stream->work_queue) {
-		dev_err(&usb_dev->dev, "Create streaming workqueue failed");
-		return -ENOMEM;
-	}
-
 	stream->urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!stream->urb) {
 		dev_err(&usb_dev->dev, "Allocate data URB failed");
@@ -399,8 +382,6 @@ void fl2000_stream_destroy(struct usb_interface *interface)
 
 		usb_free_urb(stream->urb);
 		usb_free_urb(stream->zero_len_urb);
-
-		destroy_workqueue(stream->work_queue);
 	}
 
 	fl2000_fb_list_free(stream);

@@ -166,7 +166,7 @@ void fl2000_display_vblank(struct usb_device *usb_dev)
 	if (!drm_if)
 		return;
 
-	if (drm_if->vblank_enabled)
+	if (drm_if->vblank_enabled && drm_if->pipe.crtc.enabled)
 		drm_crtc_handle_vblank(&drm_if->pipe.crtc);
 }
 
