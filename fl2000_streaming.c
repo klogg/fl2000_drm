@@ -326,11 +326,8 @@ void fl2000_stream_destroy(struct usb_interface *interface)
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
-	struct urb *urb;
 
 	if (stream) {
-		urb = stream->urb;
-
 		fl2000_fb_put_buffers(usb_dev, stream);
 
 		usb_free_urb(stream->urb);
