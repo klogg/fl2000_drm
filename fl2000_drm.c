@@ -12,9 +12,9 @@ int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
-int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t size);
-void fl2000_framebuffer_decompress(struct usb_device *usb_dev,
-		struct drm_framebuffer *fb, u32 *src);
+int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t pixels);
+void fl2000_stream_compress(struct usb_device *usb_dev,
+		struct drm_framebuffer *fb, void *src);
 int fl2000_stream_enable(struct usb_device *usb_dev);
 void fl2000_stream_disable(struct usb_device *usb_dev);
 
@@ -29,11 +29,8 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 #define MAX_WIDTH		4000
 #define MAX_HEIGHT		4000
 
-/* Stick to 24-bit RGB output for now */
-/* XXX: If we use compression, do we need to change this? */
 #define BPP			32
 static const u32 fl2000_pixel_formats[] = {
-	DRM_FORMAT_RGB888,
 	DRM_FORMAT_XRGB8888,
 };
 
@@ -95,7 +92,7 @@ static struct drm_driver fl2000_drm_driver = {
 };
 
 static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
-	.fb_create = drm_gem_fb_create,
+	.fb_create = drm_gem_fb_create_with_dirty,
 	.atomic_check = drm_atomic_helper_check,
 	.atomic_commit = drm_atomic_helper_commit,
 };
@@ -173,25 +170,56 @@ void fl2000_display_vblank(struct usb_device *usb_dev)
 		drm_crtc_handle_vblank(&drm_if->pipe.crtc);
 }
 
+
+static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
+{
+	int idx, ret;
+	struct drm_device *drm = fb->dev;
+	struct usb_device *usb_dev = drm->dev_private;
+	struct drm_gem_object *gem = drm_gem_fb_get_obj(fb, 0);
+	struct dma_buf_attachment *import_attach = gem->import_attach;
+	void *vaddr;
+
+	if (!drm_dev_enter(fb->dev, &idx)) {
+		dev_err(drm->dev, "DRM enter failed!");
+		return;
+	}
+
+	vaddr = drm_gem_shmem_vmap(gem);
+	if (!vaddr) {
+		dev_err(drm->dev, "FB vmap failed!");
+		return;
+	}
+
+	if (import_attach) {
+		ret = dma_buf_begin_cpu_access(import_attach->dmabuf,
+					       DMA_FROM_DEVICE);
+		if (ret)
+			return;
+	}
+
+	fl2000_stream_compress(usb_dev, fb, vaddr);
+
+	if (import_attach)
+		dma_buf_end_cpu_access(import_attach->dmabuf, DMA_FROM_DEVICE);
+
+	drm_gem_shmem_vunmap(drm_gem_fb_get_obj(fb, 0), vaddr);
+
+	drm_dev_exit(idx);
+}
+
+
 static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
-		struct drm_plane_state *old_pstate)
+		struct drm_plane_state *old_state)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
 	struct drm_pending_vblank_event *event = crtc->state->event;
-	struct drm_plane_state *pstate = pipe->plane.state;
-	struct drm_framebuffer *fb = pstate->fb;
-	struct usb_device *usb_dev = drm->dev_private;
+	struct drm_plane_state *state = pipe->plane.state;
+	struct drm_rect rect;
 
-	if (fb) {
-		void *vaddr = drm_gem_shmem_vmap(drm_gem_fb_get_obj(fb, 0));
-		if (!vaddr) {
-			dev_err(drm->dev, "FB vmap failed!");
-		} else {
-			fl2000_framebuffer_decompress(usb_dev, fb, vaddr);
-			drm_gem_shmem_vunmap(drm_gem_fb_get_obj(fb, 0), vaddr);
-		}
-	}
+	if (drm_atomic_helper_damage_merged(old_state, state, &rect))
+		fb2000_dirty(state->fb, &rect);
 
 	if (event) {
 		crtc->state->event = NULL;
@@ -295,6 +323,8 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
 	pxclk.drop_cnt = false;
 	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, drop_cnt);
+	pxclk.vga565_mode = true;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga565_mode);
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, pxclk.val);
 
 	mask = 0;
@@ -339,8 +369,7 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 
-	/* XXX: Assume 24-bit RGB output mode */
-	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay * 3);
+	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay);
 }
 
 static void fl2000_output_enable(struct drm_encoder *encoder)
@@ -461,6 +490,8 @@ static int fl2000_bind(struct device *master)
 	}
 
 	drm_kms_helper_poll_init(drm);
+
+	drm_plane_enable_fb_damage_clips(&drm_if->pipe.plane);
 
 	ret = drm_dev_register(drm, 0);
 	if (ret) {
