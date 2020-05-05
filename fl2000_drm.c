@@ -45,6 +45,7 @@ static const char *fl2000_supported_bridges[] = {
 struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
+	bool vblank_enabled;
 };
 
 static void fl2000_drm_if_release(struct device *dev, void *res)
@@ -168,8 +169,8 @@ void fl2000_display_vblank(struct usb_device *usb_dev)
 	if (!drm_if)
 		return;
 
-	drm_crtc_handle_vblank(&drm_if->pipe.crtc);
-
+	if (drm_if->vblank_enabled)
+		drm_crtc_handle_vblank(&drm_if->pipe.crtc);
 }
 
 static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
@@ -204,6 +205,36 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	}
 }
 
+static int fl2000_display_enable_vblank(struct drm_simple_display_pipe *pipe)
+{
+	struct drm_crtc *crtc = &pipe->crtc;
+	struct drm_device *drm = crtc->dev;
+	struct usb_device *usb_dev = drm->dev_private;
+	struct fl2000_drm_if *drm_if;
+
+	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
+	if (!drm_if)
+		return -ENODEV;
+
+	drm_if->vblank_enabled = true;
+
+	return 0;
+}
+
+static void fl2000_display_disable_vblank(struct drm_simple_display_pipe *pipe)
+{
+	struct drm_crtc *crtc = &pipe->crtc;
+	struct drm_device *drm = crtc->dev;
+	struct usb_device *usb_dev = drm->dev_private;
+	struct fl2000_drm_if *drm_if;
+
+	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
+	if (!drm_if)
+		return;
+
+	drm_if->vblank_enabled = false;
+}
+
 /* Logical pipe management (no HW configuration here) */
 static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_display_mode_valid,
@@ -211,6 +242,8 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.disable = fl2000_display_disable,
 	.check = fl2000_display_check,
 	.update = fl2000_display_update,
+	.enable_vblank = fl2000_display_enable_vblank,
+	.disable_vblank = fl2000_display_disable_vblank,
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
 
