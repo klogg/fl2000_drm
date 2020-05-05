@@ -80,8 +80,6 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 
 	*val = *data;
 
-	//dev_dbg(&usb_dev->dev, "RD: 0x%04X - 0x%08X", reg, *data);
-
 	kfree(data);
 	return ret;
 }
@@ -97,8 +95,6 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	BUG_ON(!data);
 
 	*data = val;
-
-	//dev_dbg(&usb_dev->dev, "WR: 0x%04X - 0x%08X", reg, *data);
 
 	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
 			CONTROL_MSG_WRITE, (USB_DIR_OUT | USB_TYPE_VENDOR), 0,
