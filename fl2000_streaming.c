@@ -17,18 +17,84 @@
 
 #include "fl2000.h"
 
-int fl2000_framebuffer_get(struct usb_device *usb_dev, void *dest,
-		size_t dest_size);
-void fl2000_framebuffer_put(struct usb_device *usb_dev);
+void fl2000_display_vblank(struct usb_device *usb_dev);
 
 /* Streaming is implemented with a single URB for each frame. USB is configured
  * to send NULL URB automatically after each data URB */
+
+#define FL2000_FB_NUM	2
+
+struct fl2000_fb {
+     struct list_head list;
+     void *buf;
+     dma_addr_t buf_addr;
+};
+
 struct fl2000_stream {
 	struct urb *urb, *zero_len_urb;
 	struct usb_device *usb_dev;
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
+	struct list_head fb_list;
 };
+
+static inline int fl2000_fb_list_alloc(struct fl2000_stream *stream)
+{
+	int i;
+
+	INIT_LIST_HEAD(&stream->fb_list);
+
+	for (i = 0; i < FL2000_FB_NUM; i++) {
+		/* TODO: Check malloc failure */
+		struct fl2000_fb *fb = kzalloc(sizeof(struct fl2000_fb),
+				GFP_KERNEL);
+
+		INIT_LIST_HEAD(&fb->list);
+		list_add(&fb->list, &stream->fb_list);
+	}
+
+	return 0;
+}
+
+static inline void fl2000_fb_list_free(struct fl2000_stream *stream)
+{
+	struct fl2000_fb *cursor, *temp;
+
+	list_for_each_entry_safe(cursor, temp, &stream->fb_list, list) {
+		list_del(&cursor->list);
+		kfree(cursor);
+	}
+}
+
+static inline int fl2000_fb_get_buffers(struct usb_device *usb_dev,
+		struct fl2000_stream *stream)
+{
+	struct fl2000_fb *cursor;
+	ssize_t size = stream->urb->transfer_buffer_length;
+	list_for_each_entry(cursor, &stream->fb_list, list) {
+		/* TODO: Signal error */
+		if (cursor->buf)
+			continue;
+		/* TODO: Check malloc failure */
+		cursor->buf = usb_alloc_coherent(usb_dev, size, GFP_KERNEL,
+				&cursor->buf_addr);
+	}
+
+	return 0;
+}
+
+static inline void fl2000_fb_put_buffers(struct usb_device *usb_dev,
+		struct fl2000_stream *stream)
+{
+	struct fl2000_fb *cursor;
+	ssize_t size = stream->urb->transfer_buffer_length;
+	list_for_each_entry(cursor, &stream->fb_list, list) {
+		if (!cursor->buf)
+			continue;
+		usb_free_coherent(usb_dev, size, cursor->buf,
+				cursor->buf_addr);
+	}
+}
 
 static void fl2000_stream_release(struct device *dev, void *res)
 {
@@ -40,7 +106,7 @@ static void fl2000_stream_work(struct work_struct *work)
 	struct fl2000_stream *stream = container_of(work, struct fl2000_stream,
 			work);
 
-	fl2000_framebuffer_put(stream->usb_dev);
+	fl2000_display_vblank(stream->usb_dev);
 }
 
 static void fl2000_stream_completion(struct urb *urb)
@@ -99,10 +165,14 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 	struct usb_device *usb_dev = urb->dev;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
+	struct fl2000_fb *cursor;
 
 	switch (urb->status) {
 	/* All went well */
 	case 0:
+		/* Process vblank */
+		INIT_WORK(&stream->work, &fl2000_stream_work);
+		queue_work(stream->work_queue, &stream->work);
 		break;
 
 	/* URB was unlinked or device shutdown in progress, do nothing */
@@ -136,51 +206,73 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 		break;
 	}
 
-	fl2000_framebuffer_get(usb_dev, stream->urb->transfer_buffer,
-			stream->urb->transfer_buffer_length);
+	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
+	stream->urb->transfer_buffer = cursor->buf;
+	list_rotate_left(&stream->fb_list);
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret) {
 		/* TODO: handle USB errors in ret */
 		dev_err(&usb_dev->dev, "Data URB error %d", ret);
 	}
+}
 
-	/* vblank & unmap buffer */
-	INIT_WORK(&stream->work, &fl2000_stream_work);
-	queue_work(stream->work_queue, &stream->work);
+void fl2000_framebuffer_decompress(struct usb_device *usb_dev,
+		struct drm_framebuffer *fb, u32 *src)
+{
+	struct fl2000_fb *cursor;
+	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
+			fl2000_stream_release, NULL, NULL);
+	unsigned int x, y;
+	u8 *dst;
+
+	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
+	dst = cursor->buf;
+
+	switch (fb->format->format) {
+	case DRM_FORMAT_RGB888:
+		for (y = 0; y < fb->height; y++) {
+			memcpy(dst, src, fb->width * 3);
+			src += fb->pitches[0] / 4;
+			dst += fb->width * 3;
+		}
+		break;
+	case DRM_FORMAT_XRGB8888:
+		for (y = 0; y < fb->height; y++) {
+			for (x = 0; x < fb->width; x++) {
+				*dst++ = (src[x] & 0x000000FF) >>  0;
+				*dst++ = (src[x] & 0x0000FF00) >>  8;
+				*dst++ = (src[x] & 0x00FF0000) >> 16;
+			}
+			src += fb->pitches[0] / 4;
+		}
+		break;
+	default:
+		/* Unknown format, do nothing */
+		break;
+	}
 }
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t size)
 {
-	u8 *buf;
-	dma_addr_t buf_addr;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
-	struct urb *urb;
 
 	if (!stream)
 		return -ENODEV;
 
-	urb = stream->urb;
-
-	/* If there's a buffer with same size - keep it */
-	if (urb->transfer_buffer_length == size)
+	/* If there are buffers with same size - keep them */
+	if (stream->urb->transfer_buffer_length == size)
 		return 0;
 
-	/* Destroy existing data buffer if it has the wrong size*/
-	if (urb->transfer_buffer)
-		usb_free_coherent(usb_dev, urb->transfer_buffer_length,
-				urb->transfer_buffer, urb->transfer_dma);
+	stream->urb->transfer_buffer_length = size;
 
-	buf = usb_alloc_coherent(usb_dev, size, GFP_KERNEL, &buf_addr);
-	if (!buf) {
-		dev_err(&usb_dev->dev, "Allocate stream FB buffer failed");
-		return -ENOMEM;
-	}
+	/* Destroy wrong size buffers if they exist */
+	if (stream->urb->transfer_buffer_length != 0)
+		fl2000_fb_put_buffers(usb_dev, stream);
 
-	urb->transfer_buffer = buf;
-	urb->transfer_dma = buf_addr;
-	urb->transfer_buffer_length = size;
+	/* Allocate new buffers */
+	fl2000_fb_get_buffers(usb_dev, stream);
 
 	return 0;
 }
@@ -190,12 +282,14 @@ int fl2000_stream_enable(struct usb_device *usb_dev)
 	int ret = 0;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
+	struct fl2000_fb *cursor;
 
 	if (!stream)
 		return -ENODEV;
 
-	fl2000_framebuffer_get(usb_dev, stream->urb->transfer_buffer,
-			stream->urb->transfer_buffer_length);
+	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
+	stream->urb->transfer_buffer = cursor->buf;
+	list_rotate_left(&stream->fb_list);
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret) {
@@ -280,6 +374,8 @@ int fl2000_stream_create(struct usb_interface *interface)
 
 	stream->usb_dev = usb_dev;
 
+	fl2000_fb_list_alloc(stream);
+
 	dev_info(&usb_dev->dev, "Streaming interface up");
 
 	return ret;
@@ -295,16 +391,15 @@ void fl2000_stream_destroy(struct usb_interface *interface)
 	if (stream) {
 		urb = stream->urb;
 
-		/* Destroy existing data buffer */
-		if (urb && urb->transfer_buffer)
-			usb_free_coherent(usb_dev, urb->transfer_buffer_length,
-					urb->transfer_buffer, urb->transfer_dma);
+		fl2000_fb_put_buffers(usb_dev, stream);
 
 		usb_free_urb(stream->urb);
 		usb_free_urb(stream->zero_len_urb);
 
 		destroy_workqueue(stream->work_queue);
 	}
+
+	fl2000_fb_list_free(stream);
 
 	devres_release(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 }
