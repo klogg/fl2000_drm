@@ -509,7 +509,7 @@ static struct component_ops it66121_component_ops = {
 	.unbind = it66121_unbind,
 };
 
-/* TODO: rewrite register access properly */
+/* TODO: rewrite register access properly, add error processing */
 static int it66121_bridge_attach(struct drm_bridge *bridge)
 {
 	int ret;
@@ -522,7 +522,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	}
 
 	/* Reset according to IT66121 manual */
-	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+	regmap_write_bits(priv->regmap, IT66121_SW_RST,
 			IT66121_SW_REF_RST_HDMITX,
 			IT66121_SW_REF_RST_HDMITX);
 	msleep(50);
@@ -552,7 +552,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (3<<4), (0<<4));
 
 	/* Reset according to IT66121 manual */
-	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+	regmap_write_bits(priv->regmap, IT66121_SW_RST,
 			IT66121_SW_REF_RST_HDMITX,
 			IT66121_SW_REF_RST_HDMITX);
 	msleep(50);

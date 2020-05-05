@@ -31,6 +31,8 @@ struct fl2000_reg_data {
 	struct regmap_field *field[NUM_REGFIELDS];
 #if defined(CONFIG_DEBUG_FS)
 	unsigned int reg_debug_address;
+	struct dentry *root_dir, *reg_address_file, *reg_data_file;
+
 #endif
 };
 
@@ -161,24 +163,40 @@ static int fl2000_debugfs_reg_write(void *data, u64 value)
 DEFINE_SIMPLE_ATTRIBUTE(reg_ops, fl2000_debugfs_reg_read,
 		fl2000_debugfs_reg_write, "%08llx\n");
 
-static void fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
+static int fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 {
-	struct dentry *root_dir;
-	struct dentry *reg_address_file, *reg_data_file;
 	struct usb_device *usb_dev = reg_data->usb_dev;
 
-	root_dir = debugfs_create_dir("fl2000_regs", NULL);
+	reg_data->root_dir = debugfs_create_dir("fl2000_regs", NULL);
+	if (IS_ERR(reg_data->root_dir))
+		return PTR_ERR(reg_data->root_dir);
 
-	reg_address_file = debugfs_create_x32("reg_address", fl2000_debug_umode,
-			root_dir, &reg_data->reg_debug_address);
+	reg_data->reg_address_file = debugfs_create_x32("reg_address",
+			fl2000_debug_umode, reg_data->root_dir,
+			&reg_data->reg_debug_address);
+	if (IS_ERR(reg_data->reg_address_file))
+		return PTR_ERR(reg_data->reg_address_file);
 
-	reg_data_file = debugfs_create_file("reg_data", fl2000_debug_umode,
-			root_dir, usb_dev, &reg_ops);
+	reg_data->reg_data_file = debugfs_create_file("reg_data",
+			fl2000_debug_umode, reg_data->root_dir, usb_dev,
+			&reg_ops);
+	if (IS_ERR(reg_data->reg_data_file))
+		return PTR_ERR(reg_data->reg_data_file);
+
+	return 0;
+}
+
+static void fl2000_debugfs_reg_remove(struct fl2000_reg_data *reg_data)
+{
+	debugfs_remove(reg_data->reg_data_file);
+	debugfs_remove(reg_data->reg_address_file);
+	debugfs_remove(reg_data->root_dir);
 }
 
 #else /* CONFIG_DEBUG_FS */
 
-#define fl2000_debugfs_reg_init(usb_dev)
+#define fl2000_debugfs_reg_init(reg_data)
+#define fl2000_debugfs_reg_remove(reg_data)
 
 #endif /* CONFIG_DEBUG_FS */
 
@@ -288,7 +306,11 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 		}
 	}
 
-	fl2000_debugfs_reg_init(reg_data);
+	ret = fl2000_debugfs_reg_init(reg_data);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot create debug entry (%d)", ret);
+		return ret;
+	}
 
 	/* TODO: Move initial reset to higher level initialization function */
 	ret = fl2000_reset(usb_dev);
@@ -313,6 +335,8 @@ void fl2000_regmap_cleanup(struct usb_device *usb_dev)
 	int i;
 	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
 			fl2000_reg_data_release, NULL, NULL);
+
+	fl2000_debugfs_reg_remove(reg_data);
 
 	for (i = 0; i < ARRAY_SIZE(fl2000_reg_fields); i++) {
 		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;
