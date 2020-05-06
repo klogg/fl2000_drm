@@ -5,7 +5,9 @@ fl2000-y := \
 	fl2000_streaming.o \
 	fl2000_i2c.o \
 	fl2000_drm.o \
-	fl2000_avcontrol.o
+	fl2000_avcontrol.o \
+	drm_gem_cma_helper.o \
+	drm_fb_cma_helper.o
 
 it66121-y := \
 	bridge/it66121_drv.o

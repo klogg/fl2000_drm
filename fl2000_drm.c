@@ -73,7 +73,7 @@ static void fl2000_drm_release(struct drm_device *drm)
 }
 
 static struct drm_driver fl2000_drm_driver = {
-	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_PRIME | \
+	.driver_features = DRIVER_MODESET | DRIVER_GEM | \
 		DRIVER_ATOMIC,
 	.lastclose = drm_fb_helper_lastclose,
 	.ioctls = NULL,
@@ -108,13 +108,13 @@ static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
 	.atomic_commit = drm_atomic_helper_commit,
 };
 
-static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
+static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_pipe *crtc,
 		const struct drm_display_mode *mode)
 {
-	struct drm_device *drm = crtc->dev;
+	// struct drm_device *drm = crtc->dev;
 
-	dev_info(drm->dev, "DRM mode validation: "DRM_MODE_FMT,
-			DRM_MODE_ARG(mode));
+	/*dev_info(drm->dev, "DRM mode validation: "DRM_MODE_FMT,
+			DRM_MODE_ARG(mode));*/
 
 	/* TODO: check mode USB bandwidth and other FL2000 HW limitations*/
 

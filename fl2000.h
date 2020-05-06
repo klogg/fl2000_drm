@@ -25,8 +25,15 @@
 #include <linux/dma-buf.h>
 #include <linux/dma-mapping.h>
 #include <linux/time.h>
-#include <drm/drmP.h>
+#include <drm/drm_drv.h>
+#include <drm/drm_bridge.h>
+#include <drm/drm_panel.h>
+#include <drm/drm_probe_helper.h>
+#include <drm/drm_print.h>
+#include <drm/drm_vblank.h>
+#include <drm/drm_fourcc.h>
 #include <drm/drm_gem.h>
+#include <drm/drm_of.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>

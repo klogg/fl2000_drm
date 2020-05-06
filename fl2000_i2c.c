@@ -81,10 +81,10 @@ static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 
 	root_dir = debugfs_create_dir("fl2000_i2c", NULL);
 
-	i2c_address_file = debugfs_create_x8("i2c_address", fl2000_debug_umode,
+	debugfs_create_x8("i2c_address", fl2000_debug_umode,
 			root_dir, &i2c_algo_data->i2c_debug_address);
 
-	i2c_offset_file = debugfs_create_x8("i2c_offset", fl2000_debug_umode,
+	debugfs_create_x8("i2c_offset", fl2000_debug_umode,
 			root_dir, &i2c_algo_data->i2c_debug_offset);
 
 	i2c_data_file = debugfs_create_file("i2c_data", fl2000_debug_umode,

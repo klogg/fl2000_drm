@@ -172,7 +172,7 @@ static void fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 
 	root_dir = debugfs_create_dir("fl2000_regs", NULL);
 
-	reg_address_file = debugfs_create_x32("reg_address", fl2000_debug_umode,
+	debugfs_create_x32("reg_address", fl2000_debug_umode,
 			root_dir, &reg_data->reg_debug_address);
 
 	reg_data_file = debugfs_create_file("reg_data", fl2000_debug_umode,
