@@ -12,13 +12,12 @@
  * is yet to be checked.
  *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
- * (C) Copyright 2018-2019, Artem Mygaiev
+ * (C) Copyright 2018-2020, Artem Mygaiev
  */
 
 #include "fl2000.h"
 
 #define FL2000_FB_NUM			2
-#define FL2000_BYTES_PER_PIX		2
 
 void fl2000_display_vblank(struct usb_device *usb_dev);
 
@@ -32,6 +31,7 @@ struct fl2000_stream {
 	struct urb *urb, *zero_len_urb;
 	struct usb_device *usb_dev;
 	struct list_head fb_list;
+	int bytes_pix;
 };
 
 static inline int fl2000_fb_list_alloc(struct fl2000_stream *stream)
@@ -142,17 +142,19 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 	}
 }
 
-static inline void fl2000_rgb565_to_rgb565_line(u16 *dbuf, u16 *sbuf,
+static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf,
 		u32 pixels)
 {
-	unsigned int x;
+	unsigned int x, xx = 0;
 
 	for (x = 0; x < pixels; x++) {
-		dbuf[x ^ 2] = sbuf[x];
+		dbuf[xx++^4] = (sbuf[x] & 0x000000FF) >>  0;
+		dbuf[xx++^4] = (sbuf[x] & 0x0000FF00) >>  8;
+		dbuf[xx++^4] = (sbuf[x] & 0x00FF0000) >> 16;
 	}
 }
 
-static inline void fl2000_xrgb8888_to_rgb565_line(u16 *dbuf, u32 *sbuf,
+static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf,
 		u32 pixels)
 {
 	unsigned int x;
@@ -173,47 +175,48 @@ void fl2000_stream_compress(struct usb_device *usb_dev,
 			fl2000_stream_release, NULL, NULL);
 	unsigned int y;
 	void *dst;
-	size_t dst_len = fb->width * FL2000_BYTES_PER_PIX;
+	u32 dst_line_len = fb->width * stream->bytes_pix;
 
 	list_rotate_left(&stream->fb_list);
 	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
 	dst = cursor->buf;
 
-	switch (fb->format->format) {
-	case DRM_FORMAT_RGB565:
-		for (y = 0; y < fb->height; y++) {
-			fl2000_rgb565_to_rgb565_line(dst, src, fb->width);
-			src += fb->pitches[0];
-			dst += dst_len;
+	for (y = 0; y < fb->height; y++) {
+		switch (stream->bytes_pix) {
+		case 2:
+			fl2000_xrgb888_to_rgb565_line(dst, src, fb->width);
+			break;
+		case 3:
+			fl2000_xrgb888_to_rgb888_line(dst, src, fb->width);
+			break;
+		default: /* Shouldn't happen */
+			break;
 		}
-		break;
-	case DRM_FORMAT_XRGB8888:
-		for (y = 0; y < fb->height; y++) {
-			fl2000_xrgb8888_to_rgb565_line(dst, src, fb->width);
-			src += fb->pitches[0];
-			dst += dst_len;
-		}
-		break;
-	default:
-		/* Unknown format, do nothing */
-		break;
+		src += fb->pitches[0];
+		dst += dst_line_len;
 	}
 }
 
-int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t pixels)
+int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels,
+		u32 bytes_pix)
 {
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
-	ssize_t size = pixels * FL2000_BYTES_PER_PIX;
+	ssize_t size;
 
 	if (!stream)
 		return -ENODEV;
 
+	/* Round buffer size up to multiple of 8 to meet HW expectations */
+	size = (pixels * bytes_pix + 7) & ~(ssize_t)7;
+
 	/* If there are buffers with same size - keep them */
-	if (stream->urb->transfer_buffer_length == size)
+	if (stream->urb->transfer_buffer_length == size &&
+			stream->bytes_pix == bytes_pix)
 		return 0;
 
 	stream->urb->transfer_buffer_length = size;
+	stream->bytes_pix = bytes_pix;
 
 	/* Destroy wrong size buffers if they exist */
 	if (stream->urb->transfer_buffer_length != 0)

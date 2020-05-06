@@ -3,7 +3,7 @@
  * fl2000_drm.c
  *
  * (C) Copyright 2012, Red Hat
- * (C) Copyright 2018-2019, Artem Mygaiev
+ * (C) Copyright 2018-2020, Artem Mygaiev
  */
 
 #include "fl2000.h"
@@ -12,7 +12,7 @@ int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
-int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t pixels);
+int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t pixels, u32 freq);
 void fl2000_stream_compress(struct usb_device *usb_dev,
 		struct drm_framebuffer *fb, void *src);
 int fl2000_stream_enable(struct usb_device *usb_dev);
@@ -29,13 +29,59 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 #define MAX_WIDTH		4000
 #define MAX_HEIGHT		4000
 
-/* Force fbdev to use RGB565 */
-#define FL2000_FB_BPP		16
-
+/* Force using 32-bit XRGB8888 on input for simplicity */
+#define FL2000_FB_BPP		32
 static const u32 fl2000_pixel_formats[] = {
-	DRM_FORMAT_RGB565,
 	DRM_FORMAT_XRGB8888,
 };
+
+/* Assume bulk transfers can use only 80% of USB bandwidth */
+#define FL2000_BULK_BW_PERCENT		80
+
+#define FL2000_BULK_BW_HIGH_SPEED	(480000000ull * 100 / \
+						FL2000_BULK_BW_PERCENT / 8)
+#define FL2000_BULK_BW_SUPER_SPEED	(5000000000ull * 100 / \
+						FL2000_BULK_BW_PERCENT / 8)
+#define FL2000_BULK_BW_SUPER_SPEED_PLUS	(10000000000ull * 100 / \
+						FL2000_BULK_BW_PERCENT / 8)
+
+static inline int fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
+{
+	int bytes_pix;
+	u64 max_bw;
+
+	/* Calculate maximum bandwidth, bytes per second */
+	switch (usb_dev->speed) {
+	case USB_SPEED_HIGH:
+		max_bw = FL2000_BULK_BW_HIGH_SPEED;
+		break;
+	case USB_SPEED_SUPER:
+		max_bw = FL2000_BULK_BW_SUPER_SPEED;
+		break;
+	case USB_SPEED_SUPER_PLUS:
+		max_bw = FL2000_BULK_BW_SUPER_SPEED_PLUS;
+		break;
+	default:
+		dev_err(&usb_dev->dev, "Unsupported USB bus detected");
+		return 0;
+	}
+
+	/* Maximum bytes per pixel with maximum bandwidth */
+	bytes_pix = max_bw / pixclock;
+	switch (bytes_pix) {
+	case 0:		/* Not enough */
+	case 1:		/* RGB 332 not supported*/
+		return 0;
+	case 2:		/* RGB 565 */
+	case 3:		/* RGB 888 */
+		break;
+	default:
+		bytes_pix = 3;
+		break;
+	}
+
+	return bytes_pix;
+}
 
 /* List all supported bridges */
 static const char *fl2000_supported_bridges[] = {
@@ -104,13 +150,16 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
 		const struct drm_display_mode *mode)
 {
 	struct drm_device *drm = crtc->dev;
+	struct usb_device *usb_dev = drm->dev_private;
+	u32 pixclock = mode->hdisplay * mode->vdisplay * drm_mode_vrefresh(mode);
 
 	dev_info(drm->dev, "DRM mode validation: "DRM_MODE_FMT,
 			DRM_MODE_ARG(mode));
 
-	/* TODO: check mode USB bandwidth and other FL2000 HW limitations*/
-
-	return MODE_OK;
+	if (!fl2000_get_bytes_pix(usb_dev, pixclock))
+		return MODE_BAD;
+	else
+		return MODE_OK;
 }
 
 static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
@@ -283,6 +332,7 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 		 struct drm_display_mode *mode,
 		 struct drm_display_mode *adjusted_mode)
 {
+	int bytes_pix;
 	struct drm_device *drm = encoder->dev;
 	struct usb_device *usb_dev = drm->dev_private;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -295,6 +345,9 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	fl2000_vga_pll_reg pll = {.val = 0};
 	fl2000_vga_isoch_reg isoch = {.val = 0};
 	u32 mask;
+	u32 pixclock = mode->hdisplay * mode->vdisplay * drm_mode_vrefresh(mode);
+
+	bytes_pix = fl2000_get_bytes_pix(usb_dev,pixclock);
 
 	mask = 0;
 	aclk.force_pll_up = true;
@@ -313,9 +366,6 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	mask = 0;
 	aclk.use_pkt_pending = false;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_pkt_pending);
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
-
-	mask = 0;
 	aclk.use_zero_pkt_len = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_zero_pkt_len);
 	aclk.vga_err_int_en = true;
@@ -326,11 +376,14 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
 	pxclk.drop_cnt = false;
 	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, drop_cnt);
-	pxclk.vga565_mode = true;
+	pxclk.vga565_mode = (bytes_pix == 2);
 	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga565_mode);
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, pxclk.val);
-
-	mask = 0;
+	pxclk.vga332_mode = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga332_mode);
+	pxclk.vga555_mode = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga555_mode);
+	pxclk.vga_compress = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga_compress);
 	pxclk.dac_output_en = true;
 	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
 	pxclk.clear_watermark = true;
@@ -346,33 +399,30 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	hsync1.hactive = mode->hdisplay;
 	hsync1.htotal = mode->htotal;
 	regmap_write(regmap, FL2000_VGA_HSYNC_REG1, hsync1.val);
-	regmap_read(regmap, FL2000_VGA_PLL_REG, &hsync1.val);
 
 	hsync2.hsync_width = mode->hsync_end - mode->hsync_start;
 	hsync2.hstart = (mode->htotal - mode->hsync_start + 1);
 	regmap_write(regmap, FL2000_VGA_HSYNC_REG2, hsync2.val);
-	regmap_read(regmap, FL2000_VGA_PLL_REG, &hsync2.val);
 
 	vsync1.vactive = mode->vdisplay;
 	vsync1.vtotal = mode->vtotal;
 	regmap_write(regmap, FL2000_VGA_VSYNC_REG1, vsync1.val);
-	regmap_read(regmap, FL2000_VGA_PLL_REG, &vsync1.val);
 
 	vsync2.vsync_width = mode->vsync_end - mode->vsync_start;
 	vsync2.vstart = (mode->vtotal - mode->vsync_start + 1);
 	vsync2.start_latency = vsync2.vstart;
 	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
-	regmap_read(regmap, FL2000_VGA_PLL_REG, &vsync2.val);
 
 	fl2000_afe_magic(usb_dev);
+
+	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay,
+			bytes_pix);
 
 	/* Force VGA connect to allow bridge perform its setup */
 	mask = 0;
 	aclk.force_vga_connect = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
-
-	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay);
 }
 
 static void fl2000_output_enable(struct drm_encoder *encoder)
