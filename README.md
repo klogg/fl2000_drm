@@ -74,6 +74,7 @@ Not shared here due to NDAs, Copyrights, etc.
  * IT66121 Register List Release V1.0
  * AV BDP v1.0
  * CEA-861-D
+ * VESA-EEDID-A2
 
 ## Notes
  * VGA (D-Sub) DAC output of FL2000DX can be implemented as a DRM bridge (dumb_vga_dac)
