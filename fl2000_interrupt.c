@@ -13,21 +13,18 @@ void fl2000_inter_check(struct usb_device *usb_dev);
 #define INTR_BUFSIZE	1
 
 struct fl2000_intr {
+	struct usb_device *usb_dev;
 	u8 poll_interval;
 	struct urb *urb;
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
 };
 
-static void fl2000_intr_work(struct work_struct *work_item)
+static void fl2000_intr_work(struct work_struct *work)
 {
-	struct fl2000_intr *intr = container_of(work_item,
-			struct fl2000_intr, work);
-	struct usb_device *usb_dev = intr->urb->dev;
+	struct fl2000_intr *intr = container_of(work, struct fl2000_intr, work);
 
-	/* This possibly involves reading I2C registers, etc. so shall be
-	 * scheduled as a work queue */
-	fl2000_inter_check(usb_dev);
+	fl2000_inter_check(intr->usb_dev);
 }
 
 static void fl2000_intr_release(struct device *dev, void *res)
@@ -42,20 +39,26 @@ static void fl2000_intr_completion(struct urb *urb)
 	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
 			fl2000_intr_release, NULL, NULL);
 
+	ret = fl2000_urb_status(usb_dev, urb);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Stopping interrupts");
+		return;
+	}
+
+	/* This possibly involves reading I2C registers, etc. so better
+	 * to schedule a work queue */
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 	queue_work(intr->work_queue, &intr->work);
 
 	/* For interrupt URBs, as part of successful URB submission
 	 * urb->interval is modified to reflect the actual transfer period used,
 	 * so we need to restore it */
-	intr->urb->interval = intr->poll_interval;
+	urb->interval = intr->poll_interval;
+	urb->start_frame = -1;
 
 	/* Restart urb */
-	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
-	if (ret) {
-		/* TODO: WTF! Signal general failure, stop driver! Except in
-		 * case of -EPERM, that means we already in progress of
-		 * stopping */
+	ret = usb_submit_urb(urb, GFP_KERNEL);
+	if (ret && ret != -EPERM) {
 		dev_err(&usb_dev->dev, "URB submission failed (%d)", ret);
 	}
 }
@@ -94,8 +97,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 	}
 	devres_add(&usb_dev->dev, intr);
 
-	/* TODO: Do we need a different interval? */
 	intr->poll_interval = desc->bInterval;
+	intr->usb_dev = usb_dev;
 
 	intr->urb = usb_alloc_urb(0, GFP_ATOMIC);
 	if (!intr->urb) {

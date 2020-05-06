@@ -182,7 +182,18 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 #define IT66121_PCI2C_CEC_ADDRESS	0x08D
 /* reserved */
 /* reserved */
-/* 090 - 0BF Pattern generation registers, ignored */
+/* 090 - 0B2 Pattern generation registers, ignored */
+/* reserved */
+#define IT66121_HDMI_DATA_SWAP		0x0BF
+static const struct reg_field IT66121_HDMI_DATA_SWAP_pack =
+		REG_FIELD(IT66121_HDMI_DATA_SWAP, 3, 3);
+static const struct reg_field IT66121_HDMI_DATA_SWAP_ml =
+		REG_FIELD(IT66121_HDMI_DATA_SWAP, 2, 2);
+static const struct reg_field IT66121_HDMI_DATA_SWAP_yc =
+		REG_FIELD(IT66121_HDMI_DATA_SWAP, 1, 1);
+static const struct reg_field IT66121_HDMI_DATA_SWAP_rb =
+		REG_FIELD(IT66121_HDMI_DATA_SWAP, 0, 0);
+
 #define IT66121_HDMI_MODE		0x0C0
 #define IT66121_HDMI_MODE_HDMI		(1<<0)
 #define IT66121_HDMI_MODE_DVI		(0<<0)
@@ -264,5 +275,31 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 #define IT66121_BANK_END		0x1FF
 
 /* CEC registers ignored (must be configured as a separate regmap / device) */
+
+/*
+ * List of volatile registers that shall not be cached
+ * */
+static inline bool IT66121_REG_VOLATILE(u32 reg)
+{
+	switch (reg) {
+	case IT66121_INT_STATUS_1:
+	case IT66121_INT_STATUS_2:
+	case IT66121_INT_STATUS_3:
+	case IT66121_SYS_STATUS:
+	case IT66121_DDC_STATUS:
+	case IT66121_DDC_RD_FIFO:
+	case IT66121_ROM_STATUS:
+	case IT66121_OS_FREQ_NUM_2:
+	case IT66121_OS_FREQ_NUM_1:
+	case IT66121_TX_CLK_COUNT:
+	case IT66121_PLL_LOCK_STATUS:
+	case IT66121_AUDIO_FREQ_COUNT:
+	case IT66121_HDMI_PCLK_CONTROL:
+	case IT66121_HDMI_PCLK_COUNT:
+		return true;
+	default:
+		return false;
+	}
+}
 
 #endif /* __FL2000_REGISTERS_H__ */

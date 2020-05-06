@@ -31,6 +31,8 @@ struct fl2000_reg_data {
 	struct regmap_field *field[NUM_REGFIELDS];
 #if defined(CONFIG_DEBUG_FS)
 	unsigned int reg_debug_address;
+	struct dentry *root_dir, *reg_address_file, *reg_data_file;
+
 #endif
 };
 
@@ -80,8 +82,6 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 
 	*val = *data;
 
-	//dev_dbg(&usb_dev->dev, "RD: 0x%04X - 0x%08X", reg, *data);
-
 	kfree(data);
 	return ret;
 }
@@ -98,8 +98,6 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 
 	*data = val;
 
-	//dev_dbg(&usb_dev->dev, "WR: 0x%04X - 0x%08X", reg, *data);
-
 	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
 			CONTROL_MSG_WRITE, (USB_DIR_OUT | USB_TYPE_VENDOR), 0,
 			offset, data, CONTROL_MSG_LEN, USB_CTRL_SET_TIMEOUT);
@@ -114,19 +112,20 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	return ret;
 }
 
+/* We do not use default values as per documentation because:
+ *  a) somehow they differ from real HW
+ *  b) on SW reset not all of them are cleared
+ */
 static const struct regmap_config fl2000_regmap_config = {
 	.val_bits = 32,
 	.reg_bits = 16,
 	.reg_stride = 4,
 	.max_register = 0xFFFF,
 
-	.cache_type = REGCACHE_NONE,
+	.cache_type = REGCACHE_RBTREE,
 
 	.precious_reg = fl2000_reg_precious,
 	.volatile_reg = fl2000_reg_volatile,
-
-	.reg_defaults = fl2000_reg_defaults,
-	.num_reg_defaults = ARRAY_SIZE(fl2000_reg_defaults),
 
 	.reg_format_endian = REGMAP_ENDIAN_BIG,
 	.val_format_endian = REGMAP_ENDIAN_BIG,
@@ -164,24 +163,42 @@ static int fl2000_debugfs_reg_write(void *data, u64 value)
 DEFINE_SIMPLE_ATTRIBUTE(reg_ops, fl2000_debugfs_reg_read,
 		fl2000_debugfs_reg_write, "%08llx\n");
 
-static void fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
+static int fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 {
-	struct dentry *root_dir;
-	struct dentry *reg_address_file, *reg_data_file;
 	struct usb_device *usb_dev = reg_data->usb_dev;
 
-	root_dir = debugfs_create_dir("fl2000_regs", NULL);
+	reg_data->root_dir = debugfs_create_dir("fl2000_regs", NULL);
+	if (IS_ERR(reg_data->root_dir))
+		return PTR_ERR(reg_data->root_dir);
 
-	debugfs_create_x32("reg_address", fl2000_debug_umode,
-			root_dir, &reg_data->reg_debug_address);
+	//debugfs_create_x32("reg_address", fl2000_debug_umode,
+	//		root_dir, &reg_data->reg_debug_address);
+	debugfs_create_x32("reg_address",
+			fl2000_debug_umode, reg_data->root_dir,
+			&reg_data->reg_debug_address);
+	if (IS_ERR(reg_data->reg_address_file))
+		return PTR_ERR(reg_data->reg_address_file);
 
-	reg_data_file = debugfs_create_file("reg_data", fl2000_debug_umode,
-			root_dir, usb_dev, &reg_ops);
+	reg_data->reg_data_file = debugfs_create_file("reg_data",
+			fl2000_debug_umode, reg_data->root_dir, usb_dev,
+			&reg_ops);
+	if (IS_ERR(reg_data->reg_data_file))
+		return PTR_ERR(reg_data->reg_data_file);
+
+	return 0;
+}
+
+static void fl2000_debugfs_reg_remove(struct fl2000_reg_data *reg_data)
+{
+	debugfs_remove(reg_data->reg_data_file);
+	debugfs_remove(reg_data->reg_address_file);
+	debugfs_remove(reg_data->root_dir);
 }
 
 #else /* CONFIG_DEBUG_FS */
 
-#define fl2000_debugfs_reg_init(usb_dev)
+#define fl2000_debugfs_reg_init(reg_data)
+#define fl2000_debugfs_reg_remove(reg_data)
 
 #endif /* CONFIG_DEBUG_FS */
 
@@ -207,16 +224,6 @@ int fl2000_reset(struct usb_device *usb_dev)
 
 	msleep(FL2000_HW_RST_MDELAY);
 
-	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(reg_data->field[MON_DETECT], true);
-	if (ret)
-		return -EIO;
-	ret = regmap_field_write(reg_data->field[WAKEUP_CLR_EN], false);
-	if (ret)
-		return -EIO;
-
 	return 0;
 }
 
@@ -224,7 +231,7 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 {
 	int ret;
 	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);;
+			fl2000_reg_data_release, NULL, NULL);
 
 	/* XXX: This is actually some unknown & undocumented FL2000 USB AFE
 	 * register setting */
@@ -239,9 +246,17 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 {
 	int ret;
 	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);;
+			fl2000_reg_data_release, NULL, NULL);
 
-	/* TODO: Move this to regmap default configuration values array */
+	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[MON_DETECT], true);
+	if (ret)
+		return -EIO;
+	ret = regmap_field_write(reg_data->field[WAKEUP_CLR_EN], false);
+	if (ret)
+		return -EIO;
 	ret = regmap_field_write(reg_data->field[U1_REJECT], true);
 	if (ret)
 		return -EIO;
@@ -260,6 +275,7 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 	int i, ret;
 	struct fl2000_reg_data *reg_data;
 	struct regmap *regmap;
+	fl2000_vga_status_reg status;
 
 	reg_data = devres_alloc(&fl2000_reg_data_release, sizeof(*reg_data),
 			GFP_KERNEL);
@@ -292,10 +308,25 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 		}
 	}
 
-	fl2000_debugfs_reg_init(reg_data);
+	ret = fl2000_debugfs_reg_init(reg_data);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot create debug entry (%d)", ret);
+		return ret;
+	}
 
-	fl2000_reset(usb_dev);
-	fl2000_usb_magic(usb_dev);
+	/* TODO: Move initial reset to higher level initialization function */
+	ret = fl2000_reset(usb_dev);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot reset device (%d)", ret);
+		return ret;
+	}
+
+	/* TODO: Split interrupt processing into DRM and register parts */
+	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot reset interrupts (%d)", ret);
+		return ret;
+	}
 
 	dev_info(&usb_dev->dev, "Configured FL2000 registers");
 	return 0;
@@ -306,6 +337,8 @@ void fl2000_regmap_cleanup(struct usb_device *usb_dev)
 	int i;
 	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
 			fl2000_reg_data_release, NULL, NULL);
+
+	fl2000_debugfs_reg_remove(reg_data);
 
 	for (i = 0; i < ARRAY_SIZE(fl2000_reg_fields); i++) {
 		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;

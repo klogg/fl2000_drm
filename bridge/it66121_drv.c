@@ -39,7 +39,16 @@ struct it66121_priv {
 	struct regmap_field *ddc_error;
 	struct regmap_field *clr_irq;
 
+	struct regmap_field *swap_pack;
+	struct regmap_field *swap_ml;
+	struct regmap_field *swap_yc;
+	struct regmap_field *swap_rb;
+
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
+
+	struct edid *edid;
+	bool dvi_mode;
+	enum drm_connector_status conn_status;
 };
 
 static int it66121_remove(struct i2c_client *client);
@@ -63,19 +72,20 @@ static const struct regmap_range_cfg it66121_regmap_banks[] = {
 	},
 };
 
+static bool it66121_reg_volatile(struct device *dev, unsigned int reg)
+{
+	return IT66121_REG_VOLATILE(reg);
+}
+
 static const struct regmap_config it66121_regmap_config = {
 	.val_bits = 8, /* 8-bit register size */
 	.reg_bits = 8, /* 8-bit register address space */
 	.reg_stride = 1,
 	.max_register = 2 * IT66121_BANK_SIZE - 1, /* 2 banks of registers */
 
-	.cache_type = REGCACHE_NONE,
+	.cache_type = REGCACHE_RBTREE,
 
-	//.precious_reg = it66121_precious_reg,
-	//.volatile_reg = it66121_volatile_reg,
-
-	//.reg_defaults = it66121_reg_defaults,
-	//.num_reg_defaults = ARRAY_SIZE(it66121_reg_defaults),
+	.volatile_reg = it66121_reg_volatile,
 
 	.ranges = it66121_regmap_banks,
 	.num_ranges = ARRAY_SIZE(it66121_regmap_banks),
@@ -210,9 +220,6 @@ static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 	int ret;
 	unsigned int ddc_control_val;
 
-	struct device *dev = priv->bridge.dev->dev;
-	dev_info(dev, "Clear DDC FIFO");
-
 	ret = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
 	if (ret)
 		return ret;
@@ -239,9 +246,6 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 {
 	int i, ret;
 	unsigned int ddc_control_val;
-
-	struct device *dev = priv->bridge.dev->dev;
-	dev_info(dev, "Abort DDC Operations");
 
 	/* XXX: Prior to DDC abort command there was also a reset of HDCP:
 	 *  1. HDCP_DESIRE clear bit CP DESIRE
@@ -280,6 +284,8 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	return 0;
 }
 
+/* TODO: Add protection for I2C register / EDID / SPI access, e.g. mutex*/
+#if 0
 static void it66121_intr_work(struct work_struct *work_item)
 {
 	int ret;
@@ -289,8 +295,6 @@ static void it66121_intr_work(struct work_struct *work_item)
 	struct it66121_priv *priv = container_of(dwork, struct it66121_priv,
 			work);
 	struct device *dev = priv->bridge.dev->dev;
-
-	/* TODO: use mutex */
 
 	ret = regmap_field_read(priv->irq_pending, &val);
 	if (ret) {
@@ -330,6 +334,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 	queue_delayed_work(priv->work_queue, &priv->work,
 			msecs_to_jiffies(IRQ_POLL_INTRVL));
 }
+#endif
 
 static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		size_t len)
@@ -338,9 +343,6 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 	unsigned int rd_fifo_val;
 	static u8 header[EDID_LOSS_LEN] = {0x00, 0xFF, 0xFF};
 	struct it66121_priv *priv = context;
-	struct device *dev = priv->bridge.dev->dev;
-
-	dev_info(dev, "Reading EDID block %d (%zd bytes)", block, len);
 
 	/* Statically fill first 3 bytes (due to EDID reading HW bug) */
 	for (i = 0; (i < EDID_LOSS_LEN) && (remain > 0); i++) {
@@ -349,27 +351,15 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		offset++;
 	}
 
+	/* Abort DDC */
+	ret = it66121_abort_ddc_ops(priv);
+	if (ret)
+		return ret;
+
 	while (remain > 0) {
 		/* Add bytes that will be lost during EDID read */
 		int size = ((remain + EDID_LOSS_LEN) > EDID_FIFO_SIZE) ?
 				EDID_FIFO_SIZE : (remain + EDID_LOSS_LEN);
-
-		/* Clear DDC FIFO */
-		ret = it66121_clear_ddc_fifo(priv);
-		if (ret)
-			return ret;
-
-		/* Power up CRCLK */
-		regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL,
-				IT66121_SYS_CRCLK_OFF,
-				IT66121_SYS_CRCLK_OFF);
-		if (ret)
-			return ret;
-
-		/* Abort DDC */
-		ret = it66121_abort_ddc_ops(priv);
-		if (ret)
-			return ret;
 
 		/* Clear DDC FIFO */
 		ret = it66121_clear_ddc_fifo(priv);
@@ -424,45 +414,28 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
-	int ret;
-	struct edid *edid;
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv,
 			connector);
+	struct edid *edid = priv->edid;
 
-	edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
-	if (!edid)
-		return -ENOMEM;
+	if (!edid) {
+		edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
+		if (!edid)
+			return 0;
 
-	ret = drm_add_edid_modes(connector, edid);
-	if (ret)
-		return ret;
+		drm_connector_update_edid_property(connector, edid);
 
-	ret = drm_connector_update_edid_property(connector, edid);
-	if (ret)
-		return ret;
+		priv->dvi_mode = !drm_detect_hdmi_monitor(edid);
+		priv->edid = edid;
+	}
 
-	return 0;
-}
-
-static int it66121_connector_detect_ctx(struct drm_connector *connector,
-		struct drm_modeset_acquire_ctx *ctx, bool force)
-{
-	int ret, val;
-	struct it66121_priv *priv = container_of(connector, struct it66121_priv,
-			connector);
-
-	ret = regmap_field_read(priv->hpd, &val);
-	return val == 0 ? connector_status_disconnected :
-			connector_status_connected;
+	return drm_add_edid_modes(connector, edid);
 }
 
 static enum drm_mode_status it66121_connector_mode_valid(
 		struct drm_connector *connector,
 		struct drm_display_mode *mode)
 {
-	struct drm_device *drm = connector->dev;
-	dev_info(drm->dev, "it66121_connector_mode_valid");
-
 	/* TODO: validate mode */
 
 	return MODE_OK;
@@ -470,14 +443,29 @@ static enum drm_mode_status it66121_connector_mode_valid(
 
 static struct drm_connector_helper_funcs it66121_connector_helper_funcs = {
 	.get_modes = it66121_connector_get_modes,
-	.detect_ctx = it66121_connector_detect_ctx,
 	.mode_valid = it66121_connector_mode_valid,
 };
 
 static enum drm_connector_status it66121_connector_detect(
 		struct drm_connector *connector, bool force)
 {
-	return it66121_connector_detect_ctx(connector, NULL, force);
+	int ret;
+	unsigned int val;
+	struct it66121_priv *priv = container_of(connector, struct it66121_priv,
+			connector);
+	struct device *dev = priv->bridge.dev->dev;
+
+	if (force || priv->conn_status == connector_status_unknown) {
+		ret = regmap_field_read(priv->hpd, &val);
+		if (ret) {
+			priv->conn_status = connector_status_unknown;
+			dev_err(dev, "Cannot get monitor status (%d)", ret);
+		} else
+			priv->conn_status = val ? connector_status_connected :
+					connector_status_disconnected;
+	}
+
+	return priv->conn_status;
 }
 
 static const struct drm_connector_funcs it66121_connector_funcs = {
@@ -498,6 +486,7 @@ static int it66121_bind(struct device *comp, struct device *master,
 	struct drm_simple_display_pipe *pipe = master_data;
 
 	dev_info(comp, "Binding IT66121 component");
+
 	/* TODO: Do some checks? */
 
 	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
@@ -511,6 +500,7 @@ static void it66121_unbind(struct device *comp, struct device *master,
 		void *master_data)
 {
 	dev_info(comp, "Unbinding IT66121 component");
+
 	/* TODO: Detach? */
 }
 
@@ -519,7 +509,7 @@ static struct component_ops it66121_component_ops = {
 	.unbind = it66121_unbind,
 };
 
-/* TODO: rewrite register access properly */
+/* TODO: rewrite register access properly, add error processing */
 static int it66121_bridge_attach(struct drm_bridge *bridge)
 {
 	int ret;
@@ -532,7 +522,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	}
 
 	/* Reset according to IT66121 manual */
-	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+	regmap_write_bits(priv->regmap, IT66121_SW_RST,
 			IT66121_SW_REF_RST_HDMITX,
 			IT66121_SW_REF_RST_HDMITX);
 	msleep(50);
@@ -562,7 +552,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	regmap_write_bits(priv->regmap, IT66121_SYS_CONTROL, (3<<4), (0<<4));
 
 	/* Reset according to IT66121 manual */
-	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
+	regmap_write_bits(priv->regmap, IT66121_SW_RST,
 			IT66121_SW_REF_RST_HDMITX,
 			IT66121_SW_REF_RST_HDMITX);
 	msleep(50);
@@ -585,6 +575,23 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	}
 
 	drm_connector_register(&priv->connector);
+
+	/* Enable HDMI packets, repeat for every data frame as recommended */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
+			IT66121_HDMI_GEN_CTRL_PKT_ON |
+			IT66121_HDMI_GEN_CTRL_PKT_RPT);
+	if (ret) {
+		DRM_ERROR("Cannot enable HDMI packets");
+		return ret;
+	}
+
+	/* Mute AV */
+	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
+			IT66121_HDMI_AV_MUTE_ON, IT66121_HDMI_AV_MUTE_ON);
+	if (ret) {
+		DRM_ERROR("Cannot mute AV");
+		return ret;
+	}
 
 #if 0
 	/* Start interrupts */
@@ -620,15 +627,7 @@ static void it66121_bridge_enable(struct drm_bridge *bridge)
 
 	/* Unmute AV */
 	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
-			IT66121_HDMI_AV_MUTE_ON,
-			~IT66121_HDMI_AV_MUTE_ON);
-	if (ret)
-		return;
-
-	/* XXX: Why we need it in every mute/umute? */
-	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
-			IT66121_HDMI_GEN_CTRL_PKT_ON |
-			IT66121_HDMI_GEN_CTRL_PKT_RPT);
+			IT66121_HDMI_AV_MUTE_ON, ~IT66121_HDMI_AV_MUTE_ON);
 	if (ret)
 		return;
 }
@@ -643,15 +642,7 @@ static void it66121_bridge_disable(struct drm_bridge *bridge)
 
 	/* Mute AV */
 	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
-			IT66121_HDMI_AV_MUTE_ON | IT66121_HDMI_AV_MUTE_BLUE,
-			IT66121_HDMI_AV_MUTE_ON | IT66121_HDMI_AV_MUTE_BLUE);
-	if (ret)
-		return;
-
-	/* XXX: Why we need it in every mute/umute? */
-	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
-			IT66121_HDMI_GEN_CTRL_PKT_ON |
-			IT66121_HDMI_GEN_CTRL_PKT_RPT);
+			IT66121_HDMI_AV_MUTE_ON, IT66121_HDMI_AV_MUTE_ON);
 	if (ret)
 		return;
 }
@@ -682,21 +673,20 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		IT66121_HDMI_AVIINFO_DB13
 	};
 
-	/* TODO: We are explicitly configuring HDMI here while actually it can
-	 * be also DVI */
-
 	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " \
-			DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
+			DRM_MODE_FMT, DRM_MODE_ARG(mode));
 
 	hdmi_avi_infoframe_init(&priv->hdmi_avi_infoframe);
 
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
-			&priv->connector, adjusted_mode);
+			&priv->connector, mode);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot create AVI infoframe (%d)",
 				ret);
 		return;
 	}
+
+	/* TODO: Set up color information here */
 
 	frame_size = hdmi_avi_infoframe_pack(&priv->hdmi_avi_infoframe, buf,
 			sizeof(buf));
@@ -736,7 +726,8 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	/* Set reset flags */
 	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
 			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST,
-			(IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST | IT66121_SW_HDCP_RST));
+			(IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST |
+					IT66121_SW_HDCP_RST));
 	if (ret)
 		return;
 
@@ -755,18 +746,17 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		return;
 	}
 
-	/* Set TX mode to HDMI in DVI mode */
-	/* TODO: Why? Is this somehow read from monitor? */
+	/* Set TX mode */
 	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
-			IT66121_HDMI_MODE_DVI);
+			priv->dvi_mode ? IT66121_HDMI_MODE_DVI :
+					IT66121_HDMI_MODE_HDMI);
 	if (ret) {
-		dev_err(bridge->dev->dev, "Cannot enable HDMI mode " \
-				"(%d)", ret);
+		dev_err(bridge->dev->dev, "Cannot set TX mode (%d)", ret);
 		return;
 	}
 
 	/* Configure AFE */
-	ret = it66121_configure_afe(priv, adjusted_mode);
+	ret = it66121_configure_afe(priv, mode);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot configure AFE (%d)", ret);
 		return;
@@ -810,6 +800,8 @@ static int it66121_probe(struct i2c_client *client)
 		return -ENOMEM;
 	}
 
+	priv->conn_status = connector_status_unknown;
+
 	priv->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
 	if (IS_ERR(priv->regmap)) {
 		return PTR_ERR(priv);
@@ -827,6 +819,15 @@ static int it66121_probe(struct i2c_client *client)
 			priv->regmap, IT66121_DDC_STATUS_ddc_done);
 	priv->ddc_error = devm_regmap_field_alloc(&client->dev,
 			priv->regmap, IT66121_DDC_STATUS_ddc_error);
+
+	priv->swap_pack = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_HDMI_DATA_SWAP_pack);
+	priv->swap_ml = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_HDMI_DATA_SWAP_ml);
+	priv->swap_yc = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_HDMI_DATA_SWAP_yc);
+	priv->swap_rb = devm_regmap_field_alloc(&client->dev,
+			priv->regmap, IT66121_HDMI_DATA_SWAP_rb);
 
 	/* Dont really care which one failed */
 	if (IS_ERR(priv->irq_pending) ||

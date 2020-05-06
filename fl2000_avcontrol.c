@@ -50,9 +50,9 @@ void fl2000_avcontrol_destroy(struct usb_interface *interface)
 
 	if (drv) {
 		for (i = ARRAY_SIZE(fl2000_devices); i > 0; i--)
-			if (drv->__device_up[i-1]) {
-				(*fl2000_devices[i-1].cleanup_fn)(usb_dev);
-				drv->__device_up[i-1] = false;
+			if (drv->__device_up[i - 1]) {
+				(*fl2000_devices[i - 1].cleanup_fn)(usb_dev);
+				drv->__device_up[i - 1] = false;
 			}
 		devres_release(&usb_dev->dev, fl2000_drv_release, NULL, NULL);
 	}
@@ -60,7 +60,7 @@ void fl2000_avcontrol_destroy(struct usb_interface *interface)
 
 int fl2000_avcontrol_create(struct usb_interface *interface)
 {
-	int i = 0, ret;
+	int i, ret = 0;
 	struct fl2000_drv *drv;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 

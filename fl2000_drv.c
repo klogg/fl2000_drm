@@ -3,7 +3,7 @@
  * fl2000_drv.c
  *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
- * (C) Copyright 2018-2019, Artem Mygaiev
+ * (C) Copyright 2018-2020, Artem Mygaiev
  */
 
 #include "fl2000.h"
@@ -49,6 +49,12 @@ static int fl2000_probe(struct usb_interface *interface,
 {
 	int ret;
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+
+	if (usb_dev->speed < USB_SPEED_HIGH) {
+		dev_err(&interface->dev, "USB 1.1 is not supported!");
+		return -ENODEV;
+	}
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
@@ -119,12 +125,12 @@ static int fl2000_resume(struct usb_interface *interface)
 }
 
 static struct usb_driver fl2000_driver = {
-	.name 		= USB_DRIVER_NAME,
-	.probe 		= fl2000_probe,
-	.disconnect 	= fl2000_disconnect,
+	.name		= USB_DRIVER_NAME,
+	.probe		= fl2000_probe,
+	.disconnect	= fl2000_disconnect,
 	.suspend	= fl2000_suspend,
 	.resume		= fl2000_resume,
-	.id_table 	= fl2000_id_table,
+	.id_table	= fl2000_id_table,
 };
 
 module_usb_driver(fl2000_driver); /* @suppress("Unused static function")
