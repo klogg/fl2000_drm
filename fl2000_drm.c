@@ -168,10 +168,23 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
+	struct usb_device *usb_dev = drm->dev_private;
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
+	u32 mask;
 
-	dev_info(drm->dev, "fl2000_display_enable");
+	if (IS_ERR(regmap)) {
+		dev_err(drm->dev, "Cannot find regmap (%ld)", PTR_ERR(regmap));
+		return;
+	}
 
-	/* TODO: Kick off streaming queue */
+	/* Disable forcing VGA connect */
+	mask = 0;
+	aclk.force_vga_connect = false;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	fl2000_stream_enable(usb_dev);
 
 	drm_crtc_vblank_on(crtc);
 }
@@ -180,10 +193,11 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
+	struct usb_device *usb_dev = drm->dev_private;
 
-	dev_info(drm->dev, "fl2000_display_disable");
+	/* TODO: disable HW */
 
-	/* TODO: Stop streaming queue */
+	fl2000_stream_disable(usb_dev);
 
 	drm_crtc_vblank_off(crtc);
 }
@@ -425,47 +439,9 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 }
 
-static void fl2000_output_enable(struct drm_encoder *encoder)
-{
-	struct drm_device *drm = encoder->dev;
-	struct usb_device *usb_dev = drm->dev_private;
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
-	u32 mask;
-
-	dev_info(drm->dev, "fl2000_output_enable");
-
-	if (IS_ERR(regmap)) {
-		dev_err(drm->dev, "Cannot find regmap (%ld)", PTR_ERR(regmap));
-		return;
-	}
-
-	/* Disable forcing VGA connect */
-	mask = 0;
-	aclk.force_vga_connect = false;
-	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
-
-	fl2000_stream_enable(usb_dev);
-}
-
-static void fl2000_output_disable(struct drm_encoder *encoder)
-{
-	struct drm_device *drm = encoder->dev;
-	struct usb_device *usb_dev = drm->dev_private;
-
-	dev_info(drm->dev, "fl2000_output_disable");
-
-	/* TODO: disable HW */
-
-	fl2000_stream_disable(usb_dev);
-}
-
 /* FL2000 HW control functions: mode configuration, turn on/off */
 static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
 	.mode_set = fl2000_output_mode_set,
-	.enable = fl2000_output_enable,
-	.disable = fl2000_output_disable,
 };
 
 static int fl2000_bind(struct device *master)
