@@ -6,6 +6,8 @@
  * (C) Copyright 2018-2020, Artem Mygaiev
  */
 
+/* TODO: Move registers operation to registers.c */
+
 #include "fl2000.h"
 
 int fl2000_reset(struct usb_device *usb_dev);
@@ -213,7 +215,6 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 
 	n = fb->format->num_planes;
 	if (n > 1) {
-		/* TODO: Check real buffer area for transmission */
 		struct drm_format_name_buf format_name;
 		dev_err(drm->dev, "Only single plane RGB framebuffers are " \
 				"supported, got %d planes (%s)", n,
@@ -341,7 +342,6 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
 
-/* TODO: Move registers operation to registers.c */
 static void fl2000_output_mode_set(struct drm_encoder *encoder,
 		 struct drm_display_mode *mode,
 		 struct drm_display_mode *adjusted_mode)
@@ -593,7 +593,6 @@ static int fl2000_compare(struct device *dev, void *data)
 	return 0;
 }
 
-/* TODO: Move registers operation to registers.c */
 void fl2000_inter_check(struct usb_device *usb_dev)
 {
 	int ret;
