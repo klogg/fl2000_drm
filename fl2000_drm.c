@@ -171,20 +171,6 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
-	u32 mask;
-
-	if (IS_ERR(regmap)) {
-		dev_err(drm->dev, "Cannot find regmap (%ld)", PTR_ERR(regmap));
-		return;
-	}
-
-	/* Disable forcing VGA connect */
-	mask = 0;
-	aclk.force_vga_connect = false;
-	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 
 	fl2000_stream_enable(usb_dev);
 
@@ -196,8 +182,6 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-
-	/* TODO: disable HW */
 
 	fl2000_stream_disable(usb_dev);
 
@@ -431,12 +415,6 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 
 	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay,
 			bytes_pix);
-
-	/* Force VGA connect to allow bridge perform its setup */
-	mask = 0;
-	aclk.force_vga_connect = true;
-	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 }
 
 /* FL2000 HW control functions: mode configuration, turn on/off */
