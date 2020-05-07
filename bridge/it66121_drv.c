@@ -197,7 +197,7 @@ static int it66121_configure_afe(struct it66121_priv *priv,
 	return 0;
 }
 
-static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
+static int it66121_wait_ddc_ready(struct it66121_priv *priv)
 {
 	int ret, val;
 
@@ -218,24 +218,9 @@ static inline int it66121_wait_ddc_ready(struct it66121_priv *priv)
 static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 {
 	int ret;
-	unsigned int ddc_control_val;
-
-	ret = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
-	if (ret)
-		return ret;
-
-	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
-			IT66121_DDC_MASTER_DDC |
-			IT66121_DDC_MASTER_HOST);
-	if (ret)
-		return ret;
 
 	ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 			DDC_CMD_FIFO_CLEAR);
-	if (ret)
-		return ret;
-
-	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
 	if (ret)
 		return ret;
 
@@ -245,7 +230,6 @@ static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 {
 	int i, ret;
-	unsigned int ddc_control_val;
 
 	/* XXX: Prior to DDC abort command there was also a reset of HDCP:
 	 *  1. HDCP_DESIRE clear bit CP DESIRE
@@ -254,19 +238,9 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	 * state, but somehow this is how it was implemented. This sequence is
 	 * removed since HDCP is not supported */
 
-	ret = regmap_read(priv->regmap, IT66121_DDC_CONTROL, &ddc_control_val);
-	if (ret)
-		return ret;
-
 	/* According to 2009/01/15 modification by Jau-Chih.Tseng@ite.com.tw
 	 * do abort DDC twice */
 	for (i = 0; i < 2; i++) {
-		ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
-				IT66121_DDC_MASTER_DDC |
-				IT66121_DDC_MASTER_HOST);
-		if (ret)
-			return ret;
-
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_ABORT);
 		if (ret)
@@ -276,10 +250,6 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 		if (ret)
 			return ret;
 	}
-
-	ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL, ddc_control_val);
-	if (ret)
-		return ret;
 
 	return 0;
 }
@@ -366,12 +336,6 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		if (ret)
 			return ret;
 
-		/* Start reading */
-		ret = regmap_write(priv->regmap, IT66121_DDC_CONTROL,
-				IT66121_DDC_MASTER_DDC |
-				IT66121_DDC_MASTER_HOST);
-		if (ret)
-			return ret;
 		ret = regmap_write(priv->regmap, IT66121_DDC_ADDRESS,
 				EDID_DDC_ADDR);
 		if (ret)
@@ -556,6 +520,11 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 			IT66121_SW_REF_RST_HDMITX,
 			IT66121_SW_REF_RST_HDMITX);
 	msleep(50);
+
+	/* We do not support HDCP so its ok to statically set host controls */
+	regmap_write(priv->regmap, IT66121_DDC_CONTROL,
+			IT66121_DDC_MASTER_DDC |
+			IT66121_DDC_MASTER_HOST);
 
 	ret = drm_connector_init(bridge->dev, &priv->connector,
 					 &it66121_connector_funcs,
@@ -882,6 +851,8 @@ static int it66121_remove(struct i2c_client *client)
 	destroy_workqueue(priv->work_queue);
 
 	component_del(&client->dev, &it66121_component_ops);
+
+	kfree(priv->edid);
 
 	drm_bridge_remove(bridge);
 

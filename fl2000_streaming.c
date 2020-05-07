@@ -319,8 +319,6 @@ int fl2000_stream_create(struct usb_interface *interface)
 
 	fl2000_fb_list_alloc(stream);
 
-	dev_info(&usb_dev->dev, "Streaming interface up");
-
 	return ret;
 }
 
