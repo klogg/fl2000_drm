@@ -147,8 +147,6 @@ int fl2000_intr_create(struct usb_interface *interface)
 		devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 	}
 
-	dev_info(&usb_dev->dev, "Interrupt interface up");
-
 	return 0;
 }
 
