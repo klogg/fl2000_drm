@@ -231,15 +231,15 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 {
 	int i, ret;
 
-	/* XXX: Prior to DDC abort command there was also a reset of HDCP:
+	/* Prior to DDC abort command there was also a reset of HDCP:
 	 *  1. HDCP_DESIRE clear bit CP DESIRE
 	 *  2. SW_RST set bit HDCP_RST
 	 * it seems wrong to keep them reset, i.e. without restoring initial
 	 * state, but somehow this is how it was implemented. This sequence is
 	 * removed since HDCP is not supported */
 
-	/* According to 2009/01/15 modification by Jau-Chih.Tseng@ite.com.tw
-	 * do abort DDC twice */
+	/* From original driver: According to 2009/01/15 modification by
+	 * Jau-Chih.Tseng@ite.com.tw do abort DDC twice */
 	for (i = 0; i < 2; i++) {
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_ABORT);
