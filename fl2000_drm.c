@@ -155,8 +155,8 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_
 	struct usb_device *usb_dev = drm->dev_private;
 	u32 pixclock = mode->hdisplay * mode->vdisplay * drm_mode_vrefresh(mode);
 
-	/*dev_info(drm->dev, "DRM mode validation: "DRM_MODE_FMT,
-			DRM_MODE_ARG(mode));*/
+	dev_info(drm->dev, "DRM mode validation: "DRM_MODE_FMT,
+			DRM_MODE_ARG(mode));
 
 	if (!fl2000_get_bytes_pix(usb_dev, pixclock))
 		return MODE_BAD;
