@@ -47,7 +47,39 @@ static const u32 fl2000_pixel_formats[] = {
 #define FL2000_BULK_BW_SUPER_SPEED_PLUS	(10000000000ull * 100 / \
 						FL2000_BULK_BW_PERCENT / 8)
 
-static inline int fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
+/* Fixed pre-devisor for simplicity */
+#define FL2000_PRE_DIV			2
+#define FL2000_XTAL			10000000	/* 10 MHz */
+#define FL2000_MIN_MUL			16		/* for 80 MHz */
+#define FL2000_MAX_MUL			200		/* for 1GHz  */
+
+static u64 fl2000_pll_calc(u32 clock, u32 *mul_s, u32 *div_s)
+{
+	u32 mul, div;
+	u32 diff_s = (u32)(-1);
+
+	for (mul = FL2000_MIN_MUL; mul < FL2000_MAX_MUL; mul ++) {
+		for (div = 1; div < 255; div++) {
+			u32 pll = FL2000_XTAL / FL2000_PRE_DIV * mul / div;
+			u32 diff = abs(clock - pll);
+			if (diff == 0) {
+				*mul_s = mul;
+				*div_s = div;
+				return 0;
+			}
+			if (diff < diff_s) {
+				diff_s = diff;
+				*mul_s = mul;
+				*div_s = div;
+			}
+		}
+	}
+
+	/* Return %.000 of clock skew */
+	return ((u64)diff_s * 100000) / clock;
+}
+
+static int fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 {
 	int bytes_pix;
 	u64 max_bw;
@@ -343,17 +375,27 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	fl2000_vga_pll_reg pll = {.val = 0};
 	fl2000_vga_isoch_reg isoch = {.val = 0};
 	u32 mask;
-	u32 pixclock = mode->hdisplay * mode->vdisplay * drm_mode_vrefresh(mode);
+	u32 pllclock;
+	u32 mul = 0, div = 0;
+	u64 skew;
 
-	bytes_pix = fl2000_get_bytes_pix(usb_dev,pixclock);
+	pllclock = mode->clock * 1000; /* mode clock is in khz */
+	bytes_pix = fl2000_get_bytes_pix(usb_dev,pllclock);
 
 	mask = 0;
 	aclk.force_pll_up = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_pll_up);
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 
-	/* TODO: Calculate PLL settings */
-	pll.val = 0x0020410A; // 32MHz
+	/* Calculate PLL settings */
+	skew = fl2000_pll_calc(pllclock, &mul, &div);
+	if (skew != 0)
+		dev_info(&usb_dev->dev, "PLL clock (%u) skew is %llu", \
+				pllclock, skew);
+
+	pll.pre_div = FL2000_PRE_DIV;
+	pll.mul = mul;
+	pll.post_div = div;
 	regmap_write(regmap, FL2000_VGA_PLL_REG, pll.val);
 
 	/* Reset FL2000 & confirm PLL settings */
