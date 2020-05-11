@@ -181,7 +181,7 @@ typedef union {
 	struct {
 		u32 post_div:8;
 		u32 pre_div:8;
-		u32 multi:8;
+		u32 mul:8;
 		u32 test_io:1;
 		u32 cfg_dac_pwrdown:1;
 		u32 force_dac_pwrup:1;
