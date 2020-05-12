@@ -14,7 +14,7 @@ int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 
-int fl2000_stream_mode_set(struct usb_device *usb_dev, ssize_t pixels, u32 freq);
+int fl2000_stream_mode_set(struct usb_device *usb_dev, size_t pixels, u32 freq);
 void fl2000_stream_compress(struct usb_device *usb_dev,
 		struct drm_framebuffer *fb, void *src);
 int fl2000_stream_enable(struct usb_device *usb_dev);

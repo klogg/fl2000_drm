@@ -66,7 +66,7 @@ static int fl2000_fb_get_buffers(struct usb_device *usb_dev,
 		struct fl2000_stream *stream)
 {
 	struct fl2000_fb *cursor;
-	ssize_t size = stream->urb->transfer_buffer_length;
+	size_t size = stream->urb->transfer_buffer_length;
 	list_for_each_entry(cursor, &stream->fb_list, list) {
 		/* TODO: Signal error */
 		if (cursor->buf)
@@ -83,7 +83,7 @@ static void fl2000_fb_put_buffers(struct usb_device *usb_dev,
 		struct fl2000_stream *stream)
 {
 	struct fl2000_fb *cursor;
-	ssize_t size = stream->urb->transfer_buffer_length;
+	size_t size = stream->urb->transfer_buffer_length;
 	list_for_each_entry(cursor, &stream->fb_list, list) {
 		if (!cursor->buf)
 			continue;
@@ -203,13 +203,13 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels,
 {
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
-	ssize_t size;
+	size_t size;
 
 	if (!stream)
 		return -ENODEV;
 
 	/* Round buffer size up to multiple of 8 to meet HW expectations */
-	size = (pixels * bytes_pix + 7) & ~(ssize_t)7;
+	size = (pixels * bytes_pix + 7) & ~(size_t)7;
 
 	/* If there are buffers with same size - keep them */
 	if (stream->urb->transfer_buffer_length == size &&
