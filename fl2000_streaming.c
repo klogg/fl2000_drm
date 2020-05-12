@@ -34,7 +34,7 @@ struct fl2000_stream {
 	int bytes_pix;
 };
 
-static inline int fl2000_fb_list_alloc(struct fl2000_stream *stream)
+static int fl2000_fb_list_alloc(struct fl2000_stream *stream)
 {
 	int i;
 
@@ -52,7 +52,7 @@ static inline int fl2000_fb_list_alloc(struct fl2000_stream *stream)
 	return 0;
 }
 
-static inline void fl2000_fb_list_free(struct fl2000_stream *stream)
+static void fl2000_fb_list_free(struct fl2000_stream *stream)
 {
 	struct fl2000_fb *cursor, *temp;
 
@@ -62,7 +62,7 @@ static inline void fl2000_fb_list_free(struct fl2000_stream *stream)
 	}
 }
 
-static inline int fl2000_fb_get_buffers(struct usb_device *usb_dev,
+static int fl2000_fb_get_buffers(struct usb_device *usb_dev,
 		struct fl2000_stream *stream)
 {
 	struct fl2000_fb *cursor;
@@ -79,7 +79,7 @@ static inline int fl2000_fb_get_buffers(struct usb_device *usb_dev,
 	return 0;
 }
 
-static inline void fl2000_fb_put_buffers(struct usb_device *usb_dev,
+static void fl2000_fb_put_buffers(struct usb_device *usb_dev,
 		struct fl2000_stream *stream)
 {
 	struct fl2000_fb *cursor;
