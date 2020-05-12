@@ -622,7 +622,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 
 {
 	int i, ret;
-	ssize_t frame_size;
+	size_t frame_size;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
 			bridge);
 	u8 buf[HDMI_INFOFRAME_SIZE(AVI)];
