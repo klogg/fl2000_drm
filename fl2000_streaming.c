@@ -89,6 +89,7 @@ static void fl2000_fb_put_buffers(struct usb_device *usb_dev,
 			continue;
 		usb_free_coherent(usb_dev, size, cursor->buf,
 				cursor->buf_addr);
+		cursor->buf = NULL;
 	}
 }
 
