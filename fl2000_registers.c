@@ -8,7 +8,7 @@
 
 #include "fl2000.h"
 
-#define CONTROL_MSG_LEN		4
+#define CONTROL_MSG_LEN		sizeof(u32)
 #define CONTROL_MSG_READ	64
 #define CONTROL_MSG_WRITE	65
 
@@ -29,6 +29,8 @@ enum fl2000_regfield_n {
 struct fl2000_reg_data {
 	struct usb_device *usb_dev;
 	struct regmap_field *field[NUM_REGFIELDS];
+	struct mutex reg_mutex;
+	void *data;
 #if defined(CONFIG_DEBUG_FS)
 	unsigned int reg_debug_address;
 	struct dentry *root_dir, *reg_address_file, *reg_data_file;
@@ -66,13 +68,13 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 	struct fl2000_reg_data *reg_data = context;
 	struct usb_device *usb_dev = reg_data->usb_dev;
 	u16 offset = (u16)reg;
-	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL | GFP_DMA);
 
-	BUG_ON(!data);
+	mutex_lock(&reg_data->reg_mutex);
 
 	ret = usb_control_msg(usb_dev, usb_rcvctrlpipe(usb_dev, 0),
 			CONTROL_MSG_READ, (USB_DIR_IN | USB_TYPE_VENDOR), 0,
-			offset, data, CONTROL_MSG_LEN, USB_CTRL_GET_TIMEOUT);
+			offset, reg_data->data, CONTROL_MSG_LEN,
+			USB_CTRL_GET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != CONTROL_MSG_LEN)
 			ret = -1;
@@ -80,9 +82,10 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 			ret = 0;
 	}
 
-	*val = *data;
+	memcpy(val, reg_data->data, CONTROL_MSG_LEN);
 
-	kfree(data);
+	mutex_unlock(&reg_data->reg_mutex);
+
 	return ret;
 }
 
@@ -92,15 +95,15 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	struct fl2000_reg_data *reg_data = context;
 	struct usb_device *usb_dev = reg_data->usb_dev;
 	u16 offset = (u16)reg;
-	u32 *data = kmalloc(sizeof(*data), GFP_KERNEL | GFP_DMA);
 
-	BUG_ON(!data);
+	mutex_lock(&reg_data->reg_mutex);
 
-	*data = val;
+	memcpy(reg_data->data, &val, CONTROL_MSG_LEN);
 
 	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
 			CONTROL_MSG_WRITE, (USB_DIR_OUT | USB_TYPE_VENDOR), 0,
-			offset, data, CONTROL_MSG_LEN, USB_CTRL_SET_TIMEOUT);
+			offset, reg_data->data, CONTROL_MSG_LEN,
+			USB_CTRL_SET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != CONTROL_MSG_LEN)
 			ret = -1;
@@ -108,7 +111,8 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 			ret = 0;
 	}
 
-	kfree(data);
+	mutex_unlock(&reg_data->reg_mutex);
+
 	return ret;
 }
 
@@ -283,7 +287,11 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 	}
 	devres_add(&usb_dev->dev, reg_data);
 
+	mutex_init(&reg_data->reg_mutex);
+
 	reg_data->usb_dev = usb_dev;
+
+	reg_data->data = kmalloc(CONTROL_MSG_LEN, GFP_KERNEL | GFP_DMA);
 
 	regmap = devm_regmap_init(&usb_dev->dev, NULL, reg_data,
 			&fl2000_regmap_config);
@@ -345,6 +353,8 @@ void fl2000_regmap_cleanup(struct usb_device *usb_dev)
 
 	/* XXX: Current regmap implementation missing some kind of a
 	 * devm_regmap_destroy() call that would work similarly to *_find() */
+
+	kfree(reg_data->data);
 
 	if (reg_data)
 		devres_release(&usb_dev->dev, fl2000_reg_data_release,
