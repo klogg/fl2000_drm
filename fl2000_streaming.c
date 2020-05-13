@@ -136,6 +136,7 @@ static void fl2000_stream_zero_len_completion(struct urb *urb)
 
 	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
 	stream->urb->transfer_buffer = cursor->buf;
+	stream->urb->transfer_dma = cursor->buf_addr;
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret && ret != -EPERM) {
@@ -241,6 +242,7 @@ int fl2000_stream_enable(struct usb_device *usb_dev)
 
 	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
 	stream->urb->transfer_buffer = cursor->buf;
+	stream->urb->transfer_dma = cursor->buf_addr;
 
 	ret = usb_submit_urb(stream->urb, GFP_KERNEL);
 	if (ret && ret != -EPERM) {
@@ -304,6 +306,7 @@ int fl2000_stream_create(struct usb_interface *interface)
 			usb_sndbulkpipe(usb_dev, 1),
 			NULL, 0,
 			fl2000_stream_completion, NULL);
+	stream->urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
 
 	stream->zero_len_urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!stream->zero_len_urb) {
