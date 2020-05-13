@@ -51,7 +51,7 @@ static int fl2000_probe(struct usb_interface *interface,
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
-	if (usb_get_maximum_speed(&usb_dev->dev) < USB_SPEED_HIGH) {
+	if (usb_dev->speed < USB_SPEED_HIGH) {
 		dev_err(&interface->dev, "USB 1.1 is not supported!");
 		return -ENODEV;
 	}
