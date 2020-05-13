@@ -85,7 +85,7 @@ static int fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 	u64 max_bw;
 
 	/* Calculate maximum bandwidth, bytes per second */
-	switch (usb_dev->speed) {
+	switch (usb_get_maximum_speed(&usb_dev->dev)) {
 	case USB_SPEED_HIGH:
 		max_bw = FL2000_BULK_BW_HIGH_SPEED;
 		break;
