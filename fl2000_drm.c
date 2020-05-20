@@ -13,6 +13,11 @@
 int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
+int fl2000_set_transfers(struct usb_device *usb_dev);
+int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix);
+int fl2000_set_timings(struct usb_device *usb_dev,
+		struct fl2000_timings *timings);
+int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll);
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev, size_t pixels, u32 freq);
 void fl2000_stream_compress(struct usb_device *usb_dev,
@@ -37,6 +42,21 @@ static const u32 fl2000_pixel_formats[] = {
 	DRM_FORMAT_XRGB8888,
 };
 
+#define FL2000_MAX_PIXCLOCK	1000000000
+
+/* PLL computing precision is 6 digits after comma */
+#define FL2000_PLL_PRECISION	1000000
+
+/* Input xtal clock */
+const u32 FL2000_XTAL = 10000000;		/* 10 MHz */
+
+/* Internal vco clock min/max */
+const u32 FL2000_VCOCLOCK_MIN = 62500000;	/* 62.5 MHz */
+const u32 FL2000_VCOCLOCK_MAX = 1000000000;	/* 1GHz */
+
+/* Maximum acceptable ppm error */
+const u32 FL2000_PPM_ERR_MAX = 500;
+
 /* Assume bulk transfers can use only 80% of USB bandwidth */
 #define FL2000_BULK_BW_PERCENT		80
 
@@ -47,39 +67,7 @@ static const u32 fl2000_pixel_formats[] = {
 #define FL2000_BULK_BW_SUPER_SPEED_PLUS	(10000000000ull * 100 / \
 						FL2000_BULK_BW_PERCENT / 8)
 
-/* Fixed pre-devisor for simplicity */
-#define FL2000_PRE_DIV			2
-#define FL2000_XTAL			10000000	/* 10 MHz */
-#define FL2000_MIN_MUL			16		/* for 80 MHz */
-#define FL2000_MAX_MUL			200		/* for 1GHz  */
-
-static u64 fl2000_pll_calc(u32 clock, u32 *mul_s, u32 *div_s)
-{
-	u32 mul, div;
-	u32 diff_s = (u32)(-1);
-
-	for (mul = FL2000_MIN_MUL; mul < FL2000_MAX_MUL; mul ++) {
-		for (div = 1; div < 255; div++) {
-			u32 pll = FL2000_XTAL / FL2000_PRE_DIV * mul / div;
-			u32 diff = abs(clock - pll);
-			if (diff == 0) {
-				*mul_s = mul;
-				*div_s = div;
-				return 0;
-			}
-			if (diff < diff_s) {
-				diff_s = diff;
-				*mul_s = mul;
-				*div_s = div;
-			}
-		}
-	}
-
-	/* Return %.000 of clock skew */
-	return ((u64)diff_s * 100000) / clock;
-}
-
-static int fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
+static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 {
 	int bytes_pix;
 	u64 max_bw;
@@ -180,20 +168,175 @@ static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
 	.atomic_commit = drm_atomic_helper_commit,
 };
 
+/* Integer division compute of ppm error */
+static u64 fl2000_pll_ppm_err(u64 clock_mil, u32 vco_clk, u32 divisor)
+{
+	u64 pll_clk_mil = vco_clk * FL2000_PLL_PRECISION / divisor;
+	u64 pll_clk_err;
+
+	/* Not using abs() here to avoid possible overflow */
+	if (pll_clk_mil > clock_mil)
+		pll_clk_err = pll_clk_mil - clock_mil;
+	else
+		pll_clk_err = clock_mil - pll_clk_mil;
+
+	/* Error must not exceed clock */
+	if (pll_clk_err > FL2000_MAX_PIXCLOCK)
+		return (u64)(-1);
+
+	return pll_clk_err * FL2000_PLL_PRECISION / clock_mil;
+}
+
+/* Try to match pixel clock - find parameters with minimal PLL error */
+static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
+{
+	static const u32 prescaler[] = {
+			1,
+			2
+	};
+	static const u32 multiplier[] = {
+			  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,
+			 11,  12,  13,  14,  15,  16,  17,  18,  19,  20,
+			 21,  22,  23,  24,  25,  26,  27,  28,  29,  30,
+			 31,  32,  33,  34,  35,  36,  37,  38,  39,  40,
+			 41,  42,  43,  44,  45,  46,  47,  48,  49,  50,
+			 51,  52,  53,  54,  55,  56,  57,  58,  59,  60,
+			 61,  62,  63,  64,  65,  66,  67,  68,  69,  70,
+			 71,  72,  73,  74,  75,  76,  77,  78,  79,  80,
+			 81,  82,  83,  84,  85,  86,  87,  88,  89,  90,
+			 91,  92,  93,  94,  95,  96,  97,  98,  99, 100,
+			101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+			111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
+			121, 122, 123, 124, 125, 126, 127, 128
+	};
+	static const u32 divisor[] = {
+			       2,        4,        6,   7,   8,   9,  10,
+			 11,  12,  13,  14,  15,  16,  17,  18,  19,  20,
+			 21,  22,  23,  24,  25,  26,  27,  28,  29,  30,
+			 31,  32,  33,  34,  35,  36,  37,  38,  39,  40,
+			 41,  42,  43,  44,  45,  46,  47,  48,  49,  50,
+			 51,  52,  53,  54,  55,  56,  57,  58,  59,  60,
+			 61,  62,  63,  64,  65,  66,  67,  68,  69,  70,
+			 71,  72,  73,  74,  75,  76,  77,  78,  79,  80,
+			 81,  82,  83,  84,  85,  86,  87,  88,  89,  90,
+			 91,  92,  93,  94,  95,  96,  97,  98,  99, 100,
+			101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
+			111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
+			121, 122, 123, 124, 125, 126, 127, 128
+	};
+	unsigned int prescaler_idx, multiplier_idx, divisor_idx;
+	u64 min_ppm_err = (u64)(-1);
+
+	for_each_array_item(prescaler, prescaler_idx) {
+		for_each_array_item(multiplier, multiplier_idx) {
+			/* Do not need precision here yet, no 10^6 multiply */
+			u32 vco_clk = FL2000_XTAL / prescaler[prescaler_idx] *
+					multiplier[multiplier_idx];
+
+			if (vco_clk < FL2000_VCOCLOCK_MIN ||
+					vco_clk > FL2000_VCOCLOCK_MAX)
+				continue;
+
+			for_each_array_item(divisor, divisor_idx) {
+				u64 ppm_err = fl2000_pll_ppm_err(clock_mil,
+						vco_clk, divisor[divisor_idx]);
+
+				if (ppm_err > min_ppm_err)
+					continue;
+
+				min_ppm_err = ppm_err;
+
+				pll->prescaler = prescaler[prescaler_idx];
+				pll->multiplier = multiplier[multiplier_idx];
+				pll->divisor = divisor[divisor_idx];
+				pll->function = vco_clk < 125000000 ? 0 :
+						vco_clk < 250000000 ? 1 :
+						vco_clk < 500000000 ? 2 : 3;
+				*clock = vco_clk / divisor[divisor_idx];
+
+				/* Stop if found exact setting */
+				if (ppm_err == 0)
+					return 0;
+			}
+		}
+	}
+
+	/* No exact PLL settings found for requested clock */
+	return min_ppm_err;
+}
+
+static int fl2000_mode_calc(const struct drm_display_mode *mode,
+		struct drm_display_mode *adjusted_mode, struct fl2000_pll *pll)
+{
+	static const int h_adjust[] = {
+			 0,
+			 1,  -1,
+			 2,  -2,
+			 3,  -3,
+			 4,  -4,
+			 5,  -5,
+			 6,  -6,
+			 7,  -7,
+			 8,  -8,
+			 9,  -9,
+			10, -10
+	};
+	unsigned int h_adjust_idx;
+	u64 ppm_err = (u64)(-1);
+	u32 clock_adjusted;
+
+	if (mode->clock * 1000 > FL2000_MAX_PIXCLOCK)
+		return -1;
+
+	/* Try to match pixel clock slightly adjusting htotal value */
+	for_each_array_item(h_adjust, h_adjust_idx) {
+		u64 clock_mil = mode->clock * 1000 * FL2000_PLL_PRECISION;
+		int adjust = h_adjust[h_adjust_idx];
+
+		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get
+		 * 10^15Hz. Assume maximum htotal is 10000 pix (no way) we get
+		 * 10^19 max value and using u64 which is 1.8*10^19 no overflow
+		 * can occur. Assume all this was checked before */
+		if (adjust != 0)
+			clock_mil = clock_mil * (mode->htotal + adjust) /
+								mode->htotal;
+
+		/* To keep precision use clock multiplied by 10^6 */
+		ppm_err = fl2000_pll_calc(clock_mil, pll, &clock_adjusted);
+
+		/* Stop searching as soon as the first valid option found */
+		if (ppm_err < FL2000_PPM_ERR_MAX) {
+			if (adjusted_mode) {
+				drm_mode_copy(adjusted_mode, mode);
+				adjusted_mode->htotal += h_adjust[h_adjust_idx];
+				adjusted_mode->clock = clock_adjusted;
+			}
+
+			return 0;
+		}
+
+	}
+
+	/* Cannot find PLL configuration that satisfy requirements */
+	return -1;
+}
+
 static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
 		const struct drm_display_mode *mode)
 {
 	struct drm_device *drm = crtc->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-	u32 pixclock = mode->hdisplay * mode->vdisplay * drm_mode_vrefresh(mode);
+	struct drm_display_mode adjusted_mode;
+	struct fl2000_pll pll;
 
-	dev_info(drm->dev, "DRM mode validation: "DRM_MODE_FMT,
-			DRM_MODE_ARG(mode));
-
-	if (!fl2000_get_bytes_pix(usb_dev, pixclock))
+	/* Get PLL configuration and check if mode adjustments needed */
+	if (fl2000_mode_calc(mode, &adjusted_mode, &pll))
 		return MODE_BAD;
-	else
-		return MODE_OK;
+
+	if (!fl2000_get_bytes_pix(usb_dev, adjusted_mode.clock))
+		return MODE_BAD;
+
+	return MODE_OK;
 }
 
 static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
@@ -362,96 +505,51 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 		 struct drm_display_mode *mode,
 		 struct drm_display_mode *adjusted_mode)
 {
-	int bytes_pix;
 	struct drm_device *drm = encoder->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	fl2000_vga_hsync_reg1 hsync1 = {.val = 0};
-	fl2000_vga_hsync_reg2 hsync2 = {.val = 0};
-	fl2000_vga_vsync_reg1 vsync1 = {.val = 0};
-	fl2000_vga_vsync_reg2 vsync2 = {.val = 0};
-	fl2000_vga_cntrl_reg_pxclk pxclk = {.val = 0};
-	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
-	fl2000_vga_pll_reg pll = {.val = 0};
-	fl2000_vga_isoch_reg isoch = {.val = 0};
-	u32 mask;
-	u32 pllclock;
-	u32 mul = 0, div = 0;
-	u64 skew;
+	struct fl2000_timings timings;
+	struct fl2000_pll pll;
+	u32 bytes_pix;
 
-	pllclock = mode->clock * 1000; /* mode clock is in khz */
-	bytes_pix = fl2000_get_bytes_pix(usb_dev,pllclock);
+	/* Get PLL configuration and cehc if mode adjustments needed */
+	if (fl2000_mode_calc(mode, adjusted_mode, &pll))
+		return;
 
-	mask = 0;
-	aclk.force_pll_up = true;
-	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_pll_up);
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+	/* Check how many bytes per pixel shall be used with adjusted clock */
+	bytes_pix = fl2000_get_bytes_pix(usb_dev, adjusted_mode->clock);
+	if (!bytes_pix)
+		return;
 
-	/* Calculate PLL settings */
-	skew = fl2000_pll_calc(pllclock, &mul, &div);
-	if (skew != 0)
-		dev_info(&usb_dev->dev, "PLL clock (%u) skew is %llu", \
-				pllclock, skew);
+	dev_info(drm->dev, "Mode requested:  "DRM_MODE_FMT, DRM_MODE_ARG(mode));
+	dev_info(drm->dev, "Mode configured: "DRM_MODE_FMT,
+			DRM_MODE_ARG(adjusted_mode));
 
-	pll.pre_div = FL2000_PRE_DIV;
-	pll.mul = mul;
-	pll.post_div = div;
-	regmap_write(regmap, FL2000_VGA_PLL_REG, pll.val);
+	/* Prepare timing configuration */
+	timings.hactive = adjusted_mode->hdisplay;
+	timings.htotal = adjusted_mode->htotal;
+	timings.hsync_width = adjusted_mode->hsync_end -
+			adjusted_mode->hsync_start;
+	timings.hstart = adjusted_mode->htotal - adjusted_mode->hsync_start + 1;
+	timings.vactive = adjusted_mode->vdisplay;
+	timings.vtotal = adjusted_mode->vtotal;
+	timings.vsync_width = adjusted_mode->vsync_end -
+			adjusted_mode->vsync_start;
+	timings.vstart = adjusted_mode->vtotal - adjusted_mode->vsync_start + 1;
+
+	/* Set PLL settings */
+	fl2000_set_pll(usb_dev, &pll);
 
 	/* Reset FL2000 & confirm PLL settings */
 	fl2000_reset(usb_dev);
-	regmap_read(regmap, FL2000_VGA_PLL_REG, &pll.val);
 
-	/* Generic clock configuration */
-	mask = 0;
-	aclk.use_pkt_pending = false;
-	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_pkt_pending);
-	aclk.use_zero_pkt_len = true;
-	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_zero_pkt_len);
-	aclk.vga_err_int_en = true;
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+	/* Set timings settings */
+	fl2000_set_timings(usb_dev, &timings);
 
-	mask = 0;
-	pxclk.dac_output_en = false;
-	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
-	pxclk.drop_cnt = false;
-	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, drop_cnt);
-	pxclk.vga565_mode = (bytes_pix == 2);
-	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga565_mode);
-	pxclk.vga332_mode = false;
-	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga332_mode);
-	pxclk.vga555_mode = false;
-	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga555_mode);
-	pxclk.vga_compress = false;
-	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga_compress);
-	pxclk.dac_output_en = true;
-	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
-	pxclk.clear_watermark = true;
-	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, clear_watermark);
-	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, pxclk.val);
+	/* Pixel format according to number of bytes per pixel */
+	fl2000_set_pixfmt(usb_dev, bytes_pix);
 
-	mask = 0;
-	isoch.mframe_cnt = 0;
-	fl2000_add_bitmask(mask, fl2000_vga_isoch_reg, mframe_cnt);
-	regmap_write_bits(regmap, FL2000_VGA_ISOCH_REG, mask, isoch.val);
-
-	/* Timings configuration */
-	hsync1.hactive = mode->hdisplay;
-	hsync1.htotal = mode->htotal;
-	regmap_write(regmap, FL2000_VGA_HSYNC_REG1, hsync1.val);
-
-	hsync2.hsync_width = mode->hsync_end - mode->hsync_start;
-	hsync2.hstart = (mode->htotal - mode->hsync_start + 1);
-	regmap_write(regmap, FL2000_VGA_HSYNC_REG2, hsync2.val);
-
-	vsync1.vactive = mode->vdisplay;
-	vsync1.vtotal = mode->vtotal;
-	regmap_write(regmap, FL2000_VGA_VSYNC_REG1, vsync1.val);
-
-	vsync2.vsync_width = mode->vsync_end - mode->vsync_start;
-	vsync2.vstart = (mode->vtotal - mode->vsync_start + 1);
-	vsync2.start_latency = vsync2.vstart;
-	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
+	/* Configure frame transfers */
+	fl2000_set_transfers(usb_dev);
 
 	fl2000_afe_magic(usb_dev);
 

@@ -179,13 +179,16 @@ static const struct reg_field FL2000_VGA_I2C_SC_REG_mon_detect =
 typedef union {
 	u32 val;
 	struct {
-		u32 post_div:8;
-		u32 pre_div:8;
-		u32 mul:8;
+		u32 divisor:8;
+		u32 prescaler:2;
+		u32 __reserved1:3;
+		u32 function:2;
+		u32 __reserved2:1;
+		u32 multiplier:8;
 		u32 test_io:1;
 		u32 cfg_dac_pwrdown:1;
 		u32 force_dac_pwrup:1;
-		u32 __reserved:5;
+		u32 __reserved3:5;
 	} __attribute__ ((aligned, packed));
 } fl2000_vga_pll_reg;
 

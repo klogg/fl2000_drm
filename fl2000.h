@@ -69,6 +69,9 @@ static const umode_t fl2000_debug_umode = 0666;
 	(__mask) |= __data.__val; \
 })
 
+/* Iterate over array */
+#define for_each_array_item(array, idx) \
+	for (idx = 0; idx < ARRAY_SIZE(array); idx++)
 
 static inline int fl2000_urb_status(struct usb_device *usb_dev, struct urb *urb)
 {
@@ -116,6 +119,22 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, struct urb *urb)
 	return ret;
 }
 
+struct fl2000_timings {
+	u32 hactive;
+	u32 htotal;
+	u32 hsync_width;
+	u32 hstart;
+	u32 vactive;
+	u32 vtotal;
+	u32 vsync_width;
+	u32 vstart;
+};
 
+struct fl2000_pll {
+	u32 prescaler;
+	u32 multiplier;
+	u32 divisor;
+	u32 function;
+};
 
 #endif /* __FL2000_DRM_H__ */
