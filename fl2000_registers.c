@@ -209,6 +209,106 @@ static void fl2000_reg_data_release(struct device *dev, void *res)
 	/* Noop */
 }
 
+int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll)
+{
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_pll_reg pll_reg = {.val = 0};
+	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
+	u32 mask = 0;
+
+	pll_reg.prescaler = pll->prescaler;
+	pll_reg.multiplier = pll->multiplier;
+	pll_reg.divisor = pll->divisor;
+	pll_reg.function = pll->function;
+	regmap_write(regmap, FL2000_VGA_PLL_REG, pll_reg.val);
+
+	aclk.force_pll_up = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_pll_up);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	return 0;
+}
+
+int fl2000_set_timings(struct usb_device *usb_dev,
+		struct fl2000_timings *timings)
+{
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_hsync_reg1 hsync1 = {.val = 0};
+	fl2000_vga_hsync_reg2 hsync2 = {.val = 0};
+	fl2000_vga_vsync_reg1 vsync1 = {.val = 0};
+	fl2000_vga_vsync_reg2 vsync2 = {.val = 0};
+
+	hsync1.hactive = timings->hactive;
+	hsync1.htotal = timings->htotal;
+	regmap_write(regmap, FL2000_VGA_HSYNC_REG1, hsync1.val);
+
+	hsync2.hsync_width = timings->hsync_width;
+	hsync2.hstart = timings->hstart;
+	regmap_write(regmap, FL2000_VGA_HSYNC_REG2, hsync2.val);
+
+	vsync1.vactive = timings->vactive;
+	vsync1.vtotal = timings->vtotal;
+	regmap_write(regmap, FL2000_VGA_VSYNC_REG1, vsync1.val);
+
+	vsync2.vsync_width = timings->vsync_width;
+	vsync2.vstart = timings->vstart;
+	vsync2.start_latency = timings->vstart;
+	regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
+
+	return 0;
+}
+
+int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix)
+{
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_cntrl_reg_pxclk pxclk = {.val = 0};
+	u32 mask = 0;
+
+	pxclk.dac_output_en = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
+	pxclk.drop_cnt = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, drop_cnt);
+	pxclk.vga565_mode = (bytes_pix == 2);
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga565_mode);
+	pxclk.vga332_mode = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga332_mode);
+	pxclk.vga555_mode = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga555_mode);
+	pxclk.vga_compress = false;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, vga_compress);
+	pxclk.dac_output_en = true;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, dac_output_en);
+	pxclk.clear_watermark = true;
+	fl2000_add_bitmask(mask, fl2000_vga_cntrl_reg_pxclk, clear_watermark);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, pxclk.val);
+
+	return 0;
+}
+
+/* TODO: Support ISO configuration */
+int fl2000_set_transfers(struct usb_device *usb_dev)
+{
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
+	fl2000_vga_isoch_reg isoch = {.val = 0};
+	u32 mask;
+
+	mask = 0;
+	aclk.use_pkt_pending = false;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_pkt_pending);
+	aclk.use_zero_pkt_len = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_zero_pkt_len);
+	aclk.vga_err_int_en = true;
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	mask = 0;
+	isoch.mframe_cnt = 0;
+	fl2000_add_bitmask(mask, fl2000_vga_isoch_reg, mframe_cnt);
+	regmap_write_bits(regmap, FL2000_VGA_ISOCH_REG, mask, isoch.val);
+
+	return 0;
+}
+
 int fl2000_reset(struct usb_device *usb_dev)
 {
 	int ret;
