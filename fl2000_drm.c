@@ -33,8 +33,9 @@ void fl2000_stream_disable(struct usb_device *usb_dev);
 #define DRM_DRIVER_MINOR	0
 #define DRM_DRIVER_PATCHLEVEL	1
 
-#define MAX_WIDTH		4000
-#define MAX_HEIGHT		4000
+/* Maximum supported resolution, out-of-the-blue numbers */
+#define FL20000_MAX_WIDTH	4000
+#define FL20000_MAX_HEIGHT	4000
 
 /* Force using 32-bit XRGB8888 on input for simplicity */
 #define FL2000_FB_BPP		32
@@ -42,20 +43,22 @@ static const u32 fl2000_pixel_formats[] = {
 	DRM_FORMAT_XRGB8888,
 };
 
-#define FL2000_MAX_PIXCLOCK	1000000000
+/* Maximum pixel clock set to 500MHz. It is hard to get more or lesss precies
+ * PLL configuration for higher clock */
+#define FL2000_MAX_PIXCLOCK	500000000
 
 /* PLL computing precision is 6 digits after comma */
 #define FL2000_PLL_PRECISION	1000000
 
-/* Input xtal clock */
-const u32 FL2000_XTAL = 10000000;		/* 10 MHz */
+/* Input xtal clock, Hz */
+#define FL2000_XTAL		10000000	/* 10 MHz */
 
-/* Internal vco clock min/max */
-const u32 FL2000_VCOCLOCK_MIN = 62500000;	/* 62.5 MHz */
-const u32 FL2000_VCOCLOCK_MAX = 1000000000;	/* 1GHz */
+/* Internal vco clock min/max, Hz */
+#define FL2000_VCOCLOCK_MIN	62500000	/* 62.5 MHz */
+#define FL2000_VCOCLOCK_MAX	1000000000	/* 1GHz */
 
 /* Maximum acceptable ppm error */
-const u32 FL2000_PPM_ERR_MAX = 500;
+#define FL2000_PPM_ERR_MAX	500
 
 /* Assume bulk transfers can use only 80% of USB bandwidth */
 #define FL2000_BULK_BW_PERCENT		80
@@ -171,7 +174,7 @@ static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
 /* Integer division compute of ppm error */
 static u64 fl2000_pll_ppm_err(u64 clock_mil, u32 vco_clk, u32 divisor)
 {
-	u64 pll_clk_mil = vco_clk * FL2000_PLL_PRECISION / divisor;
+	u64 pll_clk_mil = (u64)vco_clk * FL2000_PLL_PRECISION / divisor;
 	u64 pll_clk_err;
 
 	/* Not using abs() here to avoid possible overflow */
@@ -180,11 +183,7 @@ static u64 fl2000_pll_ppm_err(u64 clock_mil, u32 vco_clk, u32 divisor)
 	else
 		pll_clk_err = clock_mil - pll_clk_mil;
 
-	/* Error must not exceed clock */
-	if (pll_clk_err > FL2000_MAX_PIXCLOCK)
-		return (u64)(-1);
-
-	return pll_clk_err * FL2000_PLL_PRECISION / clock_mil;
+	return pll_clk_err / (clock_mil / FL2000_PLL_PRECISION);
 }
 
 /* Try to match pixel clock - find parameters with minimal PLL error */
@@ -282,7 +281,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 			10, -10
 	};
 	unsigned int h_adjust_idx;
-	u64 ppm_err = (u64)(-1);
+	u64 ppm_err;
 	u32 clock_adjusted;
 
 	if (mode->clock * 1000 > FL2000_MAX_PIXCLOCK)
@@ -290,7 +289,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 
 	/* Try to match pixel clock slightly adjusting htotal value */
 	for_each_array_item(h_adjust, h_adjust_idx) {
-		u64 clock_mil = mode->clock * 1000 * FL2000_PLL_PRECISION;
+		u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
 		int adjust = h_adjust[h_adjust_idx];
 
 		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get
@@ -298,7 +297,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		 * 10^19 max value and using u64 which is 1.8*10^19 no overflow
 		 * can occur. Assume all this was checked before */
 		if (adjust != 0)
-			clock_mil = clock_mil * (mode->htotal + adjust) /
+			clock_mil = clock_mil * ((s64)mode->htotal + adjust) /
 								mode->htotal;
 
 		/* To keep precision use clock multiplied by 10^6 */
@@ -596,9 +595,9 @@ static int fl2000_bind(struct device *master)
 	mode_config = &drm->mode_config;
 	mode_config->funcs = &fl2000_mode_config_funcs;
 	mode_config->min_width = 1;
-	mode_config->max_width = MAX_WIDTH;
+	mode_config->max_width = FL20000_MAX_WIDTH;
 	mode_config->min_height = 1;
-	mode_config->max_height = MAX_HEIGHT;
+	mode_config->max_height = FL20000_MAX_HEIGHT;
 
 	/* Set DMA mask for DRM device from mask of the 'parent' USB device */
 	dma_mask = dma_get_mask(&usb_dev->dev);
