@@ -39,7 +39,7 @@ static void fl2000_intr_completion(struct urb *urb)
 	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
 			fl2000_intr_release, NULL, NULL);
 
-	ret = fl2000_urb_status(usb_dev, urb);
+	ret = fl2000_urb_status(usb_dev, urb->status, urb->pipe);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Stopping interrupts");
 		return;
