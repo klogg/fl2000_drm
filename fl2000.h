@@ -73,11 +73,12 @@ static const umode_t fl2000_debug_umode = 0666;
 #define for_each_array_item(array, idx) \
 	for (idx = 0; idx < ARRAY_SIZE(array); idx++)
 
-static inline int fl2000_urb_status(struct usb_device *usb_dev, struct urb *urb)
+static inline int fl2000_urb_status(struct usb_device *usb_dev, int status,
+		int pipe)
 {
 	int ret = 0;
 
-	switch (urb->status) {
+	switch (status) {
 	/* All went well */
 	case 0:
 		break;
@@ -95,15 +96,14 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, struct urb *urb)
 	case -EILSEQ:
 	case -ETIME:
 		dev_err(&usb_dev->dev, "USB hardware unrecoverable error %d",
-				urb->status);
+				status);
 		ret = -1;
 		break;
 
 	/* Stalled endpoint */
 	case -EPIPE:
-		dev_err(&usb_dev->dev, "Endpoint %d stalled",
-				urb->ep->desc.bEndpointAddress);
-		ret = usb_clear_halt(usb_dev, urb->pipe);
+		dev_err(&usb_dev->dev, "Pipe %d stalled", pipe);
+		ret = usb_clear_halt(usb_dev, pipe);
 		if (ret != 0) {
 			dev_err(&usb_dev->dev, "Cannot reset endpoint, error " \
 					"%d", ret);
@@ -111,7 +111,7 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, struct urb *urb)
 		}
 		break;
 
-	/* All the rest cases - just restart transfer */
+	/* All the rest cases - igonore */
 	default:
 		break;
 	}
