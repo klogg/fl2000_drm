@@ -193,8 +193,32 @@ typedef union {
 } fl2000_vga_pll_reg;
 
 #define FL2000_VGA_LBUF_REG		(FL2000_VGA_CONTROL_OFFSET + 0x30)
+typedef union {
+	u32 val;
+	struct {
+		u32 lbuf_watermark_assert_rdy:15;
+		u32 __reserved:17;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_lbuf_reg;
+
 #define FL2000_VGA_HI_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x34)
+typedef union {
+	u32 val;
+	struct {
+		u32 lbuf_high_watermark:17;
+		u32 __reserved:15;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_hi_mark;
+
 #define FL2000_VGA_LO_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x38)
+typedef union {
+	u32 val;
+	struct {
+		u32 lbuf_low_watermark:17;
+		u32 __reserved:15;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_lo_mark;
+
 #define FL2000_VGA_CTRL_REG_ACLK	(FL2000_VGA_CONTROL_OFFSET + 0x3C)
 typedef union {
 	u32 val;
@@ -231,18 +255,94 @@ typedef union {
 } fl2000_vga_ctrl_reg_aclk;
 
 #define FL2000_VGA_PXCLK_CNT_REG	(FL2000_VGA_CONTROL_OFFSET + 0x40)
+typedef union {
+	u32 val;
+	struct {
+		u32 pix_clock_count:28;
+		u32 __reserved:4;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_pxclk_cnt_reg_reg;
+
 #define FL2000_VGA_VCNT_REG		(FL2000_VGA_CONTROL_OFFSET + 0x44)
+typedef union {
+	u32 val;
+	struct {
+		u32 max_aclk_count:15;
+		u32 max_aclk_count_hit:1;
+		u32 max_lbuf_accumulate:16;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_vcnt_reg;
+
 #define FL2000_RST_CTRL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x48)
 static const struct reg_field FL2000_RST_CTRL_REG_app_reset =
 		REG_FIELD(FL2000_RST_CTRL_REG, 15, 15);
 
 #define FL2000_BIAC_CTRL1_REG		(FL2000_VGA_CONTROL_OFFSET + 0x4C)
+typedef union {
+	u32 val;
+	struct {
+		u32 cfg_biac_ctrl_lo8:8;
+		u32 cfg_biac_frame_mult:8;
+		u32 cfg_biac_125us_mult:16;
+	} __attribute__ ((aligned, packed));
+} fl2000_cfg_biac_ctrl1_reg;
+
 #define FL2000_BIAC_CTRL2_REG		(FL2000_VGA_CONTROL_OFFSET + 0x50)
+typedef union {
+	u32 val;
+	struct {
+		u32 cfg_biac_ctrl_hi16:16;
+		u32 __reserved:16;
+	} __attribute__ ((aligned, packed));
+} fl2000_cfg_biac_ctrl2_reg;
+
 #define FL2000_BIAC_STATUS_REG		(FL2000_VGA_CONTROL_OFFSET + 0x54)
+typedef union {
+	u32 val;
+	struct {
+		u32 current_status:16;
+		u32 current_value:16;
+	} __attribute__ ((aligned, packed));
+} fl2000_cfg_biac_status_reg;
+
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x58) */
+
 #define FL2000_VGA_PLT_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x5C)
+typedef union {
+	u32 val;
+	struct {
+		u32 palette_ram_wr_data:24;
+		u32 __reserved:8;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_plt_reg_pxclk;
+
 #define FL2000_VGA_PLT_RADDR_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x60)
+typedef union {
+	u32 val;
+	struct {
+		u32 palette_ram_rd_addr:8;
+		u32 last_frame_lbuf_watermark:16;
+		u32 __reserved:8;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_plt_rdaddr_reg_pxclk;
+
 #define FL2000_VGA_CTRL2_REG_ACLK	(FL2000_VGA_CONTROL_OFFSET + 0x64)
+typedef union {
+	u32 val;
+	struct {
+		u32 pll_powerdown_detect_en:1;
+		u32 mstor_blksize_ptr_width:3;
+		u32 mstor_blk_count:12;
+		u32 spi_wr_en:1;
+		u32 detect_pins_debounce_en:1;
+		u32 hdmi_int_en:1;
+		u32 hdmi_int_active_high:1;
+		u32 spi_en:1;
+		u32 __reserved:2;
+		u32 sw_prod_rev:8;
+	} __attribute__ ((aligned, packed));
+} fl2000_vga_ctrl2_reg_axclk;
+
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x68) */
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x6C) */
 #define FL2000_TEST_CNTL_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x70)
@@ -251,6 +351,7 @@ static const struct reg_field FL2000_RST_CTRL_REG_app_reset =
 #define FL2000_TEST_STAT1		(FL2000_VGA_CONTROL_OFFSET + 0x7C)
 #define FL2000_TEST_STAT2		(FL2000_VGA_CONTROL_OFFSET + 0x80)
 #define FL2000_TEST_STAT3		(FL2000_VGA_CONTROL_OFFSET + 0x84)
+
 #define FL2000_VGA_CTRL_REG_3		(FL2000_VGA_CONTROL_OFFSET + 0x88)
 static const struct reg_field FL2000_VGA_CTRL_REG_3_wakeup_clr_en =
 		REG_FIELD(FL2000_VGA_CTRL_REG_3, 10, 10);
@@ -284,6 +385,7 @@ static inline bool FL2000_REG_VOLATILE(u32 reg)
 	case FL2000_VGA_VCNT_REG:
 	case FL2000_RST_CTRL_REG:
 	case FL2000_BIAC_STATUS_REG:
+	case FL2000_VGA_PLT_RADDR_REG_PXCLK:
 	case FL2000_TEST_CNTL_REG1:
 	case FL2000_TEST_CNTL_REG2:
 	case FL2000_TEST_STAT1:
