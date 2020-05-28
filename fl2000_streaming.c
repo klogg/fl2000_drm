@@ -180,7 +180,7 @@ static void fl2000_stream_work(struct work_struct *work)
 	struct usb_device *usb_dev = stream->usb_dev;
 	struct fl2000_fb *cursor;
 
-	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
+	cursor = list_last_entry(&stream->fb_list, struct fl2000_fb, list);
 
 	ret = usb_sg_init(&stream->data_request, stream->usb_dev,
 			usb_sndbulkpipe(usb_dev, 1), 0, cursor->sgt->sgl,
@@ -266,7 +266,6 @@ void fl2000_stream_compress(struct usb_device *usb_dev,
 	void *dst;
 	u32 dst_line_len = fb->width * stream->bytes_pix;
 
-	list_rotate_left(&stream->fb_list);
 	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
 	dst = cursor->buf;
 
@@ -284,6 +283,8 @@ void fl2000_stream_compress(struct usb_device *usb_dev,
 		src += fb->pitches[0];
 		dst += dst_line_len;
 	}
+
+	list_rotate_left(&stream->fb_list);
 }
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels,
