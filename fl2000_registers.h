@@ -33,8 +33,6 @@ static const struct reg_field FL2000_USB_CTRL_wake_nrdy =
 #define FL2000_VGA_CONTROL_OFFSET	0x8000
 
 #define FL2000_VGA_STATUS_REG		(FL2000_VGA_CONTROL_OFFSET + 0x00)
-/* Implement structure here because self-clearing fields cannot be read
- * with sequential access to reg_fields */
 typedef union {
 	u32 val;
 	struct {
@@ -152,8 +150,6 @@ typedef union {
 } fl2000_vga_isoch_reg;
 
 #define FL2000_VGA_I2C_SC_REG		(FL2000_VGA_CONTROL_OFFSET + 0x20)
-/* Implement structure here because during I2C xfers there would be too many
- * slow USB control exchanges caused by independent setting of reg_fields */
 typedef union {
 	u32 val;
 	struct {
@@ -175,6 +171,7 @@ static const struct reg_field FL2000_VGA_I2C_SC_REG_mon_detect =
 
 #define FL2000_VGA_I2C_RD_REG		(FL2000_VGA_CONTROL_OFFSET + 0x24)
 #define FL2000_VGA_I2C_WR_REG		(FL2000_VGA_CONTROL_OFFSET + 0x28)
+
 #define FL2000_VGA_PLL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x2C)
 typedef union {
 	u32 val;
@@ -345,6 +342,7 @@ typedef union {
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x68) */
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x6C) */
+
 #define FL2000_TEST_CNTL_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x70)
 #define FL2000_TEST_CNTL_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x74)
 #define FL2000_TEST_CNTL_REG3		(FL2000_VGA_CONTROL_OFFSET + 0x78)
