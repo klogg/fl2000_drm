@@ -308,7 +308,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 			if (adjusted_mode) {
 				drm_mode_copy(adjusted_mode, mode);
 				adjusted_mode->htotal += h_adjust[h_adjust_idx];
-				adjusted_mode->clock = clock_adjusted;
+				adjusted_mode->clock = clock_adjusted / 1000;
 			}
 
 			return 0;
