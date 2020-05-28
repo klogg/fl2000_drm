@@ -156,8 +156,7 @@ static int it66121_configure_input(struct it66121_priv *priv)
 	return 0;
 }
 
-static int it66121_configure_afe(struct it66121_priv *priv,
-		const struct drm_display_mode *mode)
+static int it66121_configure_afe(struct it66121_priv *priv, int clock_khz)
 {
 	int ret;
 
@@ -167,7 +166,7 @@ static int it66121_configure_afe(struct it66121_priv *priv,
 		return ret;
 
 	/* TODO: Rewrite with proper bit names */
-	if (KHZ2PICOS(mode->clock) > 80000000UL) {
+	if (clock_khz > 80000) {
 		ret = regmap_write_bits(priv->regmap, IT66121_AFE_XP_CONTROL, 0x90, 0x80);
 		if (ret)
 			return ret;
@@ -725,7 +724,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	}
 
 	/* Configure AFE */
-	ret = it66121_configure_afe(priv, mode);
+	ret = it66121_configure_afe(priv, mode->clock);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot configure AFE (%d)", ret);
 		return;
