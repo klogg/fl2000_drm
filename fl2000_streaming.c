@@ -122,7 +122,7 @@ static int fl2000_fb_get_buffers(struct usb_device *usb_dev,
 		if (cursor->buf || cursor->sgt)
 			return -EBUSY;
 
-		cursor->buf = kvmalloc(size, GFP_KERNEL);
+		cursor->buf = vmalloc(size);
 		if (!cursor->buf)
 			return -ENOMEM;
 
@@ -152,7 +152,7 @@ static void fl2000_fb_put_buffers(struct usb_device *usb_dev,
 		}
 
 		if (cursor->buf) {
-			kvfree(cursor->buf);
+			vfree(cursor->buf);
 			cursor->buf = NULL;
 		}
 	}
