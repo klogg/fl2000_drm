@@ -1133,20 +1133,6 @@ REG WR 0x0070 : 0x04006085
 ```
 
 ## Frame streaming
-It is not quite good to bound frame sending to some timer of host, better to use some event that signals that HW is ready ands needs data; otherwise due to accumulating erros overflows or underflows will occur. Thus, it is important to understand:
-* How URBs are returned from FL2000? Is there any FPS dependency?
-* Do I get overflow / underflow interrupts? Are they linked to waterlevels?
+It is not possible to split frame into stream several bulk transfers, FL200 does not support that. On Bulk transfers device implements ACKs with period that implements proper pixel rate support so no need to add extra timers etc.
 
-### Tests for URB / LBUF dependencies
-1. ebable LBUF error interrupt enable
-2. configure re-sending same URB on every 'ack'
-3. send multiple URBs
-4. **check** timestamp of every URB 'ack' - does it correspond to FPS?
-5. **check** if LBUF overflow interrupt occurs?
-6. stop sending URBs
-7. **check** if LBUF underflow interrupt occurs?
-8. set LBUF high waterlevel to `frame_hight + 1` lines
-9. set LBUF low waterlevel to `1` line
-10. send only 2 URBs
-11. **check** if LBUF overflow interrupt occurs?
-12. **check** if LBUF underflow interrupt occurs?
+Isochronous transfers are not yet investigated.
