@@ -56,37 +56,6 @@ See parsed stream dump and register access statistics below.
 * When reading EDID original driver seem to reset 2 high bytes (readonly as per doc) to 0, in capture we see that windows driver just keeps them 'dirty' with previous operation result
 * DDC Abort issued twice during EDID, with EDID_ROM flag enabled (flag setting is absent in original driver)
 
-## The "BIG TABLE"
-
-Original FL2000 Linux driver implements array of hardcoded register values to properly configure timings and pixel clock for different video modes. All this can be dynamically calculated, and most probably is done in Windows driver that provide configuration for 800x480 display which is unavailable in Linux. Full dump of big_table and analysis is [available on Dropbox](https://www.dropbox.com/s/2xb9j8pz4yjyrsb/big_table_analysis.ods?dl=0)
-
-Pixel clock is acheived with PLL connected to main XTAL (10MHz in our case)
-* Pixel clock = XTAL clock / (VGA_PLL_REG.pll_pre_div & 0xF) * VGA_PLL_REG.pll_multi / VGA_PLL_REG.pll_post_div
-
-Lower bits of VGA_PLL_REG.pll_pre_div has possible values of 1 or 2. Not sure if other values are allowed
-
-It is unclear though what is the purpose of the high 4 bits of VGA_PLL_REG.pll_pre_div. In the table values for these 4 bits are 0, 1, 2 or 3 and this is somehow aligned with "intermediate" clock order (after pre divisor and multiplier). With minimum-maximum clock distribution we can gate to some empirical rules setting values 0-3:
-
-| x | min | max  | rule |
-|---|-----|------|------|
-| 0 | 80  | 100  | -    |
-| 1 | 130 | 150  | >100 |
-| 2 | 270 | 490  | >250 |
-| 3 | 515 | 1000 | >500 |
-
-Not sure if other values are possible. Also it seems that maximum "intermediate" clock in the table is 1GHz
-
-Timings are set according to mode structure:
-* H_SYNC_REG_1.hactive = hdisplay
-* V_SYNC_REG_1.vactive = vdisplay
-* H_SYNC_REG_1.htotal = htotal
-* H_SYNC_REG_1.vtotal = vtotal
-* H_SYNC_REG_2.hsync_width = hsync_end - hsync_start
-* V_SYNC_REG_2.vsync_width = vsync_end - vsync_start
-* H_SYNC_REG_2.hstart = (htotal - hsync_start + 1)
-* V_SYNC_REG_2.vstart = (vtotal - vsync_start + 1)
-* V_SYNC_REG_2.frame start latency = vstart
-
 ## Register access statistics
 
 **FL2000**
