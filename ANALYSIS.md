@@ -11,6 +11,8 @@ Dump of correctly working windows driver with non-standard HDMI display is [avai
 
 NOTE: by default USBPcap captures 65535 bytes max, so packets with frame data are incomplete. For details see https://github.com/desowin/usbpcap/issues/26
 
+NOTE: even Windows driver is rather unstable, dropping frames and at some point stopping to work completely with hi-res displays. This is not investigated properly yet.
+
 ## Using Wireshark dissector
 
 To start Wireshark dissector please use following command:<br>
