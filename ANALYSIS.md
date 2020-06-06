@@ -21,6 +21,7 @@ NOTE: for correct dissector operation Wireshark must be built with patch allowin
 ### Known issues
 
 * Empty 'status' stage CONTROL packets and zero-size BULK packets are not dissected because of Wireshark implementation - see `dissect_usb_payload()` function not proceeding to dissection when there is no data beyond standard USB header
+* Registration for Windows and Linux is different. To use on Windows, uncomment registration using InterfaceClass and comment out ProductID registration; do vice versa on Linux.
 
 ## Observations
 
