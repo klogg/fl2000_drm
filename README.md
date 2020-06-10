@@ -1,5 +1,13 @@
 [![Build Status](https://travis-ci.org/klogg/fl2000_drm.svg?branch=master)](https://travis-ci.org/klogg/fl2000_drm) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=klogg_fl2000_drm&metric=alert_status)](https://sonarcloud.io/dashboard?id=klogg_fl2000_drm)
 
+<h1>
+  
+```diff
+-= NOTICE: THIS DRIVER IS NOT YET WORKING PROPERLY =-
+```
+
+</h1>
+
 # Linux kernel FL2000DX/IT66121FN dongle DRM driver
 
 Clean re-implementation of FrescoLogic FL2000DX DRM driver and ITE Tech IT66121F driver, allowing to enable full display controller capabilities for [USB-to-HDMI dongles](https://www.aliexpress.com/item/HD-1080P-USB-3-0-To-HDMI-External-Video-Graphic-Card-Multi-Display-Cable-Adapter-Converter/32808836824.html?spm=a2g0s.9042311.0.0.4a9f4c4dow19O6) based on such chips in Linux
