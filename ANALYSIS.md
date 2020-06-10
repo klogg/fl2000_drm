@@ -58,6 +58,16 @@ See parsed stream dump and register access statistics below.
 * When reading EDID original driver seem to reset 2 high bytes (readonly as per doc) to 0, in capture we see that windows driver just keeps them 'dirty' with previous operation result
 * DDC Abort issued twice during EDID, with EDID_ROM flag enabled (flag setting is absent in original driver)
 
+## Another display
+ * Timings are set for Full HD 59.9Hz
+   * VGA_PLL_REG 0x00596106
+   * VGA_HSYNC_REG1 0x07800898
+   * VGA_HSYNC_REG2 0x002C00C1
+   * VGA_VSYNC_REG1 0x04380465
+   * VGA_VSYNC_REG2 0x02A5002A
+ * AVI Info Frame is 0x1000A810, 0x0000A700, 0x00000000, 0x00000000
+ * HDMI mode enabled
+
 ## Register access statistics
 
 **FL2000**
