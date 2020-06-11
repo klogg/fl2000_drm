@@ -296,6 +296,8 @@ int fl2000_set_transfers(struct usb_device *usb_dev)
 	mask = 0;
 	aclk.use_pkt_pending = false;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_pkt_pending);
+	aclk.use_zero_td = false;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_zero_td);
 	aclk.use_zero_pkt_len = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, use_zero_pkt_len);
 	aclk.vga_err_int_en = true;
