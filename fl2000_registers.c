@@ -224,6 +224,8 @@ int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll)
 
 	aclk.force_pll_up = true;
 	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_pll_up);
+	aclk.force_vga_connect = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, force_vga_connect);
 	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
 
 	return 0;
