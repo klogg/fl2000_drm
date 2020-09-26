@@ -101,7 +101,7 @@ static int fl2000_fb_get_buffers(struct usb_device *usb_dev,
 		INIT_LIST_HEAD(&cursor->list);
 		list_add(&cursor->list, &stream->fb_list);
 
-		cursor->buf = kvmalloc(size, GFP_KERNEL);
+		cursor->buf = kvmalloc(size, GFP_KERNEL | GFP_DMA);
 		if (!cursor->buf)
 			return -ENOMEM;
 
