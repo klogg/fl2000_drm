@@ -4,7 +4,9 @@
 IOMMU="intel-iommu"
 
 # USB Host Controller PCI bus enumeration bus ID
-USB_ID="0000:04:00.0"
+#  - 0000:04:00.0 for ASMedia USB Controller
+#  - 0000:00:14.0 for Intel USB controller
+USB_ID="0000:00:14.0"
 
 # Disconnect USB Host Controller from xHCI driver using its PCI bus ID
 if [[ -d "/sys/bus/pci/drivers/xhci_hcd/$USB_ID" ]]; then
