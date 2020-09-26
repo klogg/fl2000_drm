@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/klogg/fl2000_drm.svg?branch=master)](https://travis-ci.org/klogg/fl2000_drm) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=klogg_fl2000_drm&metric=alert_status)](https://sonarcloud.io/dashboard?id=klogg_fl2000_drm)
+[![Gitter](https://badges.gitter.im/fl2000_drm/community.svg)](https://gitter.im/fl2000_drm/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) [![Build Status](https://travis-ci.org/klogg/fl2000_drm.svg?branch=master)](https://travis-ci.org/klogg/fl2000_drm) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=klogg_fl2000_drm&metric=alert_status)](https://sonarcloud.io/dashboard?id=klogg_fl2000_drm)
 
 <h1>
   
