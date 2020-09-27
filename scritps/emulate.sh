@@ -14,9 +14,12 @@ if [[ -d "/sys/bus/pci/drivers/xhci_hcd/$USB_ID" ]]; then
 fi
 
 # Start virtme
+# NOTE: There is a bug in qemu that does not properly allow using together
+# kernel_irqchip=split and intremao=on. There is work being done to re-enable
+# fastpath for INTx but it is not merged yet as of now
 virtme-run --pwd --installed-kernel --qemu-opts -cpu host \
 	-m 4G \
 	-nic user,ipv6=off,model=e1000 \
 	-machine q35,accel=kvm,kernel_irqchip=split \
-	-device $IOMMU,intremap=on,caching-mode=on \
+	-device $IOMMU,intremap=on,caching-mode=on,device-iotlb=on \
 	-device vfio-pci,host=$USB_ID -s
