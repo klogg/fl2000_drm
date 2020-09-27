@@ -544,23 +544,6 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 
 	drm_connector_register(&priv->connector);
 
-	/* Enable HDMI packets, repeat for every data frame as recommended */
-	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
-			IT66121_HDMI_GEN_CTRL_PKT_ON |
-			IT66121_HDMI_GEN_CTRL_PKT_RPT);
-	if (ret) {
-		DRM_ERROR("Cannot enable HDMI packets");
-		return ret;
-	}
-
-	/* Mute AV */
-	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
-			IT66121_HDMI_AV_MUTE_ON, IT66121_HDMI_AV_MUTE_ON);
-	if (ret) {
-		DRM_ERROR("Cannot mute AV");
-		return ret;
-	}
-
 #if 0
 	/* Start interrupts */
 	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
@@ -594,8 +577,8 @@ static void it66121_bridge_enable(struct drm_bridge *bridge)
 	dev_info(bridge->dev->dev, "it66121_bridge_enable");
 
 	/* Unmute AV */
-	ret = regmap_write_bits(priv->regmap, IT66121_HDMI_AV_MUTE,
-			IT66121_HDMI_AV_MUTE_ON, ~IT66121_HDMI_AV_MUTE_ON);
+	ret = regmap_write(priv->regmap, IT66121_HDMI_AV_MUTE,
+			~IT66121_HDMI_AV_MUTE_ON);
 	if (ret)
 		return;
 }
@@ -662,6 +645,32 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		return;
 	}
 
+	/* Set TX mode */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
+			priv->dvi_mode ? IT66121_HDMI_MODE_DVI :
+					IT66121_HDMI_MODE_HDMI);
+	if (ret) {
+		dev_err(bridge->dev->dev, "Cannot set TX mode (%d)", ret);
+		return;
+	}
+
+	/* Enable HDMI packets, repeat for every data frame as recommended */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_GEN_CTRL_PKT,
+			IT66121_HDMI_GEN_CTRL_PKT_ON |
+			IT66121_HDMI_GEN_CTRL_PKT_RPT);
+	if (ret) {
+		DRM_ERROR("Cannot enable HDMI packets");
+		return;
+	}
+
+	/* Mute AV */
+	ret = regmap_write(priv->regmap, IT66121_HDMI_AV_MUTE,
+			IT66121_HDMI_AV_MUTE_ON | IT66121_HDMI_AV_MUTE_BLUE);
+	if (ret) {
+		DRM_ERROR("Cannot mute AV");
+		return;
+	}
+
 	/* Write new AVI infoframe packet */
 	for (i = 0; i < HDMI_AVI_INFOFRAME_SIZE; i++) {
 		ret = regmap_write(priv->regmap, aviinfo_reg[i],
@@ -709,15 +718,6 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot configure input bus " \
 				"(%d)", ret);
-		return;
-	}
-
-	/* Set TX mode */
-	ret = regmap_write(priv->regmap, IT66121_HDMI_MODE,
-			priv->dvi_mode ? IT66121_HDMI_MODE_DVI :
-					IT66121_HDMI_MODE_HDMI);
-	if (ret) {
-		dev_err(bridge->dev->dev, "Cannot set TX mode (%d)", ret);
 		return;
 	}
 
