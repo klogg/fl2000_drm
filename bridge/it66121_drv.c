@@ -308,22 +308,22 @@ static void it66121_intr_work(struct work_struct *work_item)
 static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		size_t len)
 {
-	int i, ret, remain = len, offset = 0;
-	unsigned int rd_fifo_val;
-	static u8 header[EDID_LOSS_LEN] = {0x00, 0xFF, 0xFF};
+	int i, ret, remain = len, offset = block & 1 ? 128 : 0;
+	unsigned int rd_fifo_val, segment = block >> 1;
+	static const u8 header[EDID_LOSS_LEN] = {0x00, 0xFF, 0xFF};
 	struct it66121_priv *priv = context;
-
-	/* Statically fill first 3 bytes (due to EDID reading HW bug) */
-	for (i = 0; (i < EDID_LOSS_LEN) && (remain > 0); i++) {
-		*(buf++) = header[i];
-		remain--;
-		offset++;
-	}
 
 	/* Abort DDC */
 	ret = it66121_abort_ddc_ops(priv);
 	if (ret)
 		return ret;
+
+	/* Statically fill first 3 bytes (due to EDID reading HW bug) */
+	while ((offset < EDID_LOSS_LEN) && (remain > 0)) {
+		*(buf++) = header[offset];
+		remain--;
+		offset++;
+	}
 
 	while (remain > 0) {
 		/* Add bytes that will be lost during EDID read */
@@ -348,7 +348,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block,
 		ret = regmap_write(priv->regmap, IT66121_DDC_SIZE, size);
 		if (ret)
 			return ret;
-		ret = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, block);
+		ret = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, segment);
 		if (ret)
 			return ret;
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
