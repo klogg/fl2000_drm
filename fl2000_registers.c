@@ -437,8 +437,14 @@ enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev)
 	}
 	regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, mask, status.val);
 
-	/* Don't know how to recover here */
+	if (status.lbuf_halt) {
+		/* TODO: Reset LBUF using regmap_field for lbuf_sw_rst */
+		dev_err(&usb_dev->dev, "LBUF halted!");
+		int_status = ERROR;
+	}
+
 	if (status.vga_error) {
+		/* TODO: Don't know how to recover here */
 		dev_err(&usb_dev->dev, "VGA error detected!");
 		int_status = ERROR;
 	}
