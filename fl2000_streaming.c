@@ -371,7 +371,7 @@ int fl2000_stream_create(struct usb_interface *interface)
 	ret = usb_set_interface(usb_dev, 0, 1);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot set streaming interface " \
-				"altstting for bulk transfers");
+				"altsetting for bulk transfers");
 		return ret;
 	}
 
