@@ -644,8 +644,6 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " \
 			DRM_MODE_FMT, DRM_MODE_ARG(mode));
 
-	hdmi_avi_infoframe_init(&priv->hdmi_avi_infoframe);
-
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
 			&priv->connector, mode);
 	if (ret) {
