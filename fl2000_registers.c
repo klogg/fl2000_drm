@@ -376,6 +376,76 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	return 0;
 }
 
+int fl2000_enable_interrupts(struct usb_device *usb_dev)
+{
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
+	fl2000_vga_ctrl2_reg_axclk axclk = {.val = 0};
+	u32 mask;
+
+	mask = 0;
+	aclk.vga_err_int_en = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, vga_err_int_en);
+	aclk.lbuf_err_int_en = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, lbuf_err_int_en);
+	aclk.edid_mon_int_en = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, edid_mon_int_en);
+	aclk.edid_mon_int_en = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, edid_mon_int_en);
+	aclk.feedback_int_en = false;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl_reg_aclk, feedback_int_en);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+
+	mask = 0;
+	axclk.hdmi_int_en = true;
+	fl2000_add_bitmask(mask, fl2000_vga_ctrl2_reg_axclk, hdmi_int_en);
+	regmap_write_bits(regmap, FL2000_VGA_CTRL2_REG_ACLK, mask, axclk.val);
+
+	return 0;
+}
+
+enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev)
+{
+	int ret;
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	fl2000_vga_status_reg status;
+	u32 mask = 0;
+	enum fl2000_int_status int_status = CLEAR;
+
+	/* Process interrupt */
+	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot read interrupt register (%d)",
+				ret);
+		return ERROR;
+	}
+
+	if (status.hdmi_event || status.monitor_event ||
+			status.edid_event) {
+		dev_info(&usb_dev->dev, "Connection event 0x%X", status.val);
+		int_status = EVENT;
+	}
+
+	/* LBUF issues are recoverable */
+	if (status.lbuf_overflow) {
+		dev_err(&usb_dev->dev, "LBUF overflow detected!");
+		fl2000_add_bitmask(mask, fl2000_vga_status_reg, lbuf_overflow);
+	}
+	if (status.lbuf_underflow) {
+		dev_err(&usb_dev->dev, "LBUF underflow detected!");
+		fl2000_add_bitmask(mask, fl2000_vga_status_reg, lbuf_underflow);
+	}
+	regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, mask, status.val);
+
+	/* Don't know how to recover here */
+	if (status.vga_error) {
+		dev_err(&usb_dev->dev, "VGA error detected!");
+		int_status = ERROR;
+	}
+
+	return int_status;
+}
+
 int fl2000_regmap_init(struct usb_device *usb_dev)
 {
 	int i, ret;

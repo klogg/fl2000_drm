@@ -18,6 +18,8 @@ int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix);
 int fl2000_set_timings(struct usb_device *usb_dev,
 		struct fl2000_timings *timings);
 int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll);
+int fl2000_enable_interrupts(struct usb_device *usb_dev);
+enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev);
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev, size_t pixels, u32 freq);
 void fl2000_stream_compress(struct usb_device *usb_dev,
@@ -550,6 +552,9 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 	/* Configure frame transfers */
 	fl2000_set_transfers(usb_dev);
 
+	/* Enable interrupts */
+	fl2000_enable_interrupts(usb_dev);
+
 	fl2000_afe_magic(usb_dev);
 
 	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay,
@@ -712,27 +717,14 @@ static int fl2000_compare(struct device *dev, void *data)
 
 void fl2000_inter_check(struct usb_device *usb_dev)
 {
-	int ret;
-	fl2000_vga_status_reg status;
 	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
 			fl2000_drm_if_release, NULL, NULL);
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 
-	if (!drm_if || !regmap)
+	if (!drm_if)
 		return;
 
-	/* Process interrupt */
-	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot read interrupt register (%d)",
-				ret);
-	} else {
-		dev_info(&usb_dev->dev, "FL2000 interrupt 0x%X", status.val);
-		if (status.hdmi_event || status.monitor_event ||
-				status.edid_event) {
-			drm_kms_helper_hotplug_event(&drm_if->drm);
-		}
-	}
+	if (fl2000_check_interrupt(usb_dev) == EVENT)
+		drm_kms_helper_hotplug_event(&drm_if->drm);
 }
 
 int fl2000_drm_init(struct usb_device *usb_dev)
