@@ -137,4 +137,10 @@ struct fl2000_pll {
 	u32 function;
 };
 
+enum fl2000_int_status {
+	CLEAR,	/* nothing to do */
+	EVENT,	/* sink connection event */
+	ERROR,	/* unrecoverable error */
+};
+
 #endif /* __FL2000_DRM_H__ */
