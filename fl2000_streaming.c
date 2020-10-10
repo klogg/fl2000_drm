@@ -17,16 +17,18 @@
 
 #include "fl2000.h"
 
-#define FL2000_FB_NUM		2
+#define FL2000_SB_NUM		2
 
 #define FL2000_URB_TIMEOUT	100
 
 void fl2000_display_vblank(struct usb_device *usb_dev);
 
-struct fl2000_fb {
+struct fl2000_stream_buf {
 	struct list_head list;
-	void *buf;
-	struct sg_table *sgt;
+	struct sg_table sgt;
+	struct page **pages;
+	int nr_pages;
+	void *vaddr;
 };
 
 struct fl2000_stream {
@@ -34,7 +36,7 @@ struct fl2000_stream {
 	struct usb_sg_request data_request;
 	struct usb_device *usb_dev;
 	/* TODO: Add spinlock for list protection */
-	struct list_head fb_list;
+	struct list_head sb_list;
 	size_t buf_size;
 	int bytes_pix;
 	struct work_struct work;
@@ -42,106 +44,100 @@ struct fl2000_stream {
 	struct timer_list sg_timer;
 };
 
-/* Copied from drivers/gpu/drm/virtio/virtgpu_vq.c
- * (C) David Riley <davidriley@chromium.org> */
-static struct sg_table *vmalloc_to_sgt(char *data, uint32_t size, int *sg_ents)
+static void fl2000_free_sb(struct fl2000_stream_buf *sb)
 {
-	int ret, s, i;
-	struct sg_table *sgt;
-	struct scatterlist *sg;
-	struct page *pg;
+	int i;
 
-	if (WARN_ON(!PAGE_ALIGNED(data)))
-		return NULL;
+	if (sb->vaddr != NULL)
+		vunmap(sb->vaddr);
 
-	sgt = kmalloc(sizeof(*sgt), GFP_KERNEL);
-	if (!sgt)
-		return NULL;
+	sg_free_table(&sb->sgt);
 
-	*sg_ents = DIV_ROUND_UP(size, PAGE_SIZE);
-	ret = sg_alloc_table(sgt, *sg_ents, GFP_KERNEL);
-	if (ret) {
-		kfree(sgt);
-		return NULL;
-	}
+	for (i = 0; (i < sb->nr_pages) && (sb->pages[i] != NULL); i++)
+		__free_page(sb->pages[i]);
 
-	for_each_sg(sgt->sgl, sg, *sg_ents, i) {
-		pg = vmalloc_to_page(data);
-		if (!pg) {
-			sg_free_table(sgt);
-			kfree(sgt);
-			return NULL;
-		}
+	if (sb->pages != NULL)
+		kfree(sb->pages);
 
-		s = min_t(int, PAGE_SIZE, size);
-		sg_set_page(sg, pg, s, 0);
-
-		size -= s;
-		data += s;
-	}
-
-	return sgt;
+	kfree(sb);
 }
 
-static int fl2000_fb_get_buffers(struct usb_device *usb_dev,
+static struct fl2000_stream_buf *fl2000_alloc_sb(size_t size)
+{
+	int i, ret;
+	struct fl2000_stream_buf *sb;
+	int nr_pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
+
+	sb = kzalloc(sizeof(struct fl2000_stream_buf), GFP_KERNEL);
+	if (!sb)
+		return NULL;
+
+	sb->nr_pages = nr_pages;
+
+	sb->pages = kcalloc(nr_pages, sizeof(*sb->pages), GFP_KERNEL);
+	if (!sb->pages)
+		goto error;
+
+	for (i = 0; i < nr_pages; i++) {
+		sb->pages[i] = alloc_page(GFP_KERNEL | GFP_DMA);
+		if (!sb->pages[i])
+			goto error;
+	}
+
+	ret = sg_alloc_table_from_pages(&sb->sgt, sb->pages, nr_pages, 0, size,
+			GFP_KERNEL);
+	if (ret != 0)
+		goto error;
+
+	sb->vaddr = vmap(sb->pages, nr_pages, VM_MAP | VM_IOREMAP, PAGE_KERNEL);
+	if (!sb->vaddr)
+		goto error;
+
+	INIT_LIST_HEAD(&sb->list);
+	memset(sb->vaddr, 0, nr_pages << PAGE_SHIFT);
+
+	return sb;
+
+error:
+	fl2000_free_sb(sb);
+
+	return NULL;
+}
+
+static int fl2000_stream_get_buffers(struct usb_device *usb_dev,
 		struct fl2000_stream *stream, size_t size)
 {
 	int i;
-	struct fl2000_fb *cursor;
-	int sg_ents;
+	struct fl2000_stream_buf *cur_sb;
 
-	if (!list_empty(&stream->fb_list))
+	if (!list_empty(&stream->sb_list))
 		return -1;
 
-	for (i = 0; i < FL2000_FB_NUM; i++) {
-		cursor = kzalloc(sizeof(struct fl2000_fb), GFP_KERNEL);
-		if (!cursor)
-			return -ENOMEM;
+	for (i = 0; i < FL2000_SB_NUM; i++) {
+		cur_sb = fl2000_alloc_sb(size);
+		if (!cur_sb)
+			return -1;
 
-		INIT_LIST_HEAD(&cursor->list);
-		list_add(&cursor->list, &stream->fb_list);
+		list_add(&cur_sb->list, &stream->sb_list);
 
-		cursor->buf = kvmalloc(size, GFP_KERNEL | GFP_DMA);
-		if (!cursor->buf)
-			return -ENOMEM;
-
-		if (is_vmalloc_addr(cursor->buf)) {
-			cursor->sgt = vmalloc_to_sgt(cursor->buf, size, &sg_ents);
-			if (!cursor->sgt)
-				return -ENOMEM;
-
-			/* Large buffers can be sent only via scatterlists.
-			 * Device expects a single URB for bulk data transfer
-			 * so if host controller cannot do scatter-gather DMA
-			 * driver wont work
-			 * */
-			if (sg_ents > 1 && !usb_dev->bus->sg_tablesize)
-				return -EIO;
-		} else
-			cursor->sgt = NULL;
+		/* Large buffers can be sent only via scatterlists. Device
+		 * expects a single URB for bulk data transfer so if host
+		 * controller cannot do scatter-gather DMA driver won't work
+		 */
+		if (cur_sb->sgt.nents > 1 && !usb_dev->bus->sg_tablesize)
+			return -EIO;
 	}
 
 	return 0;
 }
 
-static void fl2000_fb_put_buffers(struct usb_device *usb_dev,
+static void fl2000_stream_put_buffers(struct usb_device *usb_dev,
 		struct fl2000_stream *stream)
 {
-	struct fl2000_fb *cursor, *temp;
-	list_for_each_entry_safe(cursor, temp, &stream->fb_list, list) {
-		if (cursor->sgt) {
-			sg_free_table(cursor->sgt);
-			kfree(cursor->sgt);
-			cursor->sgt = NULL;
-		}
-
-		if (cursor->buf) {
-			kvfree(cursor->buf);
-			cursor->buf = NULL;
-		}
-
-		list_del(&cursor->list);
-		kfree(cursor);
+	struct fl2000_stream_buf *cur_sb, *temp_sb;
+	list_for_each_entry_safe(cur_sb, temp_sb, &stream->sb_list, list) {
+		list_del(&cur_sb->list);
+		fl2000_free_sb(cur_sb);
 	}
 }
 
@@ -165,36 +161,30 @@ static void fl2000_stream_work(struct work_struct *work)
 	struct fl2000_stream *stream = container_of(work, struct fl2000_stream,
 			work);
 	struct usb_device *usb_dev = stream->usb_dev;
-	struct fl2000_fb *cursor;
+	struct fl2000_stream_buf *cur_sb;
 
-	cursor = list_last_entry(&stream->fb_list, struct fl2000_fb, list);
-	if (!cursor)
+	cur_sb = list_last_entry(&stream->sb_list, struct fl2000_stream_buf,
+			list);
+	if (!cur_sb)
 		return;
 
-	if (cursor->sgt) {
-		ret = usb_sg_init(&stream->data_request, stream->usb_dev,
-				usb_sndbulkpipe(usb_dev, 1), 0,
-				cursor->sgt->sgl, cursor->sgt->nents,
-				stream->buf_size, GFP_KERNEL);
-		if (ret)
-			return;
+	ret = usb_sg_init(&stream->data_request, stream->usb_dev,
+			usb_sndbulkpipe(usb_dev, 1), 0,
+			cur_sb->sgt.sgl, cur_sb->sgt.nents,
+			stream->buf_size, GFP_KERNEL);
+	if (ret)
+		return;
 
-		stream->sg_timer.expires = jiffies +
-				msecs_to_jiffies(FL2000_URB_TIMEOUT);
-		add_timer(&stream->sg_timer);
+	stream->sg_timer.expires = jiffies +
+			msecs_to_jiffies(FL2000_URB_TIMEOUT);
+	add_timer(&stream->sg_timer);
 
-		usb_sg_wait(&stream->data_request);
+	usb_sg_wait(&stream->data_request);
 
-		if (!del_timer_sync(&stream->sg_timer))
-			ret = -ETIME;
-		else
-			ret = stream->data_request.status;
-	} else {
-		int actual_length;
-		ret = usb_bulk_msg(usb_dev, usb_sndbulkpipe(usb_dev, 1),
-			cursor->buf, stream->buf_size, &actual_length,
-			FL2000_URB_TIMEOUT);
-	}
+	if (!del_timer_sync(&stream->sg_timer))
+		ret = -ETIME;
+	else
+		ret = stream->data_request.status;
 
 	ret = fl2000_urb_status(usb_dev, ret, usb_sndbulkpipe(usb_dev, 1));
 	if (ret) {
@@ -257,15 +247,16 @@ static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf,
 void fl2000_stream_compress(struct usb_device *usb_dev,
 		struct drm_framebuffer *fb, void *src)
 {
-	struct fl2000_fb *cursor;
+	struct fl2000_stream_buf *cur_sb;
 	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
 			fl2000_stream_release, NULL, NULL);
 	unsigned int y;
 	void *dst;
 	u32 dst_line_len = fb->width * stream->bytes_pix;
 
-	cursor = list_first_entry(&stream->fb_list, struct fl2000_fb, list);
-	dst = cursor->buf;
+	cur_sb = list_first_entry(&stream->sb_list, struct fl2000_stream_buf,
+			list);
+	dst = cur_sb->vaddr;
 
 	for (y = 0; y < fb->height; y++) {
 		switch (stream->bytes_pix) {
@@ -282,7 +273,7 @@ void fl2000_stream_compress(struct usb_device *usb_dev,
 		dst += dst_line_len;
 	}
 
-	list_rotate_left(&stream->fb_list);
+	list_rotate_left(&stream->sb_list);
 }
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels,
@@ -306,13 +297,13 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels,
 		return 0;
 
 	/* Destroy wrong size buffers if they exist */
-	if (!list_empty(&stream->fb_list))
-		fl2000_fb_put_buffers(usb_dev, stream);
+	if (!list_empty(&stream->sb_list))
+		fl2000_stream_put_buffers(usb_dev, stream);
 
 	/* Allocate new buffers */
-	ret = fl2000_fb_get_buffers(usb_dev, stream, size);
+	ret = fl2000_stream_get_buffers(usb_dev, stream, size);
 	if (ret) {
-		fl2000_fb_put_buffers(usb_dev, stream);
+		fl2000_stream_put_buffers(usb_dev, stream);
 		stream->buf_size = 0;
 		return ret;
 	}
@@ -383,7 +374,7 @@ int fl2000_stream_create(struct usb_interface *interface)
 	}
 	devres_add(&usb_dev->dev, stream);
 
-	INIT_LIST_HEAD(&stream->fb_list);
+	INIT_LIST_HEAD(&stream->sb_list);
 
 	stream->zero_len_urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!stream->zero_len_urb) {
@@ -425,7 +416,7 @@ void fl2000_stream_destroy(struct usb_interface *interface)
 
 	usb_free_urb(stream->zero_len_urb);
 
-	fl2000_fb_put_buffers(usb_dev, stream);
+	fl2000_stream_put_buffers(usb_dev, stream);
 
 	devres_release(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 }
