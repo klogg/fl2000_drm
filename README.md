@@ -3,7 +3,7 @@
 <h1>
   
 ```diff
--= NOTICE: THIS DRIVER IS NOT YET WORKING PROPERLY =-
+-= DRIVER IS NOT YET STABLE =-
 ```
 
 </h1>
