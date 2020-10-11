@@ -94,8 +94,6 @@ Not shared here due to NDAs, Copyrights, etc.
  * Move all (or as much as possible) resources to device resources (dev/devres functions) and simplify release
  * Replace bus detection & components linking with configuration (modprobe / udev)
  * Allow driver to be builtin to kernel
- * Refactor for better / cleaner structure and modularity
  * Implement unit testing with latest kernel & DRM unit testing tools, target coverage shall be 100%
  * Switch to isochronous transfers
- * Add computation for PLL settings from selected monitor mode
  * Implement suspend / resume
