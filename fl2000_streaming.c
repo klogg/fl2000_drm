@@ -104,33 +104,6 @@ error:
 	return NULL;
 }
 
-static int fl2000_stream_get_buffers(struct usb_device *usb_dev,
-		struct fl2000_stream *stream, size_t size)
-{
-	int i;
-	struct fl2000_stream_buf *cur_sb;
-
-	if (!list_empty(&stream->sb_list))
-		return -1;
-
-	for (i = 0; i < FL2000_SB_NUM; i++) {
-		cur_sb = fl2000_alloc_sb(size);
-		if (!cur_sb)
-			return -1;
-
-		list_add(&cur_sb->list, &stream->sb_list);
-
-		/* Large buffers can be sent only via scatterlists. Device
-		 * expects a single URB for bulk data transfer so if host
-		 * controller cannot do scatter-gather DMA driver won't work
-		 */
-		if (cur_sb->sgt.nents > 1 && !usb_dev->bus->sg_tablesize)
-			return -EIO;
-	}
-
-	return 0;
-}
-
 static void fl2000_stream_put_buffers(struct usb_device *usb_dev,
 		struct fl2000_stream *stream)
 {
@@ -139,6 +112,37 @@ static void fl2000_stream_put_buffers(struct usb_device *usb_dev,
 		list_del(&cur_sb->list);
 		fl2000_free_sb(cur_sb);
 	}
+}
+
+static int fl2000_stream_get_buffers(struct usb_device *usb_dev,
+		struct fl2000_stream *stream, size_t size)
+{
+	int i, ret;
+	struct fl2000_stream_buf *cur_sb;
+
+	BUG_ON(!list_empty(&stream->sb_list));
+
+	for (i = 0; i < FL2000_SB_NUM; i++) {
+		cur_sb = fl2000_alloc_sb(size);
+		if (!cur_sb) {
+			ret = -ENOMEM;
+			goto error;
+		}
+
+		list_add(&cur_sb->list, &stream->sb_list);
+
+		/* Ensure scatterlist will fit device's sg table size */
+		if (cur_sb->sgt.nents > usb_dev->bus->sg_tablesize) {
+			ret = -EIO;
+			goto error;
+		}
+	}
+
+	return 0;
+
+error:
+	fl2000_stream_put_buffers(usb_dev, stream);
+	return ret;
 }
 
 static void fl2000_stream_release(struct device *dev, void *res)
