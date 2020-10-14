@@ -57,34 +57,6 @@ static void fl2000_stream_release(struct device *dev, void *res)
 	/* Noop */
 }
 
-static void fl2000_stream_data_completion(struct urb *urb)
-{
-	struct usb_device *usb_dev = urb->dev;
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
-			fl2000_stream_release, NULL, NULL);
-	struct fl2000_stream_buf *cur_sb = urb->context;
-
-	spin_lock_irq(&stream->list_lock);
-	list_move_tail(&cur_sb->list, &stream->render_list);
-	spin_unlock(&stream->list_lock);
-
-	fl2000_display_vblank(stream->usb_dev);
-
-	/* Kick transmit workqueue */
-	up(&stream->work_sem);
-
-	fl2000_urb_status(usb_dev, urb->status, urb->pipe);
-	usb_free_urb(urb);
-}
-
-static void fl2000_stream_zero_len_completion(struct urb *urb)
-{
-	struct usb_device *usb_dev = urb->dev;
-
-	fl2000_urb_status(usb_dev, urb->status, urb->pipe);
-	usb_free_urb(urb);
-}
-
 static void fl2000_free_sb(struct fl2000_stream_buf *sb)
 {
 	int i;
@@ -180,6 +152,26 @@ error:
 	return ret;
 }
 
+static void fl2000_stream_data_completion(struct urb *urb)
+{
+	struct usb_device *usb_dev = urb->dev;
+	struct fl2000_stream *stream = devres_find(&usb_dev->dev,
+			fl2000_stream_release, NULL, NULL);
+	struct fl2000_stream_buf *cur_sb = urb->context;
+
+	spin_lock_irq(&stream->list_lock);
+	list_move_tail(&cur_sb->list, &stream->render_list);
+	spin_unlock(&stream->list_lock);
+
+	fl2000_display_vblank(stream->usb_dev);
+
+	/* Kick transmit workqueue */
+	up(&stream->work_sem);
+
+	fl2000_urb_status(usb_dev, urb->status, urb->pipe);
+	usb_free_urb(urb);
+}
+
 static void fl2000_stream_work(struct work_struct *work)
 {
 	int ret;
@@ -187,7 +179,7 @@ static void fl2000_stream_work(struct work_struct *work)
 		       work);
 	struct usb_device *usb_dev = stream->usb_dev;
 	struct fl2000_stream_buf *cur_sb, *last_sb;
-	struct urb *zero_len_urb, *data_urb;
+	struct urb *data_urb;
 
 	while (stream->enabled) {
 		ret = down_interruptible(&stream->work_sem);
@@ -229,31 +221,13 @@ static void fl2000_stream_work(struct work_struct *work)
 		data_urb->interval = 0;
 		data_urb->sg = cur_sb->sgt.sgl;
 		data_urb->num_sgs = cur_sb->sgt.nents;
+		data_urb->transfer_flags |= URB_ZERO_PACKET;
 
 		usb_anchor_urb(data_urb, &stream->anchor);
 		ret = fl2000_submit_urb(data_urb);
 		if (ret) {
 			dev_err(&usb_dev->dev, "Data URB error %d", ret);
 			usb_free_urb(data_urb);
-			break;
-		}
-
-		zero_len_urb = usb_alloc_urb(0, GFP_KERNEL);
-		if (!zero_len_urb) {
-			dev_err(&usb_dev->dev, "Zero URB allocation error");
-			ret = -ENOMEM;
-			break;
-		}
-
-		usb_fill_bulk_urb(zero_len_urb, usb_dev,
-				usb_sndbulkpipe(usb_dev, 1), NULL, 0,
-				fl2000_stream_zero_len_completion, NULL);
-
-		usb_anchor_urb(zero_len_urb, &stream->anchor);
-		ret = fl2000_submit_urb(zero_len_urb);
-		if (ret) {
-			dev_err(&usb_dev->dev, "Zero URB error %d", ret);
-			usb_free_urb(zero_len_urb);
 			break;
 		}
 	}
