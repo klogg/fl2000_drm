@@ -3,7 +3,7 @@
  * fl2000_drm.h
  *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
- * (C) Copyright 2018-2019, Artem Mygaiev
+ * (C) Copyright 2018-2020, Artem Mygaiev
  */
 
 #ifndef __FL2000_DRM_H__
@@ -73,6 +73,31 @@ static const umode_t fl2000_debug_umode = 0666;
 #define for_each_array_item(array, idx) \
 	for (idx = 0; idx < ARRAY_SIZE(array); idx++)
 
+static inline int fl2000_submit_urb(struct urb *urb)
+{
+	int ret;
+	int attempts = 10;
+
+retry:
+	ret = usb_submit_urb(urb, GFP_KERNEL);
+	switch (ret) {
+	case 0: /* All is OK */
+		break;
+	case -ENXIO:
+	case -EAGAIN:
+	case -ENOMEM:
+		if (attempts--) {
+			cond_resched();
+			goto retry;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
 static inline int fl2000_urb_status(struct usb_device *usb_dev, int status,
 		int pipe)
 {
@@ -109,6 +134,12 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, int status,
 					"%d", ret);
 			ret = -1;
 		}
+		break;
+
+	/* Shutting down */
+	case -EPERM:
+		dev_err(&usb_dev->dev, "Shutting down interface, URB canceled");
+		ret = 0;
 		break;
 
 	/* All the rest cases - igonore */

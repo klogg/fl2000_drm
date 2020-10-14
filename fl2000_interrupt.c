@@ -3,7 +3,7 @@
  * fl2000_intr.c
  *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
- * (C) Copyright 2018-2019, Artem Mygaiev
+ * (C) Copyright 2018-2020, Artem Mygaiev
  */
 
 #include "fl2000.h"
@@ -57,10 +57,9 @@ static void fl2000_intr_completion(struct urb *urb)
 	urb->start_frame = -1;
 
 	/* Restart urb */
-	ret = usb_submit_urb(urb, GFP_KERNEL);
-	if (ret && ret != -EPERM) {
+	ret = fl2000_submit_urb(urb);
+	if (ret)
 		dev_err(&usb_dev->dev, "URB submission failed (%d)", ret);
-	}
 }
 
 /**
