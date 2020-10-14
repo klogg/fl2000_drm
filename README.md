@@ -3,7 +3,7 @@
 <h1>
   
 ```diff
--= LAST MAJOR ISSUE: Module removal, device removal =-
+-= LAST MAJOR ISSUE: Module / device removal =-
 ```
 
 </h1>
