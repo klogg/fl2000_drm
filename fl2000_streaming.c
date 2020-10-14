@@ -450,9 +450,7 @@ void fl2000_stream_destroy(struct usb_interface *interface)
 	if (!stream)
 		return;
 
-	/* Shouldn't happen, but just in case */
-	if (stream->enabled)
-		fl2000_stream_disable(usb_dev);
+	BUG_ON(stream->enabled);
 
 	destroy_workqueue(stream->work_queue);
 
