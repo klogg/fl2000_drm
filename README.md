@@ -3,7 +3,7 @@
 <h1>
   
 ```diff
--= DRIVER IS NOT YET STABLE =-
+-= LAST MAJOR ISSUE: Module removal, device removal =-
 ```
 
 </h1>
