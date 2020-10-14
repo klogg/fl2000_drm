@@ -21,8 +21,8 @@
  *  - one buffer for HDMI rendering
  *  - one buffer for USB transmission
  *  - one buffer for DRM/KMS data copy */
-#define FL2000_SB_NUM		4
-#define FL2000_SB_MIN		2
+#define FL2000_SB_MIN		3
+#define FL2000_SB_NUM		(FL2000_SB_MIN + 1)
 
 #define FL2000_URB_TIMEOUT	100
 
