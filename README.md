@@ -4,4 +4,4 @@
 
 Clean re-implementation of FrescoLogic FL2000DX DRM driver and ITE Tech IT66121F driver, allowing to enable full display controller capabilities for [USB-to-HDMI dongles](https://www.aliexpress.com/item/32821739801.html?spm=a2g0o.productlist.0.0.14ee52fb8rFfu5) based on such chips in Linux
 
-For more information check project's Wiki
+For more information check project's [Wiki](https://github.com/klogg/fl2000_drm/wiki)
