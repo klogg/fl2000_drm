@@ -87,7 +87,7 @@ static struct fl2000_stream_buf *fl2000_alloc_sb(size_t size)
 		goto error;
 
 	for (i = 0; i < nr_pages; i++) {
-		sb->pages[i] = alloc_page(GFP_KERNEL | GFP_DMA);
+		sb->pages[i] = alloc_page(GFP_KERNEL);
 		if (!sb->pages[i])
 			goto error;
 	}
