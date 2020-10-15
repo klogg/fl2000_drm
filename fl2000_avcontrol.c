@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * fl2000_avcontrol.c
  *
@@ -21,7 +21,8 @@ int fl2000_drm_init(struct usb_device *usb_dev);
 void fl2000_drm_cleanup(struct usb_device *usb_dev);
 
 /* Ordered list of "init"/"cleanup functions for sub-devices. Shall be processed
- * forward order on init and backward on cleanup */
+ * forward order on init and backward on cleanup
+ */
 static const struct {
 	const char *name;
 	int (*init_fn)(struct usb_device *usb_dev);

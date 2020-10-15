@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * it66121_drv.c
  *
@@ -59,7 +59,8 @@ static const unsigned short it66121_addr[] = {(0x98 >> 1), /*(0x9A >> 1),*/
 
 static const struct regmap_range_cfg it66121_regmap_banks[] = {
 	/* Do not put common registers to any range, this will lead to skipping
-	 * "bank" configuration when accessing those at addresses 0x00-0x2F */
+	 * "bank" configuration when accessing those at addresses 0x00-0x2F
+	 */
 	{
 		.name = "Banks",
 		.range_min = IT66121_BANK_START,
@@ -134,7 +135,8 @@ static int it66121_configure_input(struct it66121_priv *priv)
 	 *   - DDR mode disabled
 	 *   - 1 cycle input PCLK delay
 	 * NOTE: some flexible encoders may support non-static mode on the bus,
-	 * for those we may need to also use modeset parameters */
+	 * for those we may need to also use modeset parameters
+	 */
 	ret = regmap_write(priv->regmap, IT66121_INPUT_MODE,
 			IT66121_INPUT_MODE_RGB |
 			IT66121_INPUT_PCLKDELAY1);
@@ -142,12 +144,14 @@ static int it66121_configure_input(struct it66121_priv *priv)
 		return ret;
 
 	/* XXX: Also we can change some parameters of IT66121_INPUT_IO_CONTROL
-	 * related to TX FIFO reseting, 10/12bit YCbCr422 sequential IO mode */
+	 * related to TX FIFO reseting, 10/12bit YCbCr422 sequential IO mode
+	 */
 
 	/* XXX: This configures transformation needed in order to properly
 	 * convert input signal to output. For now we hardcode "bypassing".
 	 * In case when conversion is needed we have to also to set Color Space
-	 * Conversion Matrix and RGB or YUV blank levels */
+	 * Conversion Matrix and RGB or YUV blank levels
+	 */
 	ret = regmap_write(priv->regmap, IT66121_INPUT_COLOR_CONV,
 			IT66121_INPUT_NO_CONV);
 	if (ret)
@@ -235,10 +239,12 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	 *  2. SW_RST set bit HDCP_RST
 	 * it seems wrong to keep them reset, i.e. without restoring initial
 	 * state, but somehow this is how it was implemented. This sequence is
-	 * removed since HDCP is not supported */
+	 * removed since HDCP is not supported
+	 */
 
 	/* From original driver: According to 2009/01/15 modification by
-	 * Jau-Chih.Tseng@ite.com.tw do abort DDC twice */
+	 * Jau-Chih.Tseng@ite.com.tw do abort DDC twice
+	 */
 	for (i = 0; i < 2; i++) {
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND,
 				DDC_CMD_ABORT);
@@ -266,9 +272,9 @@ static void it66121_intr_work(struct work_struct *work_item)
 	struct device *dev = priv->bridge.dev->dev;
 
 	ret = regmap_field_read(priv->irq_pending, &val);
-	if (ret) {
+	if (ret)
 		dev_err(dev, "Cannot read interrupt status (%d)", ret);
-	}
+
 	/* XXX: There are at least 5 registers that can source interrupt:
 	 *  - 0x06 (IT66121_INT_STATUS_1)
 	 *  - 0x07 (IT66121_INT_STATUS_2)
@@ -276,16 +282,17 @@ static void it66121_intr_work(struct work_struct *work_item)
 	 *  - 0xEE (IT66121_EXT_INT_STATUS_1)
 	 *  - 0xF0 (IT66121_EXT_INT_STATUS_2)
 	 * For now we process only DDC events of the IT66121_INT_STATUS_1 which
-	 * implies proper masks configuration */
+	 * implies proper masks configuration
+	 */
 	else if (val == true) {
 		it666121_int_status_1_reg status_1;
 
 		ret = regmap_read(priv->regmap, IT66121_INT_STATUS_1,
 				&status_1.val);
-		if (ret) {
+		if (ret)
 			dev_err(dev, "Cannot read IT66121_INT_STATUS_1 (%d)",
 					ret);
-		} else {
+		else {
 			if (status_1.ddc_fifo_err)
 				it66121_clear_ddc_fifo(priv);
 			if (status_1.ddc_bus_hang)
@@ -467,7 +474,7 @@ static void it66121_unbind(struct device *comp, struct device *master,
 	/* TODO: Detach? */
 }
 
-static struct component_ops it66121_component_ops = {
+static const struct component_ops it66121_component_ops = {
 	.bind = it66121_bind,
 	.unbind = it66121_unbind,
 };
@@ -508,7 +515,8 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	/* lower 5 bits are undisclosed in manual */
 	regmap_write_bits(priv->regmap, IT66121_AFE_DRV_HS, 0xFF, 0x1F);
 	/* DRV_ISW[5:3] value '011' is a default output current level swing,
-	 * with change to '111' we set output current level swing to maximum */
+	 * with change to '111' we set output current level swing to maximum
+	 */
 	regmap_write_bits(priv->regmap, IT66121_AFE_IP_CONTROL_2, 0xFF, 0x38);
 
 	/* power up IACLK, TxCLK */
@@ -624,24 +632,20 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		IT66121_HDMI_AVIINFO_DB13
 	};
 
-	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " \
-			DRM_MODE_FMT, DRM_MODE_ARG(mode));
+	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " DRM_MODE_FMT, DRM_MODE_ARG(mode));
 
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
 			&priv->connector, mode);
 	if (ret) {
-		dev_err(bridge->dev->dev, "Cannot create AVI infoframe (%d)",
-				ret);
+		dev_err(bridge->dev->dev, "Cannot create AVI infoframe (%d)", ret);
 		return;
 	}
 
 	/* TODO: Set up color information here */
 
-	frame_size = hdmi_avi_infoframe_pack(&priv->hdmi_avi_infoframe, buf,
-			sizeof(buf));
+	frame_size = hdmi_avi_infoframe_pack(&priv->hdmi_avi_infoframe, buf, sizeof(buf));
 	if (frame_size < 0) {
-		dev_err(bridge->dev->dev, "Cannot pack AVI infoframe (%ld)",
-				frame_size);
+		dev_err(bridge->dev->dev, "Cannot pack AVI infoframe (%ld)", frame_size);
 		return;
 	}
 
@@ -676,15 +680,13 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 		ret = regmap_write(priv->regmap, aviinfo_reg[i],
 				buf[i + HDMI_INFOFRAME_HEADER_SIZE]);
 		if (ret) {
-			dev_err(bridge->dev->dev, "Cannot write AVI " \
-					"infoframe byte %d (%d)", i, ret);
+			dev_err(bridge->dev->dev, "Cannot write AVI infoframe byte %d (%d)", i, ret);
 			return;
 		}
 	}
 	ret = regmap_write(priv->regmap, IT66121_HDMI_AVIINFO_CSUM, buf[3]);
 	if (ret) {
-		dev_err(bridge->dev->dev, "Cannot write AVI infoframe " \
-				"checksum (%d)", ret);
+		dev_err(bridge->dev->dev, "Cannot write AVI infoframe checksum (%d)", ret);
 		return;
 	}
 
@@ -693,8 +695,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 			IT66121_HDMI_AVI_INFO_PKT_ON |
 			IT66121_HDMI_AVI_INFO_RPT);
 	if (ret) {
-		dev_err(bridge->dev->dev, "Cannot enable AVI infoframe " \
-				"(%d)", ret);
+		dev_err(bridge->dev->dev, "Cannot enable AVI infoframe (%d)", ret);
 		return;
 	}
 
@@ -716,8 +717,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 	/* Configure connection, conversions, etc. */
 	ret = it66121_configure_input(priv);
 	if (ret) {
-		dev_err(bridge->dev->dev, "Cannot configure input bus " \
-				"(%d)", ret);
+		dev_err(bridge->dev->dev, "Cannot configure input bus (%d)", ret);
 		return;
 	}
 
@@ -760,18 +760,14 @@ static int it66121_probe(struct i2c_client *client)
 	dev_info(&client->dev, "Probing IT66121 client");
 
 	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv) {
-		dev_err(&client->dev, "Cannot allocate IT66121 client " \
-				"private structure");
+	if (!priv)
 		return -ENOMEM;
-	}
 
 	priv->conn_status = connector_status_unknown;
 
 	priv->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
-	if (IS_ERR(priv->regmap)) {
+	if (IS_ERR(priv->regmap))
 		return PTR_ERR(priv);
-	}
 
 	priv->bridge.funcs = &it66121_bridge_funcs;
 
@@ -816,7 +812,8 @@ static int it66121_probe(struct i2c_client *client)
 
 	/* Important and somewhat unsafe - bridge pointer is in device structure
 	 * Ideally, after detecting connection encoder would need to find bridge
-	 * using connection's peer device name, but this is not supported yet */
+	 * using connection's peer device name, but this is not supported yet
+	 */
 	i2c_set_clientdata(client, &priv->bridge);
 
 	ret = component_add(&client->dev, &it66121_component_ops);
@@ -877,8 +874,7 @@ static int it66121_detect(struct i2c_client *client,
 	ret = i2c_check_functionality(adapter, I2C_FUNC_I2C |
 			I2C_FUNC_SMBUS_READ_BYTE);
 	if (!ret) {
-		dev_info(&adapter->dev, "Adapter does not support I2C " \
-				"functions properly");
+		dev_info(&adapter->dev, "Adapter does not support I2C functions properly");
 		return -ENODEV;
 	}
 
@@ -925,9 +921,10 @@ static struct i2c_driver it66121_driver = {
 	.address_list = it66121_addr,
 };
 
-module_i2c_driver(it66121_driver); /* @suppress("Unused static function")
-			@suppress("Unused variable declaration in file scope")
-			@suppress("Unused function declaration") */
+module_i2c_driver(it66121_driver);	/* @suppress("Unused static function")
+					 * @suppress("Unused variable declaration in file scope")
+					 * @suppress("Unused function declaration")
+					 */
 
 MODULE_AUTHOR("Artem Mygaiev");
 MODULE_DESCRIPTION("IT66121 HDMI transmitter driver");
