@@ -19,6 +19,6 @@ with sudo or in root shell to start the driver. If you are running on a system w
 ./scritps/sign.sh
 ```
 
-**NOTE:** proper kernel headers and build tools (e.g. "build-essential" package) must be installed on the system. Driver is developed and tested on Ubuntu 20.04 with Linux kernel 5.4, so better to test it this way.
+**NOTE:** proper kernel headers and build tools (e.g. "build-essential" package) must be installed on the system. Driver is developed and tested on Ubuntu 20.04 with Linux kernel 5.4, so better to test it this way. Please use gcc-8 to build the driver
 
 For more information check project's [Wiki](https://github.com/klogg/fl2000_drm/wiki)
