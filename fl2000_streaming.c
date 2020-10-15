@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * fl2000_streaming.c
  *
@@ -20,7 +20,8 @@
 /* Triple buffering:
  *  - one buffer for HDMI rendering
  *  - one buffer for USB transmission
- *  - one buffer for DRM/KMS data copy */
+ *  - one buffer for DRM/KMS data copy
+ */
 #define FL2000_SB_MIN		3
 #define FL2000_SB_NUM		(FL2000_SB_MIN + 1)
 
@@ -121,6 +122,7 @@ static void fl2000_stream_put_buffers(struct usb_device *usb_dev,
 		struct fl2000_stream *stream)
 {
 	struct fl2000_stream_buf *cur_sb, *temp_sb;
+
 	list_for_each_entry_safe(cur_sb, temp_sb, &stream->render_list, list) {
 		list_del(&cur_sb->list);
 		fl2000_free_sb(cur_sb);
@@ -191,7 +193,8 @@ static void fl2000_stream_work(struct work_struct *work)
 		spin_lock_irq(&stream->list_lock);
 
 		/* If no buffers are available for immediate transmission - then
-		 * copy latest transmission data */
+		 * copy latest transmission data
+		 */
 		if (list_empty(&stream->transmit_list)) {
 			BUG_ON(list_empty(&stream->render_list));
 			BUG_ON(list_empty(&stream->wait_list));
@@ -231,8 +234,6 @@ static void fl2000_stream_work(struct work_struct *work)
 			break;
 		}
 	}
-
-	return;
 }
 
 static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf,
@@ -370,8 +371,7 @@ void fl2000_stream_disable(struct usb_device *usb_dev)
 	drain_workqueue(stream->work_queue);
 
 	if (!usb_wait_anchor_empty_timeout(&stream->anchor, 5000)) {
-		dev_warn(&usb_dev->dev, "Timed out waiting for output URBs " \
-				"to complete, killing\n");
+		dev_warn(&usb_dev->dev, "Timed out waiting for output URBs to complete, killing\n");
 		usb_kill_anchored_urbs(&stream->anchor);
 	}
 
@@ -408,8 +408,7 @@ int fl2000_stream_create(struct usb_interface *interface)
 
 	ret = usb_set_interface(usb_dev, 0, 1);
 	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot set streaming interface " \
-				"altsetting for bulk transfers");
+		dev_err(&usb_dev->dev, "Cannot set streaming interface altsetting for bulk transfers");
 		return ret;
 	}
 

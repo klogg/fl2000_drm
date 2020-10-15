@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * fl2000_intr.c
  *
@@ -46,13 +46,15 @@ static void fl2000_intr_completion(struct urb *urb)
 	}
 
 	/* This possibly involves reading I2C registers, etc. so better
-	 * to schedule a work queue */
+	 * to schedule a work queuei
+	 */
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 	queue_work(intr->work_queue, &intr->work);
 
 	/* For interrupt URBs, as part of successful URB submission
 	 * urb->interval is modified to reflect the actual transfer period used,
-	 * so we need to restore it */
+	 * so we need to restore it
+	 */
 	urb->interval = intr->poll_interval;
 	urb->start_frame = -1;
 
@@ -81,7 +83,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
 	/* There's only one altsetting (#0) and one endpoint (#3) in the
-	 * interrupt interface (#2) but lets try and "find" it anyway */
+	 * interrupt interface (#2) but lets try and "find" it anyway
+	 */
 	ret = usb_find_int_in_endpoint(interface->cur_altsetting, &desc);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot find interrupt endpoint");
@@ -90,8 +93,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 
 	intr = devres_alloc(&fl2000_intr_release, sizeof(*intr), GFP_KERNEL);
 	if (!intr) {
-		dev_err(&usb_dev->dev, "Cannot allocate interrupt private " \
-				"structure");
+		dev_err(&usb_dev->dev, "Cannot allocate interrupt private structure");
 		return -ENOMEM;
 	}
 	devres_add(&usb_dev->dev, intr);
@@ -127,7 +129,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 
 	/* Interrupt URB configuration is static, including allocated buffer
 	 * NOTE: We are setting 'transfer_dma' during coherent buffer
-	 * allocation above */
+	 * allocation above
+	 */
 	usb_fill_int_urb(intr->urb, usb_dev,
 			usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)),
 			buf, INTR_BUFSIZE, fl2000_intr_completion, intr,

@@ -63,8 +63,8 @@ static const umode_t fl2000_debug_umode = 0666;
 ({ \
 	union { \
 		__type __mask; \
-		typeof (__mask) __val; \
-	} __attribute__ ((aligned)) __data; \
+		typeof(__mask) __val; \
+	}  __aligned(4) __data; \
 	__data.__mask.__field = ~0; \
 	(__mask) |= __data.__val; \
 })
@@ -130,8 +130,7 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, int status,
 		dev_err(&usb_dev->dev, "Pipe %d stalled", pipe);
 		ret = usb_clear_halt(usb_dev, pipe);
 		if (ret != 0) {
-			dev_err(&usb_dev->dev, "Cannot reset endpoint, error " \
-					"%d", ret);
+			dev_err(&usb_dev->dev, "Cannot reset endpoint, error %d", ret);
 			ret = -1;
 		}
 		break;

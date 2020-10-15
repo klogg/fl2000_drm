@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * fl2000_drv.c
  *
@@ -10,7 +10,7 @@
 
 #define USB_DRIVER_NAME			"fl2000_usb"
 
-#define USB_CLASS_AV 			0x10
+#define USB_CLASS_AV			0x10
 #define USB_SUBCLASS_AV_CONTROL		0x01
 #define USB_SUBCLASS_AV_VIDEO		0x02
 #define USB_SUBCLASS_AV_AUDIO		0x03
@@ -38,8 +38,7 @@ int fl2000_intr_create(struct usb_interface *interface);
 void fl2000_intr_destroy(struct usb_interface *interface);
 
 static struct usb_device_id fl2000_id_table[] = {
-	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, \
-		USB_PRODUCT_ID_FL2000, USB_CLASS_AV) },
+	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, USB_PRODUCT_ID_FL2000, USB_CLASS_AV) },
 	{},
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
@@ -105,10 +104,12 @@ static int fl2000_suspend(struct usb_interface *interface,
 			   pm_message_t message)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
+
 	dev_dbg(&usb_dev->dev, "resume");
 
 	/* TODO: suspend
-	 * drm_mode_config_helper_suspend() */
+	 * drm_mode_config_helper_suspend()
+	 */
 
 	return 0;
 }
@@ -116,10 +117,12 @@ static int fl2000_suspend(struct usb_interface *interface,
 static int fl2000_resume(struct usb_interface *interface)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
+
 	dev_dbg(&usb_dev->dev, "suspend");
 
 	/* TODO: resume
-	 * drm_mode_config_helper_resume() */
+	 * drm_mode_config_helper_resume()
+	 */
 
 	return 0;
 }
@@ -133,9 +136,10 @@ static struct usb_driver fl2000_driver = {
 	.id_table	= fl2000_id_table,
 };
 
-module_usb_driver(fl2000_driver); /* @suppress("Unused static function")
-			@suppress("Unused variable declaration in file scope")
-			@suppress("Unused function declaration") */
+module_usb_driver(fl2000_driver);	/* @suppress("Unused static function")
+					 * @suppress("Unused variable declaration in file scope")
+					 * @suppress("Unused function declaration")
+					 */
 
 MODULE_AUTHOR("Artem Mygaiev");
 MODULE_DESCRIPTION("FL2000 USB display driver");

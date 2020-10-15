@@ -4,8 +4,8 @@
  *
  * Based on the un-official documentation found on the net and registers
  * description from source code:
- * 	- FL2000DX Linux driver on GitHub
- * 	- RK3188 Android driver on GitHub
+ *  - FL2000DX Linux driver on GitHub
+ *  - RK3188 Android driver on GitHub
  *
  * (C) Copyright 2019, Artem Mygaiev
  */
@@ -43,22 +43,22 @@ typedef union {
 		u32 ddc_bus_hang:1;
 		u32 rx_sense:1;
 		u32 hpd_plug:1;
-	} __attribute__ ((aligned, packed));
+	} __aligned(4) __packed;
 } it666121_int_status_1_reg;
 
 #define IT66121_INT_STATUS_2		0x07
 #define IT66121_INT_STATUS_3		0x08
 #define IT66121_INT_MASK_1		0x09
-#define IT66121_MASK_DDC_NOACK  	(1<<5)
+#define IT66121_MASK_DDC_NOACK		(1<<5)
 #define IT66121_MASK_DDC_FIFOERR	(1<<4)
-#define IT66121_MASK_DDC_BUSHANG 	(1<<2)
+#define IT66121_MASK_DDC_BUSHANG	(1<<2)
 
 #define IT66121_INT_MASK_2		0x0A
 #define IT66121_INT_MASK_3		0x0B
 #define IT66121_INT_CLEAR_1		0x0C
 #define IT66121_INT_CLEAR_2		0x0D
 #define IT66121_SYS_STATUS		0x0E
-static const struct reg_field IT66121_SYS_STATUS_irq_pending=
+static const struct reg_field IT66121_SYS_STATUS_irq_pending =
 		REG_FIELD(IT66121_SYS_STATUS, 7, 7);
 static const struct reg_field IT66121_SYS_STATUS_hpd =
 		REG_FIELD(IT66121_SYS_STATUS, 6, 6);
@@ -147,7 +147,7 @@ static const struct reg_field IT66121_DDC_STATUS_ddc_error =
 #define IT66121_INPUT_COLOR_CONV	0x072
 #define IT66121_INPUT_DITHER		(1<<7)
 #define IT66121_INPUT_UDFILTER		(1<<6)
-#define IT66121_INPUT_DNFREE_GO 	(1<<5)
+#define IT66121_INPUT_DNFREE_GO		(1<<5)
 #define IT66121_INPUT_BTAT1004		(1<<2)
 #define IT66121_INPUT_RGB_TO_YUV	0x2
 #define IT66121_INPUT_YUV_TO_RGB	0x3
@@ -276,9 +276,7 @@ static const struct reg_field IT66121_HDMI_DATA_SWAP_rb =
 
 /* CEC registers ignored (must be configured as a separate regmap / device) */
 
-/*
- * List of volatile registers that shall not be cached
- * */
+/* List of volatile registers that shall not be cached */
 static inline bool IT66121_REG_VOLATILE(u32 reg)
 {
 	switch (reg) {

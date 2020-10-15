@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * fl2000_registers.c
  *
@@ -340,7 +340,8 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 			fl2000_reg_data_release, NULL, NULL);
 
 	/* XXX: This is actually some unknown & undocumented FL2000 USB AFE
-	 * register setting */
+	 * register setting
+	 */
 	ret = regmap_field_write(reg_data->field[MAGIC], true);
 	if (ret)
 		return -EIO;
@@ -485,6 +486,7 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 
 	for (i = 0; i < ARRAY_SIZE(fl2000_reg_fields); i++) {
 		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;
+
 		reg_data->field[n] = devm_regmap_field_alloc(
 				&usb_dev->dev, regmap,
 				fl2000_reg_fields[i].field);
@@ -528,11 +530,13 @@ void fl2000_regmap_cleanup(struct usb_device *usb_dev)
 
 	for (i = 0; i < ARRAY_SIZE(fl2000_reg_fields); i++) {
 		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;
+
 		devm_regmap_field_free(&usb_dev->dev, reg_data->field[n]);
 	}
 
 	/* XXX: Current regmap implementation missing some kind of a
-	 * devm_regmap_destroy() call that would work similarly to *_find() */
+	 * devm_regmap_destroy() call that would work similarly to *_find()
+	 */
 
 	kfree(reg_data->data);
 

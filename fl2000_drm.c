@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+// SPDX-License-Identifier: GPL-2.0
 /*
  * fl2000_drm.c
  *
@@ -46,7 +46,8 @@ static const u32 fl2000_pixel_formats[] = {
 };
 
 /* Maximum pixel clock set to 500MHz. It is hard to get more or lesss precies
- * PLL configuration for higher clock */
+ * PLL configuration for higher clock
+ */
 #define FL2000_MAX_PIXCLOCK	500000000
 
 /* PLL computing precision is 6 digits after comma */
@@ -111,7 +112,7 @@ static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 }
 
 /* List all supported bridges */
-static const char *fl2000_supported_bridges[] = {
+static const char * const fl2000_supported_bridges[] = {
 	"it66121", /* IT66121 driver name*/
 };
 
@@ -297,7 +298,8 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get
 		 * 10^15Hz. Assume maximum htotal is 10000 pix (no way) we get
 		 * 10^19 max value and using u64 which is 1.8*10^19 no overflow
-		 * can occur. Assume all this was checked before */
+		 * can occur. Assume all this was checked before
+		 */
 		if (adjust != 0)
 			clock_mil = clock_mil * ((s64)mode->htotal + adjust) /
 								mode->htotal;
@@ -376,10 +378,9 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 	n = fb->format->num_planes;
 	if (n > 1) {
 		struct drm_format_name_buf format_name;
-		dev_err(drm->dev, "Only single plane RGB framebuffers are " \
-				"supported, got %d planes (%s)", n,
-				drm_get_format_name(fb->format->format,
-						&format_name));
+
+		dev_err(drm->dev, "Only single plane RGB framebuffers are supported, got %d planes (%s)", n,
+				drm_get_format_name(fb->format->format,	&format_name));
 		return -EINVAL;
 	}
 	return 0;
