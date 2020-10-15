@@ -213,7 +213,6 @@ static void fl2000_stream_work(struct work_struct *work)
 		data_urb = usb_alloc_urb(0, GFP_KERNEL);
 		if (!data_urb) {
 			dev_err(&usb_dev->dev, "Data URB allocation error");
-			ret = -ENOMEM;
 			break;
 		}
 
