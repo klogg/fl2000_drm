@@ -192,26 +192,9 @@ static u64 fl2000_pll_ppm_err(u64 clock_mil, u32 vco_clk, u32 divisor)
 /* Try to match pixel clock - find parameters with minimal PLL error */
 static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
 {
-	static const u32 prescaler[] = {
-			1,
-			2
-	};
-	static const u32 multiplier[] = {
-			  1,   2,   3,   4,   5,   6,   7,   8,   9,  10,
-			 11,  12,  13,  14,  15,  16,  17,  18,  19,  20,
-			 21,  22,  23,  24,  25,  26,  27,  28,  29,  30,
-			 31,  32,  33,  34,  35,  36,  37,  38,  39,  40,
-			 41,  42,  43,  44,  45,  46,  47,  48,  49,  50,
-			 51,  52,  53,  54,  55,  56,  57,  58,  59,  60,
-			 61,  62,  63,  64,  65,  66,  67,  68,  69,  70,
-			 71,  72,  73,  74,  75,  76,  77,  78,  79,  80,
-			 81,  82,  83,  84,  85,  86,  87,  88,  89,  90,
-			 91,  92,  93,  94,  95,  96,  97,  98,  99, 100,
-			101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
-			111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
-			121, 122, 123, 124, 125, 126, 127, 128
-	};
-	static const u32 divisor[] = {
+	static const u32 prescaler_max = 2;
+	static const u32 multiplier_max = 128;
+	static const u32 divisor_arr[] = {
 			       2,        4,        6,   7,   8,   9,  10,
 			 11,  12,  13,  14,  15,  16,  17,  18,  19,  20,
 			 21,  22,  23,  24,  25,  26,  27,  28,  29,  30,
@@ -226,35 +209,33 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
 			111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
 			121, 122, 123, 124, 125, 126, 127, 128
 	};
-	unsigned int prescaler_idx, multiplier_idx, divisor_idx;
+	unsigned int prescaler, multiplier, divisor_idx;
 	u64 min_ppm_err = (u64)(-1);
 
-	for_each_array_item(prescaler, prescaler_idx) {
-		for_each_array_item(multiplier, multiplier_idx) {
+	for (prescaler = 1; prescaler < prescaler_max; prescaler++) {
+		for (multiplier = 1; multiplier < multiplier_max; multiplier++) {
 			/* Do not need precision here yet, no 10^6 multiply */
-			u32 vco_clk = FL2000_XTAL / prescaler[prescaler_idx] *
-					multiplier[multiplier_idx];
+			u32 vco_clk = FL2000_XTAL / prescaler * multiplier;
 
-			if (vco_clk < FL2000_VCOCLOCK_MIN ||
-					vco_clk > FL2000_VCOCLOCK_MAX)
+			if (vco_clk < FL2000_VCOCLOCK_MIN || vco_clk > FL2000_VCOCLOCK_MAX)
 				continue;
 
-			for_each_array_item(divisor, divisor_idx) {
-				u64 ppm_err = fl2000_pll_ppm_err(clock_mil,
-						vco_clk, divisor[divisor_idx]);
+			for_each_array_item(divisor_arr, divisor_idx) {
+				u32 divisor = divisor_arr[divisor_idx];
+				u64 ppm_err = fl2000_pll_ppm_err(clock_mil, vco_clk, divisor);
 
 				if (ppm_err > min_ppm_err)
 					continue;
 
 				min_ppm_err = ppm_err;
 
-				pll->prescaler = prescaler[prescaler_idx];
-				pll->multiplier = multiplier[multiplier_idx];
-				pll->divisor = divisor[divisor_idx];
+				pll->prescaler = prescaler;
+				pll->multiplier = multiplier;
+				pll->divisor = divisor;
 				pll->function = vco_clk < 125000000 ? 0 :
 						vco_clk < 250000000 ? 1 :
 						vco_clk < 500000000 ? 2 : 3;
-				*clock = vco_clk / divisor[divisor_idx];
+				*clock = vco_clk / divisor;
 
 				/* Stop if found exact setting */
 				if (ppm_err == 0)
