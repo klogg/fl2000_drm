@@ -71,9 +71,8 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 
 	mutex_lock(&reg_data->reg_mutex);
 
-	ret = usb_control_msg(usb_dev, usb_rcvctrlpipe(usb_dev, 0),
-			CONTROL_MSG_READ, (USB_DIR_IN | USB_TYPE_VENDOR), 0,
-			offset, reg_data->data, CONTROL_MSG_LEN,
+	ret = usb_control_msg(usb_dev, usb_rcvctrlpipe(usb_dev, 0), CONTROL_MSG_READ,
+			(USB_DIR_IN | USB_TYPE_VENDOR), 0, offset, reg_data->data, CONTROL_MSG_LEN,
 			USB_CTRL_GET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != CONTROL_MSG_LEN)
@@ -100,9 +99,8 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 
 	memcpy(reg_data->data, &val, CONTROL_MSG_LEN);
 
-	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0),
-			CONTROL_MSG_WRITE, (USB_DIR_OUT | USB_TYPE_VENDOR), 0,
-			offset, reg_data->data, CONTROL_MSG_LEN,
+	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0), CONTROL_MSG_WRITE,
+			(USB_DIR_OUT | USB_TYPE_VENDOR), 0, offset, reg_data->data, CONTROL_MSG_LEN,
 			USB_CTRL_SET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != CONTROL_MSG_LEN)
@@ -164,8 +162,7 @@ static int fl2000_debugfs_reg_write(void *data, u64 value)
 	return fl2000_reg_write(usb_dev, reg_data->reg_debug_address, value);
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(reg_ops, fl2000_debugfs_reg_read,
-		fl2000_debugfs_reg_write, "%08llx\n");
+DEFINE_SIMPLE_ATTRIBUTE(reg_ops, fl2000_debugfs_reg_read, fl2000_debugfs_reg_write, "%08llx\n");
 
 static int fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 {
@@ -175,15 +172,13 @@ static int fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 	if (IS_ERR(reg_data->root_dir))
 		return PTR_ERR(reg_data->root_dir);
 
-	reg_data->reg_address_file = debugfs_create_x32("reg_address",
-			fl2000_debug_umode, reg_data->root_dir,
-			&reg_data->reg_debug_address);
+	reg_data->reg_address_file = debugfs_create_x32("reg_address", fl2000_debug_umode,
+			reg_data->root_dir, &reg_data->reg_debug_address);
 	if (IS_ERR(reg_data->reg_address_file))
 		return PTR_ERR(reg_data->reg_address_file);
 
-	reg_data->reg_data_file = debugfs_create_file("reg_data",
-			fl2000_debug_umode, reg_data->root_dir, usb_dev,
-			&reg_ops);
+	reg_data->reg_data_file = debugfs_create_file("reg_data", fl2000_debug_umode,
+			reg_data->root_dir, usb_dev, &reg_ops);
 	if (IS_ERR(reg_data->reg_data_file))
 		return PTR_ERR(reg_data->reg_data_file);
 
@@ -231,8 +226,7 @@ int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll)
 	return 0;
 }
 
-int fl2000_set_timings(struct usb_device *usb_dev,
-		struct fl2000_timings *timings)
+int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timings)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	fl2000_vga_hsync_reg1 hsync1 = {.val = 0};
@@ -316,8 +310,8 @@ int fl2000_set_transfers(struct usb_device *usb_dev)
 int fl2000_reset(struct usb_device *usb_dev)
 {
 	int ret;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL,
+			NULL);
 
 	if (!reg_data) {
 		dev_err(&usb_dev->dev, "Device resources not found");
@@ -336,12 +330,10 @@ int fl2000_reset(struct usb_device *usb_dev)
 int fl2000_afe_magic(struct usb_device *usb_dev)
 {
 	int ret;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL,
+			NULL);
 
-	/* XXX: This is actually some unknown & undocumented FL2000 USB AFE
-	 * register setting
-	 */
+	/* XXX: This is actually some unknown & undocumented FL2000 USB AFE register setting */
 	ret = regmap_field_write(reg_data->field[MAGIC], true);
 	if (ret)
 		return -EIO;
@@ -352,8 +344,8 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 int fl2000_usb_magic(struct usb_device *usb_dev)
 {
 	int ret;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL,
+			NULL);
 
 	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
 	if (ret)
@@ -416,13 +408,11 @@ enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev)
 	/* Process interrupt */
 	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
 	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot read interrupt register (%d)",
-				ret);
+		dev_err(&usb_dev->dev, "Cannot read interrupt register (%d)", ret);
 		return ERROR;
 	}
 
-	if (status.hdmi_event || status.monitor_event ||
-			status.edid_event) {
+	if (status.hdmi_event || status.monitor_event || status.edid_event) {
 		dev_info(&usb_dev->dev, "Connection event 0x%X", status.val);
 		int_status = EVENT;
 	}
@@ -460,8 +450,7 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 	struct regmap *regmap;
 	fl2000_vga_status_reg status;
 
-	reg_data = devres_alloc(&fl2000_reg_data_release, sizeof(*reg_data),
-			GFP_KERNEL);
+	reg_data = devres_alloc(&fl2000_reg_data_release, sizeof(*reg_data), GFP_KERNEL);
 	if (!reg_data) {
 		dev_err(&usb_dev->dev, "Registers data allocation failed");
 		return -ENOMEM;
@@ -474,21 +463,17 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 
 	reg_data->data = kmalloc(CONTROL_MSG_LEN, GFP_KERNEL | GFP_DMA);
 
-	regmap = devm_regmap_init(&usb_dev->dev, NULL, reg_data,
-			&fl2000_regmap_config);
+	regmap = devm_regmap_init(&usb_dev->dev, NULL, reg_data, &fl2000_regmap_config);
 	if (IS_ERR(regmap)) {
-		dev_err(&usb_dev->dev, "Registers map failed (%ld)",
-				PTR_ERR(regmap));
-		devres_release(&usb_dev->dev, fl2000_reg_data_release,
-				NULL, NULL);
+		dev_err(&usb_dev->dev, "Registers map failed (%ld)", PTR_ERR(regmap));
+		devres_release(&usb_dev->dev, fl2000_reg_data_release, NULL, NULL);
 		return PTR_ERR(regmap);
 	}
 
 	for (i = 0; i < ARRAY_SIZE(fl2000_reg_fields); i++) {
 		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;
 
-		reg_data->field[n] = devm_regmap_field_alloc(
-				&usb_dev->dev, regmap,
+		reg_data->field[n] = devm_regmap_field_alloc(&usb_dev->dev, regmap,
 				fl2000_reg_fields[i].field);
 		if (IS_ERR(reg_data->field[n])) {
 			/* TODO: Release what was allocated before error */
@@ -523,8 +508,8 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 void fl2000_regmap_cleanup(struct usb_device *usb_dev)
 {
 	int i;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev,
-			fl2000_reg_data_release, NULL, NULL);
+	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL,
+			NULL);
 
 	fl2000_debugfs_reg_remove(reg_data);
 
@@ -534,13 +519,12 @@ void fl2000_regmap_cleanup(struct usb_device *usb_dev)
 		devm_regmap_field_free(&usb_dev->dev, reg_data->field[n]);
 	}
 
-	/* XXX: Current regmap implementation missing some kind of a
-	 * devm_regmap_destroy() call that would work similarly to *_find()
+	/* XXX: Current regmap implementation missing some kind of a devm_regmap_destroy() call that
+	 * would work similarly to *_find()
 	 */
 
 	kfree(reg_data->data);
 
 	if (reg_data)
-		devres_release(&usb_dev->dev, fl2000_reg_data_release,
-				NULL, NULL);
+		devres_release(&usb_dev->dev, fl2000_reg_data_release, NULL, NULL);
 }

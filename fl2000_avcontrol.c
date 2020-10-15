@@ -20,8 +20,8 @@ void fl2000_regmap_cleanup(struct usb_device *usb_dev);
 int fl2000_drm_init(struct usb_device *usb_dev);
 void fl2000_drm_cleanup(struct usb_device *usb_dev);
 
-/* Ordered list of "init"/"cleanup functions for sub-devices. Shall be processed
- * forward order on init and backward on cleanup
+/* Ordered list of "init"/"cleanup functions for sub-devices. Shall be processed forward order on
+ * init and backward on cleanup
  */
 static const struct {
 	const char *name;
@@ -46,8 +46,7 @@ void fl2000_avcontrol_destroy(struct usb_interface *interface)
 {
 	int i;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	struct fl2000_drv *drv = devres_find(&usb_dev->dev,
-				fl2000_drv_release, NULL, NULL);
+	struct fl2000_drv *drv = devres_find(&usb_dev->dev, fl2000_drv_release, NULL, NULL);
 
 	if (drv) {
 		for (i = ARRAY_SIZE(fl2000_devices); i > 0; i--)
