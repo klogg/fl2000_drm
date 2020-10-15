@@ -78,22 +78,20 @@ static inline int fl2000_submit_urb(struct urb *urb)
 	int ret;
 	int attempts = 10;
 
-retry:
-	ret = usb_submit_urb(urb, GFP_KERNEL);
-	switch (ret) {
-	case 0: /* All is OK */
-		break;
-	case -ENXIO:
-	case -EAGAIN:
-	case -ENOMEM:
-		if (attempts--) {
-			cond_resched();
-			goto retry;
+	do {
+		ret = usb_submit_urb(urb, GFP_KERNEL);
+		switch (ret) {
+		case -ENXIO:
+		case -ENOMEM:
+			if (attempts--) {
+				cond_resched();
+				ret = -EAGAIN;
+			}
+			break;
+		default:
+			break;
 		}
-		break;
-	default:
-		break;
-	}
+	} while (ret == -EAGAIN);
 
 	return ret;
 }
