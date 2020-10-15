@@ -212,8 +212,8 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
 	unsigned int prescaler, multiplier, divisor_idx;
 	u64 min_ppm_err = (u64)(-1);
 
-	for (prescaler = 1; prescaler < prescaler_max; prescaler++) {
-		for (multiplier = 1; multiplier < multiplier_max; multiplier++) {
+	for (prescaler = 1; prescaler <= prescaler_max; prescaler++) {
+		for (multiplier = 1; multiplier <= multiplier_max; multiplier++) {
 			/* Do not need precision here yet, no 10^6 multiply */
 			u32 vco_clk = FL2000_XTAL / prescaler * multiplier;
 
