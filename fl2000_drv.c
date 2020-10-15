@@ -15,8 +15,8 @@
 #define USB_SUBCLASS_AV_VIDEO		0x02
 #define USB_SUBCLASS_AV_AUDIO		0x03
 
-#define USB_VENDOR_ID_FRESCO_LOGIC	0x1D5C
-#define USB_PRODUCT_ID_FL2000		0x2000
+#define USB_VENDOR_FRESCO_LOGIC		0x1D5C
+#define USB_PRODUCT_FL2000		0x2000
 
 /* Known USB interfaces of FL2000 */
 enum {
@@ -38,7 +38,7 @@ int fl2000_intr_create(struct usb_interface *interface);
 void fl2000_intr_destroy(struct usb_interface *interface);
 
 static struct usb_device_id fl2000_id_table[] = {
-	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_ID_FRESCO_LOGIC, USB_PRODUCT_ID_FL2000, USB_CLASS_AV) },
+	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, USB_CLASS_AV) },
 	{},
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
@@ -137,9 +137,9 @@ static struct usb_driver fl2000_driver = {
 };
 
 module_usb_driver(fl2000_driver);	/* @suppress("Unused static function")
-					 * @suppress("Unused variable declaration in file scope")
-					 * @suppress("Unused function declaration")
-					 */
+	 	 	 	 	 * @suppress("Unused variable declaration in file scope")
+	 	 	 	 	 * @suppress("Unused function declaration")
+	 	 	 	 	 */
 
 MODULE_AUTHOR("Artem Mygaiev");
 MODULE_DESCRIPTION("FL2000 USB display driver");

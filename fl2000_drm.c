@@ -6,8 +6,6 @@
  * (C) Copyright 2018-2020, Artem Mygaiev
  */
 
-/* TODO: Move registers operation to registers.c */
-
 #include "fl2000.h"
 
 int fl2000_reset(struct usb_device *usb_dev);
@@ -15,15 +13,13 @@ int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 int fl2000_set_transfers(struct usb_device *usb_dev);
 int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix);
-int fl2000_set_timings(struct usb_device *usb_dev,
-		struct fl2000_timings *timings);
+int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timings);
 int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll);
 int fl2000_enable_interrupts(struct usb_device *usb_dev);
 enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev);
 
 int fl2000_stream_mode_set(struct usb_device *usb_dev, size_t pixels, u32 freq);
-void fl2000_stream_compress(struct usb_device *usb_dev,
-		struct drm_framebuffer *fb, void *src);
+void fl2000_stream_compress(struct usb_device *usb_dev, struct drm_framebuffer *fb, void *src);
 int fl2000_stream_enable(struct usb_device *usb_dev);
 void fl2000_stream_disable(struct usb_device *usb_dev);
 
@@ -45,8 +41,8 @@ static const u32 fl2000_pixel_formats[] = {
 	DRM_FORMAT_XRGB8888,
 };
 
-/* Maximum pixel clock set to 500MHz. It is hard to get more or lesss precies
- * PLL configuration for higher clock
+/* Maximum pixel clock set to 500MHz. It is hard to get more or less precise PLL configuration for
+ * higher clock
  */
 #define FL2000_MAX_PIXCLOCK	500000000
 
@@ -66,12 +62,9 @@ static const u32 fl2000_pixel_formats[] = {
 /* Assume bulk transfers can use only 80% of USB bandwidth */
 #define FL2000_BULK_BW_PERCENT		80
 
-#define FL2000_BULK_BW_HIGH_SPEED	(480000000ull * 100 / \
-						FL2000_BULK_BW_PERCENT / 8)
-#define FL2000_BULK_BW_SUPER_SPEED	(5000000000ull * 100 / \
-						FL2000_BULK_BW_PERCENT / 8)
-#define FL2000_BULK_BW_SUPER_SPEED_PLUS	(10000000000ull * 100 / \
-						FL2000_BULK_BW_PERCENT / 8)
+#define FL2000_BULK_BW_HIGH_SPEED	(480000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
+#define FL2000_BULK_BW_SUPER_SPEED	(5000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
+#define FL2000_BULK_BW_SUPER_SPEED_PLUS	(10000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
 
 static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 {
@@ -132,8 +125,7 @@ static inline struct fl2000_drm_if *fl2000_drm_to_drm_if(struct drm_device *drm)
 	return container_of(drm, struct fl2000_drm_if, drm);
 }
 
-static inline struct fl2000_drm_if *fl2000_pipe_to_drm_if(
-		struct drm_simple_display_pipe *pipe)
+static inline struct fl2000_drm_if *fl2000_pipe_to_drm_if(struct drm_simple_display_pipe *pipe)
 {
 	return container_of(pipe, struct fl2000_drm_if, pipe);
 }
@@ -287,10 +279,9 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
 		int adjust = h_adjust[h_adjust_idx];
 
-		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get
-		 * 10^15Hz. Assume maximum htotal is 10000 pix (no way) we get
-		 * 10^19 max value and using u64 which is 1.8*10^19 no overflow
-		 * can occur. Assume all this was checked before
+		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get 10^15Hz. Assume
+		 * maximum htotal is 10000 pix (no way) we get 10^19 max value and using u64 which
+		 * is 1.8*10^19 no overflow can occur. Assume all this was checked before
 		 */
 		if (adjust != 0)
 			clock_mil = clock_mil * ((s64)mode->htotal + adjust) /
@@ -359,8 +350,7 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 }
 
 static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
-		struct drm_plane_state *plane_state,
-		struct drm_crtc_state *crtc_state)
+		struct drm_plane_state *plane_state, struct drm_crtc_state *crtc_state)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
@@ -371,7 +361,7 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 	if (n > 1) {
 		struct drm_format_name_buf format_name;
 
-		dev_err(drm->dev, "Only single plane RGB framebuffers are supported, got %d planes (%s)", n,
+		dev_err(drm->dev, "Only single plane RGB fbs are supported, got %d planes (%s)", n,
 				drm_get_format_name(fb->format->format,	&format_name));
 		return -EINVAL;
 	}
@@ -495,8 +485,7 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
 
-static void fl2000_output_mode_set(struct drm_encoder *encoder,
-		 struct drm_display_mode *mode,
+static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
 		 struct drm_display_mode *adjusted_mode)
 {
 	struct drm_device *drm = encoder->dev;
@@ -515,19 +504,16 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 		return;
 
 	dev_info(drm->dev, "Mode requested:  "DRM_MODE_FMT, DRM_MODE_ARG(mode));
-	dev_info(drm->dev, "Mode configured: "DRM_MODE_FMT,
-			DRM_MODE_ARG(adjusted_mode));
+	dev_info(drm->dev, "Mode configured: "DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
 
 	/* Prepare timing configuration */
 	timings.hactive = adjusted_mode->hdisplay;
 	timings.htotal = adjusted_mode->htotal;
-	timings.hsync_width = adjusted_mode->hsync_end -
-			adjusted_mode->hsync_start;
+	timings.hsync_width = adjusted_mode->hsync_end - adjusted_mode->hsync_start;
 	timings.hstart = adjusted_mode->htotal - adjusted_mode->hsync_start + 1;
 	timings.vactive = adjusted_mode->vdisplay;
 	timings.vtotal = adjusted_mode->vtotal;
-	timings.vsync_width = adjusted_mode->vsync_end -
-			adjusted_mode->vsync_start;
+	timings.vsync_width = adjusted_mode->vsync_end - adjusted_mode->vsync_start;
 	timings.vstart = adjusted_mode->vtotal - adjusted_mode->vsync_start + 1;
 
 	/* Set PLL settings */
@@ -550,8 +536,7 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder,
 
 	fl2000_afe_magic(usb_dev);
 
-	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay,
-			bytes_pix);
+	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay, bytes_pix);
 }
 
 /* FL2000 HW control functions: mode configuration, turn on/off */
@@ -565,14 +550,12 @@ static int fl2000_bind(struct device *master)
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct drm_mode_config *mode_config;
-	struct usb_device *usb_dev = container_of(master, struct usb_device,
-			dev);
+	struct usb_device *usb_dev = container_of(master, struct usb_device, dev);
 	u64 dma_mask;
 
 	dev_info(master, "Binding FL2000 master component");
 
-	drm_if = devres_alloc(&fl2000_drm_if_release, sizeof(*drm_if),
-			GFP_KERNEL);
+	drm_if = devres_alloc(&fl2000_drm_if_release, sizeof(*drm_if), GFP_KERNEL);
 	if (!drm_if) {
 		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure");
 		return -ENOMEM;
@@ -605,9 +588,8 @@ static int fl2000_bind(struct device *master)
 		return ret;
 	}
 
-	ret = drm_simple_display_pipe_init(drm, &drm_if->pipe,
-			&fl2000_display_funcs, fl2000_pixel_formats,
-			ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
+	ret = drm_simple_display_pipe_init(drm, &drm_if->pipe, &fl2000_display_funcs,
+			fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
 	if (ret) {
 		dev_err(drm->dev, "Cannot configure simple display pipe (%d)",
 				ret);
@@ -710,8 +692,8 @@ static int fl2000_compare(struct device *dev, void *data)
 
 void fl2000_inter_check(struct usb_device *usb_dev)
 {
-	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev,
-			fl2000_drm_if_release, NULL, NULL);
+	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL,
+			NULL);
 
 	if (!drm_if)
 		return;
@@ -726,11 +708,10 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 	struct component_match *match = NULL;
 
 	/* Make USB interface master */
-	component_match_add_release(&usb_dev->dev, &match,
-			fl2000_match_release, fl2000_compare, usb_dev);
+	component_match_add_release(&usb_dev->dev, &match, fl2000_match_release, fl2000_compare,
+			usb_dev);
 
-	ret = component_master_add_with_match(&usb_dev->dev,
-			&fl2000_drm_master_ops, match);
+	ret = component_master_add_with_match(&usb_dev->dev, &fl2000_drm_master_ops, match);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot register component master (%d)",
 				ret);

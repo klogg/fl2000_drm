@@ -8,10 +8,9 @@
 
 #include "fl2000.h"
 
-/* I2C controller require mandatory 8-bit (1 bite) sub-address provided for any
- * read/write operation. Each read or write operate with 8-bit (1-byte) data.
- * Every exchange shall consist of 2 messages (sub-address + data) combined.
- * USB xfer always bounds address to 4-byte boundary
+/* I2C controller require mandatory 8-bit (1 bite) sub-address provided for any read/write
+ * operation. Each read or write operate with 8-bit (1-byte) data. Every exchange shall consist of 2
+ * messages (sub-address + data) combined. USB xfer always bounds address to 4-byte boundary
  */
 #define I2C_CMESSAGES_NUM	2
 #define I2C_REG_ADDR_SIZE	(sizeof(u8))
@@ -31,17 +30,17 @@ struct fl2000_i2c_algo_data {
 #endif
 };
 
-static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
-		u16 addr, u8 offset, u32 *data);
+static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 addr, u8 offset,
+		u32 *data);
 
-static inline int fl2000_i2c_read_dword(struct i2c_adapter *adapter,
-		u16 addr, u8 offset, u32 *data)
+static inline int fl2000_i2c_read_dword(struct i2c_adapter *adapter, u16 addr, u8 offset,
+		u32 *data)
 {
 	return fl2000_i2c_xfer_dword(adapter, true, addr, offset, data);
 }
 
-static inline int fl2000_i2c_write_dword(struct i2c_adapter *adapter,
-		u16 addr, u8 offset, u32 *data)
+static inline int fl2000_i2c_write_dword(struct i2c_adapter *adapter, u16 addr, u8 offset,
+		u32 *data)
 {
 	return fl2000_i2c_xfer_dword(adapter, false, addr, offset, data);
 }
@@ -71,8 +70,7 @@ static int fl2000_debugfs_i2c_write(void *data, u64 value)
 			i2c_algo_data->i2c_debug_offset, &u32_value);
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read,
-		fl2000_debugfs_i2c_write, "%08llx\n");
+DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read, fl2000_debugfs_i2c_write, "%08llx\n");
 
 static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 {
@@ -121,8 +119,8 @@ static void fl2000_debugfs_i2c_remove(struct i2c_adapter *adapter)
 #endif /* CONFIG_DEBUG_FS */
 
 /* TODO: Move this function to registers.c */
-static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
-		u16 addr, u8 offset, u32 *data)
+static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 addr, u8 offset,
+		u32 *data)
 {
 	int ret;
 	fl2000_vga_i2c_sc_reg reg = {.val = 0};
@@ -139,9 +137,8 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		}
 	}
 
-	/* XXX: This bit always reads back as 0, so we need to restore it back.
-	 * Though not quite sure if we need to enable monitor detection circuit
-	 * for HDMI use case
+	/* XXX: This bit always reads back as 0, so we need to restore it back. Though not quite
+	 * sure if we need to enable monitor detection circuit for HDMI use case
 	 */
 	reg.monitor_detect = true;
 	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, monitor_detect);
@@ -165,20 +162,19 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 		return ret;
 	}
 
-	ret = regmap_read_poll_timeout(regmap, FL2000_VGA_I2C_SC_REG,
-			reg.val, (reg.i2c_done == true),
-			I2C_RDWR_INTERVAL, I2C_RDWR_TIMEOUT);
-	/* This shouldn't normally happen: there's internal 256ms HW timeout on
-	 * I2C operations and USB must be always available so no I/O errors. But
-	 * if it happens we are probably in irreversible HW issue
+	ret = regmap_read_poll_timeout(regmap, FL2000_VGA_I2C_SC_REG, reg.val,
+			(reg.i2c_done == true), I2C_RDWR_INTERVAL, I2C_RDWR_TIMEOUT);
+	/* This shouldn't normally happen: there's internal 256ms HW timeout on I2C operations and
+	 * USB must be always available so no I/O errors. But if it happens we are probably in
+	 * irreversible HW issue
 	 */
 	if (ret) {
 		dev_err(&adapter->dev, "FL2000_VGA_I2C_SC_REG poll failed!");
 		return ret;
 	}
 
-	/* XXX: Weirdly enough we cannot rely on internal HW 256ms I2C timeout
-	 * indicated in bit 29. Somehow it always read back as 0
+	/* XXX: Weirdly enough we cannot rely on internal HW 256ms I2C timeout indicated in bit 29.
+	 * Somehow it always read back as 0
 	 */
 	if (reg.i2c_status != 0) {
 		dev_err(&adapter->dev, "I2C error detected: status %d",	reg.i2c_status);
@@ -196,8 +192,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read,
 	return 0;
 }
 
-static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
-		struct i2c_msg *msgs, int num)
+static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num)
 {
 	int ret;
 	bool read;
@@ -230,10 +225,9 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 	} else
 		return -ENOTSUPP;
 
-	/* Somehow the original FL2000 driver forces offset to be bound to
-	 * 4-byte margin. This is really strange because i2c operation shall not
-	 * depend on i2c margin, unless the HW design is completely crippled.
-	 * Oh, yes, it is crippled :(
+	/* Somehow the original FL2000 driver forces offset to be bound to 4-byte margin. This is
+	 * really strange because i2c operation shall not depend on i2c margin, unless the HW design
+	 * is completely crippled. Oh, yes, it is crippled :(
 	 */
 	if (read) {
 		ret = fl2000_i2c_read_dword(adapter, addr, offset, &data.w);
@@ -242,10 +236,9 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter,
 
 		msgs[1].buf[0] = data.b[idx];
 	} else {
-		/* Since FL2000 i2c bus implementation always operates with
-		 * 4-byte messages, we need to read before write in order not to
-		 * corrupt unrelated registers in case if we do not write whole
-		 * dword
+		/* Since FL2000 i2c bus implementation always operates with 4-byte messages, we need
+		 * to read before write in order not to corrupt unrelated registers in case if we do
+		 * not write whole dword
 		 */
 		ret = fl2000_i2c_read_dword(adapter, addr, offset, &data.w);
 		if (ret)
@@ -294,15 +287,13 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	struct fl2000_i2c_algo_data *i2c_algo_data;
 
 	/* Adapter must be allocated before anything else */
-	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter),
-			GFP_KERNEL);
+	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter), GFP_KERNEL);
 	if (!adapter)
 		return -ENOMEM;
 	devres_add(&usb_dev->dev, adapter);
 
 	/* On de-initialization of algo_data i2c adapter will be unregistered */
-	i2c_algo_data = devm_kzalloc(&usb_dev->dev, sizeof(*i2c_algo_data),
-			GFP_KERNEL);
+	i2c_algo_data = devm_kzalloc(&usb_dev->dev, sizeof(*i2c_algo_data), GFP_KERNEL);
 	if (!i2c_algo_data)
 		return -ENOMEM;
 
@@ -332,8 +323,8 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 
 void fl2000_i2c_cleanup(struct usb_device *usb_dev)
 {
-	struct i2c_adapter *adapter = devres_find(&usb_dev->dev,
-			fl2000_i2c_adapter_release, NULL, NULL);
+	struct i2c_adapter *adapter = devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL,
+			NULL);
 
 	if (!adapter)
 		return;

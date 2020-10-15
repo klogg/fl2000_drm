@@ -18,16 +18,12 @@
 #define FL2000_USB_CONTROL_OFFSET	0x0000
 
 #define FL2000_USB_LPM			(FL2000_USB_CONTROL_OFFSET + 0x70)
-static const struct reg_field FL2000_USB_LPM_magic =
-		REG_FIELD(FL2000_USB_LPM, 13, 13);
-static const struct reg_field FL2000_USB_LPM_u2_reject =
-		REG_FIELD(FL2000_USB_LPM, 19, 19);
-static const struct reg_field FL2000_USB_LPM_u1_reject =
-		REG_FIELD(FL2000_USB_LPM, 20, 20);
+static const struct reg_field FL2000_USB_LPM_magic = REG_FIELD(FL2000_USB_LPM, 13, 13);
+static const struct reg_field FL2000_USB_LPM_u2_reject = REG_FIELD(FL2000_USB_LPM, 19, 19);
+static const struct reg_field FL2000_USB_LPM_u1_reject = REG_FIELD(FL2000_USB_LPM, 20, 20);
 
 #define FL2000_USB_CTRL			(FL2000_USB_CONTROL_OFFSET + 0x78)
-static const struct reg_field FL2000_USB_CTRL_wake_nrdy =
-		REG_FIELD(FL2000_USB_CTRL, 17, 17);
+static const struct reg_field FL2000_USB_CTRL_wake_nrdy = REG_FIELD(FL2000_USB_CTRL, 17, 17);
 
 /* #### VGA Control Registers Bank #### */
 #define FL2000_VGA_CONTROL_OFFSET	0x8000
@@ -356,8 +352,8 @@ static const struct reg_field FL2000_VGA_CTRL_REG_3_wakeup_clr_en =
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x8C) */
 
-/* List of registers that shall not be read automatically (e.g. for cache update
- * due to presence of self-clear bits
+/* List of registers that shall not be read automatically (e.g. for cache update due to presence of
+ * self-clear bits
  */
 static inline bool FL2000_REG_PRECIOUS(u32 reg)
 {

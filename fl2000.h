@@ -96,8 +96,7 @@ static inline int fl2000_submit_urb(struct urb *urb)
 	return ret;
 }
 
-static inline int fl2000_urb_status(struct usb_device *usb_dev, int status,
-		int pipe)
+static inline int fl2000_urb_status(struct usb_device *usb_dev, int status, int pipe)
 {
 	int ret = 0;
 
@@ -118,8 +117,7 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, int status,
 	case -EPROTO:
 	case -EILSEQ:
 	case -ETIME:
-		dev_err(&usb_dev->dev, "USB hardware unrecoverable error %d",
-				status);
+		dev_err(&usb_dev->dev, "USB hardware unrecoverable error %d", status);
 		ret = -1;
 		break;
 

@@ -36,8 +36,7 @@ static void fl2000_intr_completion(struct urb *urb)
 {
 	int ret;
 	struct usb_device *usb_dev = urb->dev;
-	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
-			fl2000_intr_release, NULL, NULL);
+	struct fl2000_intr *intr = devres_find(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 
 	ret = fl2000_urb_status(usb_dev, urb->status, urb->pipe);
 	if (ret) {
@@ -45,15 +44,12 @@ static void fl2000_intr_completion(struct urb *urb)
 		return;
 	}
 
-	/* This possibly involves reading I2C registers, etc. so better
-	 * to schedule a work queuei
-	 */
+	/* This possibly involves reading I2C registers, etc. so better to schedule a work queue */
 	INIT_WORK(&intr->work, &fl2000_intr_work);
 	queue_work(intr->work_queue, &intr->work);
 
-	/* For interrupt URBs, as part of successful URB submission
-	 * urb->interval is modified to reflect the actual transfer period used,
-	 * so we need to restore it
+	/* For interrupt URBs, as part of successful URB submission urb->interval is modified to
+	 * reflect the actual transfer period used, so we need to restore it
 	 */
 	urb->interval = intr->poll_interval;
 	urb->start_frame = -1;
@@ -82,8 +78,8 @@ int fl2000_intr_create(struct usb_interface *interface)
 	struct usb_endpoint_descriptor *desc;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
-	/* There's only one altsetting (#0) and one endpoint (#3) in the
-	 * interrupt interface (#2) but lets try and "find" it anyway
+	/* There's only one altsetting (#0) and one endpoint (#3) in the interrupt interface (#2)
+	 * but lets try and "find" it anyway
 	 */
 	ret = usb_find_int_in_endpoint(interface->cur_altsetting, &desc);
 	if (ret) {
@@ -108,8 +104,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 		return -ENOMEM;
 	}
 
-	buf = usb_alloc_coherent(usb_dev, INTR_BUFSIZE, GFP_KERNEL,
-			&intr->urb->transfer_dma);
+	buf = usb_alloc_coherent(usb_dev, INTR_BUFSIZE, GFP_KERNEL, &intr->urb->transfer_dma);
 	if (!buf) {
 		dev_err(&usb_dev->dev, "Cannot allocate interrupt data");
 		usb_free_urb(intr->urb);
@@ -120,31 +115,25 @@ int fl2000_intr_create(struct usb_interface *interface)
 	intr->work_queue = create_workqueue("fl2000_interrupt");
 	if (!intr->work_queue) {
 		dev_err(&usb_dev->dev, "Create interrupt workqueue failed");
-		usb_free_coherent(usb_dev, INTR_BUFSIZE, buf,
-				intr->urb->transfer_dma);
+		usb_free_coherent(usb_dev, INTR_BUFSIZE, buf, intr->urb->transfer_dma);
 		usb_free_urb(intr->urb);
 		devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 		return -ENOMEM;
 	}
 
 	/* Interrupt URB configuration is static, including allocated buffer
-	 * NOTE: We are setting 'transfer_dma' during coherent buffer
-	 * allocation above
+	 * NOTE: We are setting 'transfer_dma' during coherent buffer allocation above
 	 */
-	usb_fill_int_urb(intr->urb, usb_dev,
-			usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)),
-			buf, INTR_BUFSIZE, fl2000_intr_completion, intr,
-			intr->poll_interval);
-	intr->urb->transfer_flags |=
-			URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
+	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)), buf,
+			INTR_BUFSIZE, fl2000_intr_completion, intr, intr->poll_interval);
+	intr->urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
 
 	/* Start checking for interrupts */
 	ret = usb_submit_urb(intr->urb, GFP_KERNEL);
 	if (ret) {
 		dev_err(&usb_dev->dev, "URB submission failed");
 		destroy_workqueue(intr->work_queue);
-		usb_free_coherent(usb_dev, INTR_BUFSIZE, buf,
-				intr->urb->transfer_dma);
+		usb_free_coherent(usb_dev, INTR_BUFSIZE, buf, intr->urb->transfer_dma);
 		usb_free_urb(intr->urb);
 		devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 	}
@@ -155,8 +144,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 void fl2000_intr_destroy(struct usb_interface *interface)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	struct fl2000_intr *intr = devres_find(&usb_dev->dev,
-			fl2000_intr_release, NULL, NULL);
+	struct fl2000_intr *intr = devres_find(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 
 	if (!intr)
 		return;
