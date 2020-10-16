@@ -250,7 +250,6 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 }
 
 /* TODO: Add protection for I2C register / EDID / SPI access, e.g. mutex*/
-#if 0
 static void it66121_intr_work(struct work_struct *work_item)
 {
 	int ret;
@@ -295,7 +294,6 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(IRQ_POLL_INTRVL));
 }
-#endif
 
 static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, size_t len)
 {
@@ -324,25 +322,25 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 		/* Clear DDC FIFO */
 		ret = it66121_clear_ddc_fifo(priv);
 		if (ret)
-			return ret;
+			break;
 
 		ret = regmap_write(priv->regmap, IT66121_DDC_ADDRESS, EDID_DDC_ADDR);
 		if (ret)
-			return ret;
+			break;
 
 		/* Account 3 bytes that will be lost */
 		ret = regmap_write(priv->regmap, IT66121_DDC_OFFSET, offset - EDID_LOSS_LEN);
 		if (ret)
-			return ret;
+			break;
 		ret = regmap_write(priv->regmap, IT66121_DDC_SIZE, size);
 		if (ret)
-			return ret;
+			break;
 		ret = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, segment);
 		if (ret)
-			return ret;
+			break;
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND, DDC_CMD_EDID_READ);
 		if (ret)
-			return ret;
+			break;
 
 		/* Deduct lost bytes when reading from FIFO */
 		size -= EDID_LOSS_LEN;
@@ -359,7 +357,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 		offset += size;
 	}
 
-	return 0;
+	return ret;
 }
 
 static int it66121_connector_get_modes(struct drm_connector *connector)
@@ -522,7 +520,6 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 
 	drm_connector_register(&priv->connector);
 
-#if 0
 	/* Start interrupts */
 	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1,
 		IT66121_MASK_DDC_NOACK | IT66121_MASK_DDC_FIFOERR | IT66121_MASK_DDC_BUSHANG,
@@ -530,7 +527,6 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 	atomic_set(&priv->state, RUN);
 	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(IRQ_POLL_INTRVL));
-#endif
 
 	dev_info(bridge->dev->dev, "Bridge attached");
 
