@@ -31,7 +31,7 @@
 
 #define IT66121_INT_CONTROL		0x05
 #define IT66121_INT_STATUS_1		0x06
-typedef union {
+union it666121_int_status_1_reg {
 	u32 val;
 	struct {
 		u32 __unused:24;
@@ -44,7 +44,7 @@ typedef union {
 		u32 rx_sense:1;
 		u32 hpd_plug:1;
 	} __aligned(4) __packed;
-} it666121_int_status_1_reg;
+};
 
 #define IT66121_INT_STATUS_2		0x07
 #define IT66121_INT_STATUS_3		0x08

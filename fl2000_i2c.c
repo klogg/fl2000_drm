@@ -123,7 +123,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 add
 		u32 *data)
 {
 	int ret;
-	fl2000_vga_i2c_sc_reg reg = {.val = 0};
+	union fl2000_vga_i2c_sc_reg reg = {.val = 0};
 	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
 	struct usb_device *usb_dev = i2c_algo_data->usb_dev;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -141,20 +141,20 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 add
 	 * sure if we need to enable monitor detection circuit for HDMI use case
 	 */
 	reg.monitor_detect = true;
-	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, monitor_detect);
+	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, monitor_detect);
 	reg.edid_detect = true;
-	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, edid_detect);
+	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, edid_detect);
 
 	reg.i2c_status = 0;
-	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, i2c_status);
+	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_status);
 	reg.i2c_addr = addr;
-	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, i2c_addr);
+	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_addr);
 	reg.i2c_cmd = read;
-	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, i2c_cmd);
+	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_cmd);
 	reg.i2c_offset = offset;
-	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, i2c_offset);
+	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_offset);
 	reg.i2c_done = false;
-	fl2000_add_bitmask(mask, fl2000_vga_i2c_sc_reg, i2c_done);
+	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_done);
 
 	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, reg.val);
 	if (ret) {

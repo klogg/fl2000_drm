@@ -255,10 +255,8 @@ static void it66121_intr_work(struct work_struct *work_item)
 {
 	int ret;
 	unsigned int val;
-	struct delayed_work *dwork = container_of(work_item,
-			struct delayed_work, work);
-	struct it66121_priv *priv = container_of(dwork, struct it66121_priv,
-			work);
+	struct delayed_work *dwork = container_of(work_item, struct delayed_work, work);
+	struct it66121_priv *priv = container_of(dwork, struct it66121_priv, work);
 	struct device *dev = priv->bridge.dev->dev;
 
 	ret = regmap_field_read(priv->irq_pending, &val);
@@ -275,13 +273,11 @@ static void it66121_intr_work(struct work_struct *work_item)
 	 * configuration
 	 */
 	else if (val == true) {
-		it666121_int_status_1_reg status_1;
+		union it666121_int_status_1_reg status_1;
 
-		ret = regmap_read(priv->regmap, IT66121_INT_STATUS_1,
-				&status_1.val);
+		ret = regmap_read(priv->regmap, IT66121_INT_STATUS_1, &status_1.val);
 		if (ret)
-			dev_err(dev, "Cannot read IT66121_INT_STATUS_1 (%d)",
-					ret);
+			dev_err(dev, "Cannot read IT66121_INT_STATUS_1 (%d)", ret);
 		else {
 			if (status_1.ddc_fifo_err)
 				it66121_clear_ddc_fifo(priv);
@@ -297,8 +293,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 
-	queue_delayed_work(priv->work_queue, &priv->work,
-			msecs_to_jiffies(IRQ_POLL_INTRVL));
+	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(IRQ_POLL_INTRVL));
 }
 #endif
 
