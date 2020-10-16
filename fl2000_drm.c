@@ -8,21 +8,6 @@
 
 #include "fl2000.h"
 
-int fl2000_reset(struct usb_device *usb_dev);
-int fl2000_usb_magic(struct usb_device *usb_dev);
-int fl2000_afe_magic(struct usb_device *usb_dev);
-int fl2000_set_transfers(struct usb_device *usb_dev);
-int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix);
-int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timings);
-int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll);
-int fl2000_enable_interrupts(struct usb_device *usb_dev);
-enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev);
-
-int fl2000_stream_mode_set(struct usb_device *usb_dev, size_t pixels, u32 freq);
-void fl2000_stream_compress(struct usb_device *usb_dev, struct drm_framebuffer *fb, void *src);
-int fl2000_stream_enable(struct usb_device *usb_dev);
-void fl2000_stream_disable(struct usb_device *usb_dev);
-
 #define DRM_DRIVER_NAME		"fl2000_drm"
 #define DRM_DRIVER_DESC		"USB-HDMI"
 #define DRM_DRIVER_DATE		"20181001"
@@ -214,9 +199,6 @@ static inline u32 fl2000_pll_get_divisor(u64 clock_mil, u32 vco_clk, u64 *min_pp
 	return best_divisor;
 }
 
-#define fl2000_iterate_pll(__x, __y) \
-       for (__x = 1; __x <= __x##_max; __x++) for (__y = 1; __y <= __y##_max; __y++)
-
 /* Try to match pixel clock - find parameters with minimal PLL error */
 static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
 {
@@ -226,26 +208,27 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
 	u32 multiplier;
 	u64 min_ppm_err = (u64)(-1);
 
-	fl2000_iterate_pll(prescaler, multiplier) {
-		/* Do not need precision here yet, no 10^6 multiply */
-		u32 vco_clk = FL2000_XTAL / prescaler * multiplier;
-		u32 divisor;
+	for (prescaler = 1; prescaler <= prescaler_max; prescaler++)
+		for (multiplier = 1; multiplier <= multiplier_max; multiplier++) {
+			/* Do not need precision here yet, no 10^6 multiply */
+			u32 vco_clk = FL2000_XTAL / prescaler * multiplier;
+			u32 divisor;
 
-		if (vco_clk < FL2000_VCOCLOCK_MIN || vco_clk > FL2000_VCOCLOCK_MAX)
-			continue;
+			if (vco_clk < FL2000_VCOCLOCK_MIN || vco_clk > FL2000_VCOCLOCK_MAX)
+				continue;
 
-		divisor = fl2000_pll_get_divisor(clock_mil, vco_clk, &min_ppm_err);
-		if (divisor == 0)
-			continue;
+			divisor = fl2000_pll_get_divisor(clock_mil, vco_clk, &min_ppm_err);
+			if (divisor == 0)
+				continue;
 
-		pll->prescaler = prescaler;
-		pll->multiplier = multiplier;
-		pll->divisor = divisor;
-		pll->function = vco_clk < 125000000 ? 0 :
-				vco_clk < 250000000 ? 1 :
-				vco_clk < 500000000 ? 2 : 3;
-		*clock = vco_clk / divisor;
-	}
+			pll->prescaler = prescaler;
+			pll->multiplier = multiplier;
+			pll->divisor = divisor;
+			pll->function = vco_clk < 125000000 ? 0 :
+					vco_clk < 250000000 ? 1 :
+					vco_clk < 500000000 ? 2 : 3;
+			*clock = vco_clk / divisor;
+		}
 
 	/* No exact PLL settings found for requested clock */
 	return min_ppm_err;
@@ -690,7 +673,7 @@ static int fl2000_compare(struct device *dev, void *data)
 	return 0;
 }
 
-void fl2000_inter_check(struct usb_device *usb_dev)
+void fl2000_display_event_check(struct usb_device *usb_dev)
 {
 	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL,
 			NULL);

@@ -638,7 +638,8 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 		ret = regmap_write(priv->regmap, aviinfo_reg[i],
 				buf[i + HDMI_INFOFRAME_HEADER_SIZE]);
 		if (ret) {
-			dev_err(bridge->dev->dev, "Cannot write AVI infoframe byte %d (%d)", i, ret);
+			dev_err(bridge->dev->dev, "Cannot write AVI infoframe byte %d (%d)", i,
+					ret);
 			return;
 		}
 	}

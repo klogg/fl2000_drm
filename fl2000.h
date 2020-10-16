@@ -169,4 +169,49 @@ enum fl2000_int_status {
 	ERROR,	/* unrecoverable error */
 };
 
+/* AVControl transfer task */
+int fl2000_avcontrol_create(struct usb_interface *interface);
+void fl2000_avcontrol_destroy(struct usb_interface *interface);
+
+/* Stream transfer task */
+int fl2000_stream_create(struct usb_interface *interface);
+void fl2000_stream_destroy(struct usb_interface *interface);
+
+/* Streaming interface */
+int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix);
+void fl2000_stream_compress(struct usb_device *usb_dev, struct drm_framebuffer *fb, void *src);
+int fl2000_stream_enable(struct usb_device *usb_dev);
+void fl2000_stream_disable(struct usb_device *usb_dev);
+
+/* Interrupt polling task */
+int fl2000_intr_create(struct usb_interface *interface);
+void fl2000_intr_destroy(struct usb_interface *interface);
+
+/* I2C adapter interface creation */
+int fl2000_i2c_init(struct usb_device *usb_dev);
+void fl2000_i2c_cleanup(struct usb_device *usb_dev);
+
+/* Register map creation */
+int fl2000_regmap_init(struct usb_device *usb_dev);
+void fl2000_regmap_cleanup(struct usb_device *usb_dev);
+
+/* Registers interface */
+int fl2000_reset(struct usb_device *usb_dev);
+int fl2000_usb_magic(struct usb_device *usb_dev);
+int fl2000_afe_magic(struct usb_device *usb_dev);
+int fl2000_set_transfers(struct usb_device *usb_dev);
+int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix);
+int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timings);
+int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll);
+int fl2000_enable_interrupts(struct usb_device *usb_dev);
+enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev);
+
+/* DRM device creation */
+int fl2000_drm_init(struct usb_device *usb_dev);
+void fl2000_drm_cleanup(struct usb_device *usb_dev);
+
+/* DRM interface */
+void fl2000_display_vblank(struct usb_device *usb_dev);
+void fl2000_display_event_check(struct usb_device *usb_dev);
+
 #endif /* __FL2000_DRM_H__ */

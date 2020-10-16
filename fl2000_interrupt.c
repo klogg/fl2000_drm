@@ -8,8 +8,6 @@
 
 #include "fl2000.h"
 
-void fl2000_inter_check(struct usb_device *usb_dev);
-
 #define INTR_BUFSIZE	1
 
 struct fl2000_intr {
@@ -24,7 +22,7 @@ static void fl2000_intr_work(struct work_struct *work)
 {
 	struct fl2000_intr *intr = container_of(work, struct fl2000_intr, work);
 
-	fl2000_inter_check(intr->usb_dev);
+	fl2000_display_event_check(intr->usb_dev);
 }
 
 static void fl2000_intr_release(struct device *dev, void *res)
