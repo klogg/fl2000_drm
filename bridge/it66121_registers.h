@@ -32,15 +32,15 @@
 union it666121_int_status_1_reg {
 	u32 val;
 	struct {
-		u32 __unused:24;
-		u32 aud_overflow:1;
-		u32 romacq_noack:1;
-		u32 ddc_noack:1;
-		u32 ddc_fifo_err:1;
-		u32 romacq_bus_hang:1;
-		u32 ddc_bus_hang:1;
-		u32 rx_sense:1;
-		u32 hpd_plug:1;
+		u32 __unused : 24;
+		u32 aud_overflow : 1;
+		u32 romacq_noack : 1;
+		u32 ddc_noack : 1;
+		u32 ddc_fifo_err : 1;
+		u32 romacq_bus_hang : 1;
+		u32 ddc_bus_hang : 1;
+		u32 rx_sense : 1;
+		u32 hpd_plug : 1;
 	} __aligned(4) __packed;
 };
 
@@ -50,6 +50,7 @@ union it666121_int_status_1_reg {
 #define IT66121_MASK_DDC_NOACK		BIT(5)
 #define IT66121_MASK_DDC_FIFOERR	BIT(4)
 #define IT66121_MASK_DDC_BUSHANG	BIT(2)
+#define IT66121_MASK_DDC		GENMASK(5, 2)
 
 #define IT66121_INT_MASK_2		0x0A
 #define IT66121_INT_MASK_3		0x0B

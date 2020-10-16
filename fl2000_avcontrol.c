@@ -62,7 +62,7 @@ int fl2000_avcontrol_create(struct usb_interface *interface)
 			ret = (*fl2000_devices[i].init_fn)(usb_dev);
 			if (ret) {
 				dev_err(&usb_dev->dev, "Cannot create %s (%d)",
-						fl2000_devices[i].name, ret);
+					fl2000_devices[i].name, ret);
 				break;
 			}
 			drv->__device_up[i] = true;

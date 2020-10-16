@@ -27,7 +27,7 @@ enum fl2000_regfield_n {
 struct fl2000_reg_data {
 	struct usb_device *usb_dev;
 	struct regmap_field *field[NUM_REGFIELDS];
-	struct mutex reg_mutex;
+	struct mutex reg_mutex; /* Serialize control messages for register access */
 	void *data;
 #if defined(CONFIG_DEBUG_FS)
 	unsigned int reg_debug_address;
@@ -70,8 +70,8 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 	mutex_lock(&reg_data->reg_mutex);
 
 	ret = usb_control_msg(usb_dev, usb_rcvctrlpipe(usb_dev, 0), CONTROL_MSG_READ,
-			(USB_DIR_IN | USB_TYPE_VENDOR), 0, offset, reg_data->data, CONTROL_MSG_LEN,
-			USB_CTRL_GET_TIMEOUT);
+			      (USB_DIR_IN | USB_TYPE_VENDOR), 0, offset, reg_data->data,
+			      CONTROL_MSG_LEN, USB_CTRL_GET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != CONTROL_MSG_LEN)
 			ret = -1;
@@ -98,8 +98,8 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	memcpy(reg_data->data, &val, CONTROL_MSG_LEN);
 
 	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0), CONTROL_MSG_WRITE,
-			(USB_DIR_OUT | USB_TYPE_VENDOR), 0, offset, reg_data->data, CONTROL_MSG_LEN,
-			USB_CTRL_SET_TIMEOUT);
+			      (USB_DIR_OUT | USB_TYPE_VENDOR), 0, offset, reg_data->data,
+			      CONTROL_MSG_LEN, USB_CTRL_SET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != CONTROL_MSG_LEN)
 			ret = -1;
@@ -171,12 +171,13 @@ static int fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 		return PTR_ERR(reg_data->root_dir);
 
 	reg_data->reg_address_file = debugfs_create_x32("reg_address", fl2000_debug_umode,
-			reg_data->root_dir, &reg_data->reg_debug_address);
+							reg_data->root_dir,
+							&reg_data->reg_debug_address);
 	if (IS_ERR(reg_data->reg_address_file))
 		return PTR_ERR(reg_data->reg_address_file);
 
 	reg_data->reg_data_file = debugfs_create_file("reg_data", fl2000_debug_umode,
-			reg_data->root_dir, usb_dev, &reg_ops);
+						      reg_data->root_dir, usb_dev, &reg_ops);
 	if (IS_ERR(reg_data->reg_data_file))
 		return PTR_ERR(reg_data->reg_data_file);
 
@@ -472,7 +473,7 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;
 
 		reg_data->field[n] = devm_regmap_field_alloc(&usb_dev->dev, regmap,
-				fl2000_reg_fields[i].field);
+							     fl2000_reg_fields[i].field);
 		if (IS_ERR(reg_data->field[n])) {
 			/* TODO: Release what was allocated before error */
 			return PTR_ERR(reg_data->field[n]);
