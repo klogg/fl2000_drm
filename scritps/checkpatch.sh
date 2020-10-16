@@ -19,6 +19,6 @@ do
 	if [[ $file == $mod_pattern ]]; then
 		continue
 	fi
-	./checkpatch.pl --no-tree -f  "$file"
+	./checkpatch.pl --strict --no-summary --no-tree -f "$file"
 done
 
