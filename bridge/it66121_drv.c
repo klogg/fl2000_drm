@@ -872,10 +872,7 @@ static struct i2c_driver it66121_driver = {
 	.address_list = it66121_addr,
 };
 
-module_i2c_driver(it66121_driver);	/* @suppress("Unused static function")
-					 * @suppress("Unused variable declaration in file scope")
-					 * @suppress("Unused function declaration")
-					 */
+module_i2c_driver(it66121_driver);
 
 MODULE_AUTHOR("Artem Mygaiev");
 MODULE_DESCRIPTION("IT66121 HDMI transmitter driver");
