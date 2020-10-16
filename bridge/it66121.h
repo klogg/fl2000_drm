@@ -28,6 +28,6 @@
 #define I2C_CLASS_HDMI	BIT(9)
 
 /* HW defect leading to losing 3 first bytes during EDID read operation */
-#define EDID_LOSS_LEN 3
+#define EDID_LOSS_LEN	3
 
 #endif /* __IT66121_H__ */

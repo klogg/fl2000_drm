@@ -184,7 +184,8 @@ static inline u32 fl2000_pll_get_divisor(u64 clock_mil, u32 vco_clk, u64 *min_pp
 	unsigned int divisor_idx;
 	u32 best_divisor = 0;
 
-	for_each_array_item(divisor_arr, divisor_idx) {
+	/* Iterate over array */
+	for (divisor_idx = 0; divisor_idx < ARRAY_SIZE(divisor_arr); divisor_idx++) {
 		u32 divisor = divisor_arr[divisor_idx];
 		u64 ppm_err = fl2000_pll_ppm_err(clock_mil, vco_clk, divisor);
 
@@ -233,9 +234,9 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
 }
 
 static int fl2000_mode_calc(const struct drm_display_mode *mode,
-		struct drm_display_mode *adjusted_mode, struct fl2000_pll *pll)
+			    struct drm_display_mode *adjusted_mode, struct fl2000_pll *pll)
 {
-	static const int h_adjust[] = {
+	static const int h_adjust_arr[] = {
 			 0,
 			 1,  -1,
 			 2,  -2,
@@ -256,17 +257,16 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		return -1;
 
 	/* Try to match pixel clock slightly adjusting htotal value */
-	for_each_array_item(h_adjust, h_adjust_idx) {
+	for (h_adjust_idx = 0; h_adjust_idx < ARRAY_SIZE(h_adjust_arr); h_adjust_idx++) {
 		u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
-		int adjust = h_adjust[h_adjust_idx];
+		int h_adjust = h_adjust_arr[h_adjust_idx];
 
 		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get 10^15Hz. Assume
 		 * maximum htotal is 10000 pix (no way) we get 10^19 max value and using u64 which
 		 * is 1.8*10^19 no overflow can occur. Assume all this was checked before
 		 */
-		if (adjust != 0)
-			clock_mil = clock_mil * ((s64)mode->htotal + adjust) /
-								mode->htotal;
+		if (h_adjust != 0)
+			clock_mil = clock_mil * ((s64)mode->htotal + h_adjust) / mode->htotal;
 
 		/* To keep precision use clock multiplied by 10^6 */
 		ppm_err = fl2000_pll_calc(clock_mil, pll, &clock_adjusted);
@@ -275,13 +275,12 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		if (ppm_err < FL2000_PPM_ERR_MAX) {
 			if (adjusted_mode) {
 				drm_mode_copy(adjusted_mode, mode);
-				adjusted_mode->htotal += h_adjust[h_adjust_idx];
+				adjusted_mode->htotal += h_adjust_arr[h_adjust_idx];
 				adjusted_mode->clock = clock_adjusted / 1000;
 			}
 
 			return 0;
 		}
-
 	}
 
 	/* Cannot find PLL configuration that satisfy requirements */
@@ -289,7 +288,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 }
 
 static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
-		const struct drm_display_mode *mode)
+						      const struct drm_display_mode *mode)
 {
 	struct drm_device *drm = crtc->dev;
 	struct usb_device *usb_dev = drm->dev_private;
@@ -307,7 +306,7 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
 }
 
 static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
-		struct drm_crtc_state *cstate,
+				  struct drm_crtc_state *cstate,
 		struct drm_plane_state *plane_state)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
@@ -331,7 +330,8 @@ void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 }
 
 static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
-		struct drm_plane_state *plane_state, struct drm_crtc_state *crtc_state)
+				struct drm_plane_state *plane_state,
+				struct drm_crtc_state *crtc_state)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
@@ -343,7 +343,7 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 		struct drm_format_name_buf format_name;
 
 		dev_err(drm->dev, "Only single plane RGB fbs are supported, got %d planes (%s)", n,
-				drm_get_format_name(fb->format->format,	&format_name));
+			drm_get_format_name(fb->format->format,	&format_name));
 		return -EINVAL;
 	}
 	return 0;
@@ -360,7 +360,6 @@ void fl2000_display_vblank(struct usb_device *usb_dev)
 	if (drm_if->vblank_enabled && drm_if->pipe.crtc.enabled)
 		drm_crtc_handle_vblank(&drm_if->pipe.crtc);
 }
-
 
 static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 {
@@ -399,9 +398,8 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 	drm_dev_exit(idx);
 }
 
-
 static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
-		struct drm_plane_state *old_state)
+				  struct drm_plane_state *old_state)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
@@ -467,7 +465,7 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 };
 
 static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
-		 struct drm_display_mode *adjusted_mode)
+				   struct drm_display_mode *adjusted_mode)
 {
 	struct drm_device *drm = encoder->dev;
 	struct usb_device *usb_dev = drm->dev_private;
@@ -484,8 +482,8 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_displ
 	if (!bytes_pix)
 		return;
 
-	dev_info(drm->dev, "Mode requested:  "DRM_MODE_FMT, DRM_MODE_ARG(mode));
-	dev_info(drm->dev, "Mode configured: "DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
+	dev_info(drm->dev, "Mode requested:  " DRM_MODE_FMT, DRM_MODE_ARG(mode));
+	dev_info(drm->dev, "Mode configured: " DRM_MODE_FMT, DRM_MODE_ARG(adjusted_mode));
 
 	/* Prepare timing configuration */
 	timings.hactive = adjusted_mode->hdisplay;
@@ -570,10 +568,11 @@ static int fl2000_bind(struct device *master)
 	}
 
 	ret = drm_simple_display_pipe_init(drm, &drm_if->pipe, &fl2000_display_funcs,
-			fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats), NULL, NULL);
+					   fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats),
+					   NULL, NULL);
 	if (ret) {
 		dev_err(drm->dev, "Cannot configure simple display pipe (%d)",
-				ret);
+			ret);
 		return ret;
 	}
 
@@ -592,7 +591,7 @@ static int fl2000_bind(struct device *master)
 	ret = drm_vblank_init(drm, drm->mode_config.num_crtc);
 	if (ret) {
 		dev_err(drm->dev, "Failed to initialize %d VBLANK(s) (%d)",
-				drm->mode_config.num_crtc, ret);
+			drm->mode_config.num_crtc, ret);
 		return ret;
 	}
 
@@ -690,12 +689,12 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 
 	/* Make USB interface master */
 	component_match_add_release(&usb_dev->dev, &match, fl2000_match_release, fl2000_compare,
-			usb_dev);
+				    usb_dev);
 
 	ret = component_master_add_with_match(&usb_dev->dev, &fl2000_drm_master_ops, match);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot register component master (%d)",
-				ret);
+			ret);
 		return ret;
 	}
 

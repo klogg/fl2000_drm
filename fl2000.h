@@ -57,19 +57,15 @@ static const umode_t fl2000_debug_umode = 0666;
  * Sets bits to 1 in '__mask' variable that correspond to field '__field' of
  * structure type '__type'. Tested only with u32 data types
  */
-#define fl2000_add_bitmask(__mask, __type, __field) \
-({ \
-	union { \
-		__type __mask; \
-		typeof(__mask) __val; \
-	}  __aligned(4) __data; \
-	__data.__mask.__field = ~0; \
-	(__mask) |= __data.__val; \
+#define fl2000_add_bitmask(__mask, __type, __field)		\
+({								\
+	union {							\
+		__type __umask;					\
+		typeof(__mask) __val;				\
+	}  __aligned(4) __data;					\
+	__data.__umask.__field = ~0;				\
+	(__mask) |= __data.__val;				\
 })
-
-/* Iterate over array */
-#define for_each_array_item(array, idx) \
-	for (idx = 0; idx < ARRAY_SIZE(array); idx++)
 
 static inline int fl2000_submit_urb(struct urb *urb)
 {

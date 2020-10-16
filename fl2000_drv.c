@@ -24,13 +24,12 @@ enum {
 };
 
 static struct usb_device_id fl2000_id_table[] = {
-	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, USB_CLASS_AV) },
+	{USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, USB_CLASS_AV)},
 	{},
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
-static int fl2000_probe(struct usb_interface *interface,
-		const struct usb_device_id *usb_dev_id)
+static int fl2000_probe(struct usb_interface *interface, const struct usb_device_id *usb_dev_id)
 {
 	int ret;
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
@@ -86,8 +85,7 @@ static void fl2000_disconnect(struct usb_interface *interface)
 	}
 }
 
-static int fl2000_suspend(struct usb_interface *interface,
-			   pm_message_t message)
+static int fl2000_suspend(struct usb_interface *interface, pm_message_t message)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 

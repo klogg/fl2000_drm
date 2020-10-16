@@ -29,16 +29,16 @@ struct fl2000_i2c_algo_data {
 };
 
 static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 addr, u8 offset,
-		u32 *data);
+				 u32 *data);
 
 static inline int fl2000_i2c_read_dword(struct i2c_adapter *adapter, u16 addr, u8 offset,
-		u32 *data)
+					u32 *data)
 {
 	return fl2000_i2c_xfer_dword(adapter, true, addr, offset, data);
 }
 
 static inline int fl2000_i2c_write_dword(struct i2c_adapter *adapter, u16 addr, u8 offset,
-		u32 *data)
+					 u32 *data)
 {
 	return fl2000_i2c_xfer_dword(adapter, false, addr, offset, data);
 }
@@ -53,7 +53,7 @@ static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
 
 	ret = fl2000_i2c_read_dword(adapter, i2c_algo_data->i2c_debug_address,
-			i2c_algo_data->i2c_debug_offset, &u32_value);
+				    i2c_algo_data->i2c_debug_offset, &u32_value);
 	*value = u32_value;
 	return ret;
 }
@@ -79,19 +79,22 @@ static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 		return PTR_ERR(i2c_algo_data->root_dir);
 
 	i2c_algo_data->i2c_address_file = debugfs_create_x8("i2c_address",
-			fl2000_debug_umode, i2c_algo_data->root_dir,
+							    fl2000_debug_umode,
+							    i2c_algo_data->root_dir,
 			&i2c_algo_data->i2c_debug_address);
 	if (IS_ERR(i2c_algo_data->i2c_address_file))
 		return PTR_ERR(i2c_algo_data->i2c_address_file);
 
 	i2c_algo_data->i2c_offset_file = debugfs_create_x8("i2c_offset",
-			fl2000_debug_umode, i2c_algo_data->root_dir,
+							   fl2000_debug_umode,
+							   i2c_algo_data->root_dir,
 			&i2c_algo_data->i2c_debug_offset);
 	if (IS_ERR(i2c_algo_data->i2c_offset_file))
 		return PTR_ERR(i2c_algo_data->i2c_offset_file);
 
 	i2c_algo_data->i2c_data_file = debugfs_create_file("i2c_data",
-			fl2000_debug_umode, i2c_algo_data->root_dir,
+							   fl2000_debug_umode,
+							   i2c_algo_data->root_dir,
 			adapter, &i2c_ops);
 	if (IS_ERR(i2c_algo_data->i2c_data_file))
 		return PTR_ERR(i2c_algo_data->i2c_data_file);
@@ -118,7 +121,7 @@ static void fl2000_debugfs_i2c_remove(struct i2c_adapter *adapter)
 
 /* TODO: Move this function to registers.c */
 static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 addr, u8 offset,
-		u32 *data)
+				 u32 *data)
 {
 	int ret;
 	union fl2000_vga_i2c_sc_reg reg = {.val = 0};
@@ -160,8 +163,8 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 add
 		return ret;
 	}
 
-	ret = regmap_read_poll_timeout(regmap, FL2000_VGA_I2C_SC_REG, reg.val,
-			(reg.i2c_done == true), I2C_RDWR_INTERVAL, I2C_RDWR_TIMEOUT);
+	ret = regmap_read_poll_timeout(regmap, FL2000_VGA_I2C_SC_REG, reg.val, reg.i2c_done,
+				       I2C_RDWR_INTERVAL, I2C_RDWR_TIMEOUT);
 	/* This shouldn't normally happen: there's internal 256ms HW timeout on I2C operations and
 	 * USB must be always available so no I/O errors. But if it happens we are probably in
 	 * irreversible HW issue
@@ -213,15 +216,17 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 	if (num == 2) {
 		read = true;
 	} else if (num == 1) {
-		if ((msgs[0].len == 2) && !(msgs[0].flags & I2C_M_RD)) {
+		if (msgs[0].len == 2 && !(msgs[0].flags & I2C_M_RD)) {
 			read = false;
-		} else if ((msgs[0].len == 1) && (msgs[0].flags & I2C_M_RD)) {
+		} else if (msgs[0].len == 1 && (msgs[0].flags & I2C_M_RD)) {
 			msgs[0].buf[0] = 0xAA; /* poison buffer */
 			return num;
-		} else
+		} else {
 			return -ENOTSUPP;
-	} else
+		}
+	} else {
 		return -ENOTSUPP;
+	}
 
 	/* Somehow the original FL2000 driver forces offset to be bound to 4-byte margin. This is
 	 * really strange because i2c operation shall not depend on i2c margin, unless the HW design

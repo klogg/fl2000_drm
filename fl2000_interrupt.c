@@ -121,7 +121,7 @@ int fl2000_intr_create(struct usb_interface *interface)
 	 * NOTE: We are setting 'transfer_dma' during coherent buffer allocation above
 	 */
 	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, usb_endpoint_num(desc)), buf,
-			INTR_BUFSIZE, fl2000_intr_completion, intr, intr->poll_interval);
+			 INTR_BUFSIZE, fl2000_intr_completion, intr, intr->poll_interval);
 	intr->urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
 
 	/* Start checking for interrupts */
@@ -150,7 +150,7 @@ void fl2000_intr_destroy(struct usb_interface *interface)
 
 	destroy_workqueue(intr->work_queue);
 	usb_free_coherent(usb_dev, INTR_BUFSIZE, intr->urb->transfer_buffer,
-			intr->urb->transfer_dma);
+			  intr->urb->transfer_dma);
 	usb_free_urb(intr->urb);
 	devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
 }
