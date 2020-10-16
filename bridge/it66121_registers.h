@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * it66121_registers.h
- *
  * Based on the un-official documentation found on the net and registers
  * description from source code:
  *  - FL2000DX Linux driver on GitHub

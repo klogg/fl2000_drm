@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * fl2000_drv.c
- *
  * (C) Copyright 2017, Fresco Logic, Incorporated.
  * (C) Copyright 2018-2020, Artem Mygaiev
  */

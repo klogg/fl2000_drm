@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * fl2000_streaming.c
- *
  * Original driver uses default altsetting (#0) of streaming interface, which allows bursts of bulk
  * transfers of 15x1024 bytes on output. But the HW actually works incorrectly here: it uses same
  * endpoint #1 across interfaces 1 and 2, which is not allowed by USB specification: endpoint
