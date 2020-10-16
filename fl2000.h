@@ -45,7 +45,7 @@ static const umode_t fl2000_debug_umode = 0666;
 #endif /* CONFIG_DEBUG_FS */
 
 /* Custom code for DRM bridge autodetection since there is no DT support */
-#define I2C_CLASS_HDMI	(1<<9)
+#define I2C_CLASS_HDMI	BIT(9)
 
 /**
  * fl2000_add_bitmask - Set bitmask for structure field
