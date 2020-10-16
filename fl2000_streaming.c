@@ -25,8 +25,6 @@
 
 #define FL2000_URB_TIMEOUT	100
 
-void fl2000_display_vblank(struct usb_device *usb_dev);
-
 struct fl2000_stream_buf {
 	struct list_head list;
 	struct sg_table sgt;

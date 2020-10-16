@@ -8,18 +8,6 @@
 
 #include "fl2000.h"
 
-/* I2C adapter interface creation */
-int fl2000_i2c_init(struct usb_device *usb_dev);
-void fl2000_i2c_cleanup(struct usb_device *usb_dev);
-
-/* Register map creation */
-int fl2000_regmap_init(struct usb_device *usb_dev);
-void fl2000_regmap_cleanup(struct usb_device *usb_dev);
-
-/* DRM device creation */
-int fl2000_drm_init(struct usb_device *usb_dev);
-void fl2000_drm_cleanup(struct usb_device *usb_dev);
-
 /* Ordered list of "init"/"cleanup functions for sub-devices. Shall be processed forward order on
  * init and backward on cleanup
  */
