@@ -1,7 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * fl2000_registers.h
- *
  * Based on the official registers description from Fresco Logic
  *
  * (C) Copyright 2019, Artem Mygaiev
