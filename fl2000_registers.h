@@ -29,7 +29,7 @@ static const struct reg_field FL2000_USB_CTRL_wake_nrdy = REG_FIELD(FL2000_USB_C
 #define FL2000_VGA_CONTROL_OFFSET	0x8000
 
 #define FL2000_VGA_STATUS_REG		(FL2000_VGA_CONTROL_OFFSET + 0x00)
-typedef union {
+union fl2000_vga_status_reg {
 	u32 val;
 	struct {
 		u32 vga_status:1;
@@ -50,10 +50,10 @@ typedef union {
 		u32 monitor_event:1;	/* read self clear */
 		u32 edid_event:1;	/* read self clear */
 	} __aligned(4) __packed;
-} fl2000_vga_status_reg;
+};
 
 #define FL2000_VGA_CTRL_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x04)
-typedef union {
+union fl2000_vga_cntrl_reg_pxclk {
 	u32 val;
 	struct {
 		u32 clear_watermark:1;
@@ -82,10 +82,10 @@ typedef union {
 		u32 force_de_en:1;
 		u32 vga555_mode:1;
 	} __aligned(4) __packed;
-} fl2000_vga_cntrl_reg_pxclk;
+};
 
 #define FL2000_VGA_HSYNC_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x08)
-typedef union {
+union fl2000_vga_hsync_reg1 {
 	u32 val;
 	struct {
 		u32 htotal:12;
@@ -93,10 +93,10 @@ typedef union {
 		u32 hactive:12;
 		u32 __reserved2:4;
 	} __aligned(4) __packed;
-} fl2000_vga_hsync_reg1;
+};
 
 #define FL2000_VGA_HSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x0C)
-typedef union {
+union fl2000_vga_hsync_reg2 {
 	u32 val;
 	struct {
 		u32 hstart:12;
@@ -104,10 +104,10 @@ typedef union {
 		u32 hsync_width:8;
 		u32 __reserved2:8;
 	} __aligned(4) __packed;
-} fl2000_vga_hsync_reg2;
+};
 
 #define FL2000_VGA_VSYNC_REG1		(FL2000_VGA_CONTROL_OFFSET + 0x10)
-typedef union {
+union fl2000_vga_vsync_reg1 {
 	u32 val;
 	struct {
 		u32 vtotal:12;
@@ -115,10 +115,10 @@ typedef union {
 		u32 vactive:12;
 		u32 __reserved2:4;
 	} __aligned(4) __packed;
-} fl2000_vga_vsync_reg1;
+};
 
 #define FL2000_VGA_VSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x14)
-typedef union {
+union fl2000_vga_vsync_reg2 {
 	u32 val;
 	struct {
 		u32 vstart:12;
@@ -129,11 +129,11 @@ typedef union {
 		u32 __reserved3:1;
 		u32 buf_error_en:1;
 	} __aligned(4) __packed;
-} fl2000_vga_vsync_reg2;
+};
 
 #define FL2000_VGA_TEST_REG		(FL2000_VGA_CONTROL_OFFSET + 0x18)
 #define FL2000_VGA_ISOCH_REG		(FL2000_VGA_CONTROL_OFFSET + 0x1C)
-typedef union {
+union fl2000_vga_isoch_reg {
 	u32 val;
 	struct {
 		u32 start_mframe_cnt:14;
@@ -143,10 +143,10 @@ typedef union {
 		u32 mframe_cnt_update:1;
 		u32 __reserved:1;
 	} __aligned(4) __packed;
-} fl2000_vga_isoch_reg;
+};
 
 #define FL2000_VGA_I2C_SC_REG		(FL2000_VGA_CONTROL_OFFSET + 0x20)
-typedef union {
+union fl2000_vga_i2c_sc_reg {
 	u32 val;
 	struct {
 		u32 i2c_addr:7;
@@ -159,7 +159,7 @@ typedef union {
 		u32 edid_detect:1;
 		u32 i2c_done:1;
 	} __aligned(4) __packed;
-} fl2000_vga_i2c_sc_reg;
+};
 static const struct reg_field FL2000_VGA_I2C_SC_REG_edid_detect =
 		REG_FIELD(FL2000_VGA_I2C_SC_REG, 30, 30);
 static const struct reg_field FL2000_VGA_I2C_SC_REG_mon_detect =
@@ -169,7 +169,7 @@ static const struct reg_field FL2000_VGA_I2C_SC_REG_mon_detect =
 #define FL2000_VGA_I2C_WR_REG		(FL2000_VGA_CONTROL_OFFSET + 0x28)
 
 #define FL2000_VGA_PLL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x2C)
-typedef union {
+union fl2000_vga_pll_reg {
 	u32 val;
 	struct {
 		u32 divisor:8;
@@ -183,37 +183,37 @@ typedef union {
 		u32 force_dac_pwrup:1;
 		u32 __reserved3:5;
 	} __aligned(4) __packed;
-} fl2000_vga_pll_reg;
+};
 
 #define FL2000_VGA_LBUF_REG		(FL2000_VGA_CONTROL_OFFSET + 0x30)
-typedef union {
+union fl2000_vga_lbuf_reg {
 	u32 val;
 	struct {
 		u32 lbuf_watermark_assert_rdy:15;
 		u32 __reserved:17;
 	} __aligned(4) __packed;
-} fl2000_vga_lbuf_reg;
+};
 
 #define FL2000_VGA_HI_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x34)
-typedef union {
+union fl2000_vga_hi_mark {
 	u32 val;
 	struct {
 		u32 lbuf_high_watermark:17;
 		u32 __reserved:15;
 	} __aligned(4) __packed;
-} fl2000_vga_hi_mark;
+};
 
 #define FL2000_VGA_LO_MARK		(FL2000_VGA_CONTROL_OFFSET + 0x38)
-typedef union {
+union fl2000_vga_lo_mark {
 	u32 val;
 	struct {
 		u32 lbuf_low_watermark:17;
 		u32 __reserved:15;
 	} __aligned(4) __packed;
-} fl2000_vga_lo_mark;
+};
 
 #define FL2000_VGA_CTRL_REG_ACLK	(FL2000_VGA_CONTROL_OFFSET + 0x3C)
-typedef union {
+union fl2000_vga_ctrl_reg_aclk {
 	u32 val;
 	struct {
 		u32 cfg_timing_reset_n:1;
@@ -245,82 +245,82 @@ typedef union {
 		u32 pll_dac_pd_usbp3_en:1;
 		u32 pll_dac_pd_novga_en:1;
 	} __aligned(4) __packed;
-} fl2000_vga_ctrl_reg_aclk;
+};
 
 #define FL2000_VGA_PXCLK_CNT_REG	(FL2000_VGA_CONTROL_OFFSET + 0x40)
-typedef union {
+union fl2000_vga_pxclk_cnt_reg_reg {
 	u32 val;
 	struct {
 		u32 pix_clock_count:28;
 		u32 __reserved:4;
 	} __aligned(4) __packed;
-} fl2000_vga_pxclk_cnt_reg_reg;
+};
 
 #define FL2000_VGA_VCNT_REG		(FL2000_VGA_CONTROL_OFFSET + 0x44)
-typedef union {
+union fl2000_vga_vcnt_reg {
 	u32 val;
 	struct {
 		u32 max_aclk_count:15;
 		u32 max_aclk_count_hit:1;
 		u32 max_lbuf_accumulate:16;
 	} __aligned(4) __packed;
-} fl2000_vga_vcnt_reg;
+};
 
 #define FL2000_RST_CTRL_REG		(FL2000_VGA_CONTROL_OFFSET + 0x48)
 static const struct reg_field FL2000_RST_CTRL_REG_app_reset =
 		REG_FIELD(FL2000_RST_CTRL_REG, 15, 15);
 
 #define FL2000_BIAC_CTRL1_REG		(FL2000_VGA_CONTROL_OFFSET + 0x4C)
-typedef union {
+union fl2000_cfg_biac_ctrl1_reg {
 	u32 val;
 	struct {
 		u32 cfg_biac_ctrl_lo8:8;
 		u32 cfg_biac_frame_mult:8;
 		u32 cfg_biac_125us_mult:16;
 	} __aligned(4) __packed;
-} fl2000_cfg_biac_ctrl1_reg;
+};
 
 #define FL2000_BIAC_CTRL2_REG		(FL2000_VGA_CONTROL_OFFSET + 0x50)
-typedef union {
+union fl2000_cfg_biac_ctrl2_reg {
 	u32 val;
 	struct {
 		u32 cfg_biac_ctrl_hi16:16;
 		u32 __reserved:16;
 	} __aligned(4) __packed;
-} fl2000_cfg_biac_ctrl2_reg;
+};
 
 #define FL2000_BIAC_STATUS_REG		(FL2000_VGA_CONTROL_OFFSET + 0x54)
-typedef union {
+union fl2000_cfg_biac_status_reg {
 	u32 val;
 	struct {
 		u32 current_status:16;
 		u32 current_value:16;
 	} __aligned(4) __packed;
-} fl2000_cfg_biac_status_reg;
+};
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x58) */
 
 #define FL2000_VGA_PLT_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x5C)
-typedef union {
+union fl2000_vga_plt_reg_pxclk {
 	u32 val;
 	struct {
 		u32 palette_ram_wr_data:24;
 		u32 __reserved:8;
 	} __aligned(4) __packed;
-} fl2000_vga_plt_reg_pxclk;
+};
 
 #define FL2000_VGA_PLT_RADDR_REG_PXCLK	(FL2000_VGA_CONTROL_OFFSET + 0x60)
-typedef union {
+union fl2000_vga_plt_rdaddr_reg_pxclk {
 	u32 val;
 	struct {
 		u32 palette_ram_rd_addr:8;
 		u32 last_frame_lbuf_watermark:16;
 		u32 __reserved:8;
 	} __aligned(4) __packed;
-} fl2000_vga_plt_rdaddr_reg_pxclk;
+};
 
 #define FL2000_VGA_CTRL2_REG_ACLK	(FL2000_VGA_CONTROL_OFFSET + 0x64)
-typedef union {
+union fl2000_vga_ctrl2_reg_axclk {
 	u32 val;
 	struct {
 		u32 pll_powerdown_detect_en:1;
@@ -334,7 +334,7 @@ typedef union {
 		u32 __reserved:2;
 		u32 sw_prod_rev:8;
 	} __aligned(4) __packed;
-} fl2000_vga_ctrl2_reg_axclk;
+};
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x68) */
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x6C) */
