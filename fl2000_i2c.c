@@ -10,14 +10,14 @@
  * operation. Each read or write operate with 8-bit (1-byte) data. Every exchange shall consist of 2
  * messages (sub-address + data) combined. USB xfer always bounds address to 4-byte boundary
  */
-#define I2C_CMESSAGES_NUM	2
-#define I2C_REG_ADDR_SIZE	(sizeof(u8))
-#define I2C_REG_DATA_SIZE	(sizeof(u8))
-#define I2C_XFER_ADDR_MASK	(~0x3ul)
+#define I2C_CMESSAGES_NUM  2
+#define I2C_REG_ADDR_SIZE  (sizeof(u8))
+#define I2C_REG_DATA_SIZE  (sizeof(u8))
+#define I2C_XFER_ADDR_MASK (~0x3ul)
 
 /* Timeout in us for I2C read/write operations */
-#define I2C_RDWR_INTERVAL	(200)
-#define I2C_RDWR_TIMEOUT	(256 * 1000)
+#define I2C_RDWR_INTERVAL (200)
+#define I2C_RDWR_TIMEOUT  (256 * 1000)
 
 struct fl2000_i2c_data {
 	struct usb_device *usb_dev;
@@ -30,8 +30,7 @@ struct fl2000_i2c_data {
 static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 addr, u8 offset,
 				 u32 *data);
 
-static inline int fl2000_i2c_read_dword(struct i2c_adapter *adapter, u16 addr, u8 offset,
-					u32 *data)
+static inline int fl2000_i2c_read_dword(struct i2c_adapter *adapter, u16 addr, u8 offset, u32 *data)
 {
 	return fl2000_i2c_xfer_dword(adapter, true, addr, offset, data);
 }
@@ -51,8 +50,7 @@ static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 	struct i2c_adapter *adapter = data;
 	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	ret = fl2000_i2c_read_dword(adapter, i2c_data->address,
-			i2c_data->offset, &u32_value);
+	ret = fl2000_i2c_read_dword(adapter, i2c_data->address, i2c_data->offset, &u32_value);
 	*value = u32_value;
 	return ret;
 }
@@ -63,8 +61,7 @@ static int fl2000_debugfs_i2c_write(void *data, u64 value)
 	struct i2c_adapter *adapter = data;
 	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	return fl2000_i2c_write_dword(adapter, i2c_data->address,
-			i2c_data->offset, &u32_value);
+	return fl2000_i2c_write_dword(adapter, i2c_data->address, i2c_data->offset, &u32_value);
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read, fl2000_debugfs_i2c_write, "%08llx\n");
@@ -78,17 +75,17 @@ static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 		return PTR_ERR(i2c_data->root_dir);
 
 	i2c_data->address_file = debugfs_create_x8("i2c_address", fl2000_debug_umode,
-			i2c_data->root_dir, &i2c_data->address);
+						   i2c_data->root_dir, &i2c_data->address);
 	if (IS_ERR(i2c_data->address_file))
 		return PTR_ERR(i2c_data->address_file);
 
 	i2c_data->offset_file = debugfs_create_x8("i2c_offset", fl2000_debug_umode,
-			i2c_data->root_dir, &i2c_data->offset);
+						  i2c_data->root_dir, &i2c_data->offset);
 	if (IS_ERR(i2c_data->offset_file))
 		return PTR_ERR(i2c_data->offset_file);
 
 	i2c_data->data_file = debugfs_create_file("i2c_data", fl2000_debug_umode,
-			i2c_data->root_dir, adapter, &i2c_ops);
+						  i2c_data->root_dir, adapter, &i2c_ops);
 	if (IS_ERR(i2c_data->data_file))
 		return PTR_ERR(i2c_data->data_file);
 
@@ -117,7 +114,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 add
 				 u32 *data)
 {
 	int ret;
-	union fl2000_vga_i2c_sc_reg reg = {.val = 0};
+	union fl2000_vga_i2c_sc_reg reg = { .val = 0 };
 	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 	struct usb_device *usb_dev = i2c_data->usb_dev;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -171,7 +168,7 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 add
 	 * Somehow it always read back as 0
 	 */
 	if (reg.i2c_status != 0) {
-		dev_err(&adapter->dev, "I2C error detected: status %d",	reg.i2c_status);
+		dev_err(&adapter->dev, "I2C error detected: status %d", reg.i2c_status);
 		return -EIO;
 	}
 
@@ -256,19 +253,19 @@ static u32 fl2000_i2c_func(struct i2c_adapter *adap)
 }
 
 static const struct i2c_algorithm fl2000_i2c_algorithm = {
-	.master_xfer    = fl2000_i2c_xfer,
-	.functionality  = fl2000_i2c_func,
+	.master_xfer = fl2000_i2c_xfer,
+	.functionality = fl2000_i2c_func,
 };
 
 static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
-	.flags = I2C_AQ_COMB |		   /* enforce "combined" mode */
+	.flags = I2C_AQ_COMB | /* enforce "combined" mode */
 		 I2C_AQ_COMB_WRITE_FIRST | /* address write goes first */
-		 I2C_AQ_COMB_SAME_ADDR,    /* both are on the same address */
-	.max_num_msgs		= I2C_CMESSAGES_NUM,
-	.max_write_len		= 2 * I2C_REG_DATA_SIZE,
-	.max_read_len		= I2C_REG_DATA_SIZE,
-	.max_comb_1st_msg_len	= I2C_REG_ADDR_SIZE,
-	.max_comb_2nd_msg_len	= I2C_REG_DATA_SIZE,
+		 I2C_AQ_COMB_SAME_ADDR, /* both are on the same address */
+	.max_num_msgs = I2C_CMESSAGES_NUM,
+	.max_write_len = 2 * I2C_REG_DATA_SIZE,
+	.max_read_len = I2C_REG_DATA_SIZE,
+	.max_comb_1st_msg_len = I2C_REG_ADDR_SIZE,
+	.max_comb_2nd_msg_len = I2C_REG_DATA_SIZE,
 };
 
 static void fl2000_i2c_adapter_release(struct device *dev, void *res)
@@ -320,8 +317,8 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 
 void fl2000_i2c_cleanup(struct usb_device *usb_dev)
 {
-	struct i2c_adapter *adapter = devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL,
-			NULL);
+	struct i2c_adapter *adapter =
+		devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
 
 	if (!adapter)
 		return;

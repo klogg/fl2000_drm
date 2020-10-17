@@ -6,15 +6,15 @@
 
 #include "it66121.h"
 
-#define VENDOR_ID	0x4954
-#define DEVICE_ID	0x0612
-#define REVISION_MASK	0xF000
-#define REVISION_SHIFT	12
+#define VENDOR_ID      0x4954
+#define DEVICE_ID      0x0612
+#define REVISION_MASK  0xF000
+#define REVISION_SHIFT 12
 
-#define OFFSET_BITS	8
-#define VALUE_BITS	8
+#define OFFSET_BITS 8
+#define VALUE_BITS  8
 
-#define IRQ_POLL_INTRVL	100
+#define IRQ_POLL_INTRVL 100
 
 enum it66121_intr_state {
 	RUN = (1U),
@@ -95,13 +95,13 @@ static const struct regmap_config it66121_regmap_config = {
 	.use_single_write = true,
 };
 
-#define EDID_SLEEP	1000
-#define EDID_TIMEOUT	200000
+#define EDID_SLEEP   1000
+#define EDID_TIMEOUT 200000
 
-#define EDID_HDCP_ADDR	0x74
-#define EDID_DDC_ADDR	0xA0
+#define EDID_HDCP_ADDR 0x74
+#define EDID_DDC_ADDR  0xA0
 
-#define EDID_FIFO_SIZE	32
+#define EDID_FIFO_SIZE 32
 
 enum it66121_ddc_cmd {
 	DDC_CMD_BURST_READ = 0x0,
@@ -297,7 +297,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 {
 	int i, ret, remain = len, offset = block & 1 ? 128 : 0;
 	unsigned int rd_fifo_val, segment = block >> 1;
-	static const u8 header[EDID_LOSS_LEN] = {0x00, 0xFF, 0xFF};
+	static const u8 header[EDID_LOSS_LEN] = { 0x00, 0xFF, 0xFF };
 	struct it66121_priv *priv = context;
 
 	/* Abort DDC */
@@ -407,7 +407,7 @@ static enum drm_connector_status it66121_connector_detect(struct drm_connector *
 			dev_err(dev, "Cannot get monitor status (%d)", ret);
 		} else {
 			priv->conn_status = val ? connector_status_connected :
-					connector_status_disconnected;
+							connector_status_disconnected;
 		}
 	}
 
@@ -510,8 +510,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 		return ret;
 	}
 
-	drm_connector_helper_add(&priv->connector,
-				 &it66121_connector_helper_funcs);
+	drm_connector_helper_add(&priv->connector, &it66121_connector_helper_funcs);
 
 	ret = drm_connector_attach_encoder(&priv->connector, bridge->encoder);
 	if (ret) {
@@ -571,30 +570,21 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 {
 	int i, ret;
 	ssize_t frame_size;
-	struct it66121_priv *priv = container_of(bridge, struct it66121_priv,
-			bridge);
+	struct it66121_priv *priv = container_of(bridge, struct it66121_priv, bridge);
 	u8 buf[HDMI_INFOFRAME_SIZE(AVI)];
 	const u16 aviinfo_reg[HDMI_AVI_INFOFRAME_SIZE] = {
-		IT66121_HDMI_AVIINFO_DB1,
-		IT66121_HDMI_AVIINFO_DB2,
-		IT66121_HDMI_AVIINFO_DB3,
-		IT66121_HDMI_AVIINFO_DB4,
-		IT66121_HDMI_AVIINFO_DB5,
-		IT66121_HDMI_AVIINFO_DB6,
-		IT66121_HDMI_AVIINFO_DB7,
-		IT66121_HDMI_AVIINFO_DB8,
-		IT66121_HDMI_AVIINFO_DB9,
-		IT66121_HDMI_AVIINFO_DB10,
-		IT66121_HDMI_AVIINFO_DB11,
-		IT66121_HDMI_AVIINFO_DB12,
+		IT66121_HDMI_AVIINFO_DB1,  IT66121_HDMI_AVIINFO_DB2,  IT66121_HDMI_AVIINFO_DB3,
+		IT66121_HDMI_AVIINFO_DB4,  IT66121_HDMI_AVIINFO_DB5,  IT66121_HDMI_AVIINFO_DB6,
+		IT66121_HDMI_AVIINFO_DB7,  IT66121_HDMI_AVIINFO_DB8,  IT66121_HDMI_AVIINFO_DB9,
+		IT66121_HDMI_AVIINFO_DB10, IT66121_HDMI_AVIINFO_DB11, IT66121_HDMI_AVIINFO_DB12,
 		IT66121_HDMI_AVIINFO_DB13
 	};
 
 	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " DRM_MODE_FMT,
 		 DRM_MODE_ARG(mode));
 
-	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe,
-						       &priv->connector, mode);
+	ret = drm_hdmi_avi_infoframe_from_display_mode(&priv->hdmi_avi_infoframe, &priv->connector,
+						       mode);
 	if (ret) {
 		dev_err(bridge->dev->dev, "Cannot create AVI infoframe (%d)", ret);
 		return;
@@ -659,7 +649,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 	/* Set reset flags */
 	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
 				IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST,
-			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST);
+				IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST);
 	if (ret)
 		return;
 
@@ -722,32 +712,28 @@ static int it66121_probe(struct i2c_client *client)
 
 	priv->bridge.funcs = &it66121_bridge_funcs;
 
-	priv->irq_pending = devm_regmap_field_alloc(&client->dev, priv->regmap,
-						    IT66121_SYS_STATUS_irq_pending);
-	priv->hpd = devm_regmap_field_alloc(&client->dev, priv->regmap,
-					    IT66121_SYS_STATUS_hpd);
-	priv->clr_irq = devm_regmap_field_alloc(&client->dev, priv->regmap,
-						IT66121_SYS_STATUS_clr_irq);
-	priv->ddc_done = devm_regmap_field_alloc(&client->dev, priv->regmap,
-						 IT66121_DDC_STATUS_ddc_done);
-	priv->ddc_error = devm_regmap_field_alloc(&client->dev, priv->regmap,
-						  IT66121_DDC_STATUS_ddc_error);
+	priv->irq_pending =
+		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_SYS_STATUS_irq_pending);
+	priv->hpd = devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_SYS_STATUS_hpd);
+	priv->clr_irq =
+		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_SYS_STATUS_clr_irq);
+	priv->ddc_done =
+		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_DDC_STATUS_ddc_done);
+	priv->ddc_error =
+		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_DDC_STATUS_ddc_error);
 
-	priv->swap_pack = devm_regmap_field_alloc(&client->dev, priv->regmap,
-						  IT66121_HDMI_DATA_SWAP_pack);
-	priv->swap_ml = devm_regmap_field_alloc(&client->dev, priv->regmap,
-						IT66121_HDMI_DATA_SWAP_ml);
-	priv->swap_yc = devm_regmap_field_alloc(&client->dev, priv->regmap,
-						IT66121_HDMI_DATA_SWAP_yc);
-	priv->swap_rb = devm_regmap_field_alloc(&client->dev, priv->regmap,
-						IT66121_HDMI_DATA_SWAP_rb);
+	priv->swap_pack =
+		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_HDMI_DATA_SWAP_pack);
+	priv->swap_ml =
+		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_HDMI_DATA_SWAP_ml);
+	priv->swap_yc =
+		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_HDMI_DATA_SWAP_yc);
+	priv->swap_rb =
+		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_HDMI_DATA_SWAP_rb);
 
 	/* Dont really care which one failed */
-	if (IS_ERR(priv->irq_pending) ||
-	    IS_ERR(priv->hpd) ||
-			IS_ERR(priv->clr_irq) ||
-			IS_ERR(priv->ddc_done) ||
-			IS_ERR(priv->ddc_error)) {
+	if (IS_ERR(priv->irq_pending) || IS_ERR(priv->hpd) || IS_ERR(priv->clr_irq) ||
+	    IS_ERR(priv->ddc_done) || IS_ERR(priv->ddc_error)) {
 		return -1;
 	}
 
@@ -817,8 +803,7 @@ static int it66121_detect(struct i2c_client *client, struct i2c_board_info *info
 		};
 		u8 b[4];
 	} id;
-	dev_info(&adapter->dev, "Detecting IT66121 at address 0x%X on %s",
-		 address, adapter->name);
+	dev_info(&adapter->dev, "Detecting IT66121 at address 0x%X on %s", address, adapter->name);
 
 	/* We rely on full I2C protocol + 1 byte SMBUS read for detection */
 	ret = i2c_check_functionality(adapter, I2C_FUNC_I2C | I2C_FUNC_SMBUS_READ_BYTE);

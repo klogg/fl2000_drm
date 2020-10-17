@@ -13,11 +13,9 @@ static const struct {
 	const char *name;
 	int (*init_fn)(struct usb_device *usb_dev);
 	void (*cleanup_fn)(struct usb_device *usb_dev);
-} fl2000_devices[] = {
-	{"registers map", fl2000_regmap_init, fl2000_regmap_cleanup},
-	{"I2C adapter", fl2000_i2c_init, fl2000_i2c_cleanup},
-	{"DRM device", fl2000_drm_init, fl2000_drm_cleanup}
-};
+} fl2000_devices[] = { { "registers map", fl2000_regmap_init, fl2000_regmap_cleanup },
+		       { "I2C adapter", fl2000_i2c_init, fl2000_i2c_cleanup },
+		       { "DRM device", fl2000_drm_init, fl2000_drm_cleanup } };
 
 struct fl2000_drv {
 	bool __device_up[ARRAY_SIZE(fl2000_devices)];

@@ -45,7 +45,7 @@ static const umode_t fl2000_debug_umode = 0666;
 #endif /* CONFIG_DEBUG_FS */
 
 /* Custom code for DRM bridge autodetection since there is no DT support */
-#define I2C_CLASS_HDMI	BIT(9)
+#define I2C_CLASS_HDMI BIT(9)
 
 /**
  * fl2000_add_bitmask - Set bitmask for structure field
@@ -57,15 +57,15 @@ static const umode_t fl2000_debug_umode = 0666;
  * Sets bits to 1 in '__mask' variable that correspond to field '__field' of
  * structure type '__type'. Tested only with u32 data types
  */
-#define fl2000_add_bitmask(__mask, __type, __field)		\
-({								\
-	union {							\
-		__type __umask;					\
-		typeof(__mask) __val;				\
-	}  __aligned(4) __data;					\
-	__data.__umask.__field = ~0;				\
-	(__mask) |= __data.__val;				\
-})
+#define fl2000_add_bitmask(__mask, __type, __field) \
+	({                                          \
+		union {                             \
+			__type __umask;             \
+			typeof(__mask) __val;       \
+		} __aligned(4) __data;              \
+		__data.__umask.__field = ~0;        \
+		(__mask) |= __data.__val;           \
+	})
 
 static inline int fl2000_submit_urb(struct urb *urb)
 {
@@ -158,9 +158,9 @@ struct fl2000_pll {
 };
 
 enum fl2000_int_status {
-	CLEAR,	/* nothing to do */
-	EVENT,	/* sink connection event */
-	ERROR,	/* unrecoverable error */
+	CLEAR, /* nothing to do */
+	EVENT, /* sink connection event */
+	ERROR, /* unrecoverable error */
 };
 
 /* AVControl transfer task */

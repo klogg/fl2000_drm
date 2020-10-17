@@ -6,11 +6,11 @@
 
 #include "fl2000.h"
 
-#define CONTROL_MSG_LEN		sizeof(u32)
-#define CONTROL_MSG_READ	64
-#define CONTROL_MSG_WRITE	65
+#define CONTROL_MSG_LEN	  sizeof(u32)
+#define CONTROL_MSG_READ  64
+#define CONTROL_MSG_WRITE 65
 
-#define FL2000_HW_RST_MDELAY	10
+#define FL2000_HW_RST_MDELAY 10
 
 enum fl2000_regfield_n {
 	U1_REJECT,
@@ -39,16 +39,14 @@ struct fl2000_reg_data {
 static const struct {
 	enum fl2000_regfield_n n;
 	struct reg_field field;
-} fl2000_reg_fields[] = {
-	{U1_REJECT, FL2000_USB_LPM_u1_reject},
-	{U2_REJECT, FL2000_USB_LPM_u2_reject},
-	{WAKE_NRDY, FL2000_USB_CTRL_wake_nrdy},
-	{APP_RESET, FL2000_RST_CTRL_REG_app_reset},
-	{WAKEUP_CLR_EN, FL2000_VGA_CTRL_REG_3_wakeup_clr_en},
-	{EDID_DETECT, FL2000_VGA_I2C_SC_REG_edid_detect},
-	{MON_DETECT, FL2000_VGA_I2C_SC_REG_mon_detect},
-	{MAGIC, FL2000_USB_LPM_magic}
-};
+} fl2000_reg_fields[] = { { U1_REJECT, FL2000_USB_LPM_u1_reject },
+			  { U2_REJECT, FL2000_USB_LPM_u2_reject },
+			  { WAKE_NRDY, FL2000_USB_CTRL_wake_nrdy },
+			  { APP_RESET, FL2000_RST_CTRL_REG_app_reset },
+			  { WAKEUP_CLR_EN, FL2000_VGA_CTRL_REG_3_wakeup_clr_en },
+			  { EDID_DETECT, FL2000_VGA_I2C_SC_REG_edid_detect },
+			  { MON_DETECT, FL2000_VGA_I2C_SC_REG_mon_detect },
+			  { MAGIC, FL2000_USB_LPM_magic } };
 
 static bool fl2000_reg_precious(struct device *dev, unsigned int reg)
 {
@@ -206,8 +204,8 @@ static void fl2000_reg_data_release(struct device *dev, void *res)
 int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_pll_reg pll_reg = {.val = 0};
-	union fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
+	union fl2000_vga_pll_reg pll_reg = { .val = 0 };
+	union fl2000_vga_ctrl_reg_aclk aclk = { .val = 0 };
 	u32 mask = 0;
 
 	pll_reg.prescaler = pll->prescaler;
@@ -228,10 +226,10 @@ int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll)
 int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timings)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_hsync_reg1 hsync1 = {.val = 0};
-	union fl2000_vga_hsync_reg2 hsync2 = {.val = 0};
-	union fl2000_vga_vsync_reg1 vsync1 = {.val = 0};
-	union fl2000_vga_vsync_reg2 vsync2 = {.val = 0};
+	union fl2000_vga_hsync_reg1 hsync1 = { .val = 0 };
+	union fl2000_vga_hsync_reg2 hsync2 = { .val = 0 };
+	union fl2000_vga_vsync_reg1 vsync1 = { .val = 0 };
+	union fl2000_vga_vsync_reg2 vsync2 = { .val = 0 };
 
 	hsync1.hactive = timings->hactive;
 	hsync1.htotal = timings->htotal;
@@ -256,7 +254,7 @@ int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timing
 int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_cntrl_reg_pxclk pxclk = {.val = 0};
+	union fl2000_vga_cntrl_reg_pxclk pxclk = { .val = 0 };
 	u32 mask = 0;
 
 	pxclk.dac_output_en = false;
@@ -284,8 +282,8 @@ int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix)
 int fl2000_set_transfers(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
-	union fl2000_vga_isoch_reg isoch = {.val = 0};
+	union fl2000_vga_ctrl_reg_aclk aclk = { .val = 0 };
+	union fl2000_vga_isoch_reg isoch = { .val = 0 };
 	u32 mask;
 
 	mask = 0;
@@ -309,8 +307,8 @@ int fl2000_set_transfers(struct usb_device *usb_dev)
 int fl2000_reset(struct usb_device *usb_dev)
 {
 	int ret;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL,
-			NULL);
+	struct fl2000_reg_data *reg_data =
+		devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL, NULL);
 
 	if (!reg_data) {
 		dev_err(&usb_dev->dev, "Device resources not found");
@@ -329,8 +327,8 @@ int fl2000_reset(struct usb_device *usb_dev)
 int fl2000_afe_magic(struct usb_device *usb_dev)
 {
 	int ret;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL,
-			NULL);
+	struct fl2000_reg_data *reg_data =
+		devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL, NULL);
 
 	/* XXX: This is actually some unknown & undocumented FL2000 USB AFE register setting */
 	ret = regmap_field_write(reg_data->field[MAGIC], true);
@@ -343,8 +341,8 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 int fl2000_usb_magic(struct usb_device *usb_dev)
 {
 	int ret;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL,
-			NULL);
+	struct fl2000_reg_data *reg_data =
+		devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL, NULL);
 
 	ret = regmap_field_write(reg_data->field[EDID_DETECT], true);
 	if (ret)
@@ -371,8 +369,8 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 int fl2000_enable_interrupts(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_ctrl_reg_aclk aclk = {.val = 0};
-	union fl2000_vga_ctrl2_reg_axclk axclk = {.val = 0};
+	union fl2000_vga_ctrl_reg_aclk aclk = { .val = 0 };
+	union fl2000_vga_ctrl2_reg_axclk axclk = { .val = 0 };
 	u32 mask;
 
 	mask = 0;
@@ -472,8 +470,8 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 	for (i = 0; i < ARRAY_SIZE(fl2000_reg_fields); i++) {
 		enum fl2000_regfield_n n = fl2000_reg_fields[i].n;
 
-		reg_data->field[n] = devm_regmap_field_alloc(&usb_dev->dev, regmap,
-							     fl2000_reg_fields[i].field);
+		reg_data->field[n] =
+			devm_regmap_field_alloc(&usb_dev->dev, regmap, fl2000_reg_fields[i].field);
 		if (IS_ERR(reg_data->field[n])) {
 			/* TODO: Release what was allocated before error */
 			return PTR_ERR(reg_data->field[n]);
@@ -507,8 +505,8 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 void fl2000_regmap_cleanup(struct usb_device *usb_dev)
 {
 	int i;
-	struct fl2000_reg_data *reg_data = devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL,
-			NULL);
+	struct fl2000_reg_data *reg_data =
+		devres_find(&usb_dev->dev, fl2000_reg_data_release, NULL, NULL);
 
 	fl2000_debugfs_reg_remove(reg_data);
 

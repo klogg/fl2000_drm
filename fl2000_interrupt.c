@@ -6,7 +6,7 @@
 
 #include "fl2000.h"
 
-#define INTR_BUFSIZE	1
+#define INTR_BUFSIZE 1
 
 struct fl2000_intr {
 	struct usb_device *usb_dev;

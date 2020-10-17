@@ -6,15 +6,15 @@
 
 #include "fl2000.h"
 
-#define USB_DRIVER_NAME			"fl2000_usb"
+#define USB_DRIVER_NAME "fl2000_usb"
 
-#define USB_CLASS_AV			0x10
-#define USB_SUBCLASS_AV_CONTROL		0x01
-#define USB_SUBCLASS_AV_VIDEO		0x02
-#define USB_SUBCLASS_AV_AUDIO		0x03
+#define USB_CLASS_AV		0x10
+#define USB_SUBCLASS_AV_CONTROL 0x01
+#define USB_SUBCLASS_AV_VIDEO	0x02
+#define USB_SUBCLASS_AV_AUDIO	0x03
 
-#define USB_VENDOR_FRESCO_LOGIC		0x1D5C
-#define USB_PRODUCT_FL2000		0x2000
+#define USB_VENDOR_FRESCO_LOGIC 0x1D5C
+#define USB_PRODUCT_FL2000	0x2000
 
 /* Known USB interfaces of FL2000 */
 enum fl2000_interface {
@@ -24,7 +24,7 @@ enum fl2000_interface {
 };
 
 static struct usb_device_id fl2000_id_table[] = {
-	{USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, USB_CLASS_AV)},
+	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, USB_CLASS_AV) },
 	{},
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
@@ -112,12 +112,12 @@ static int fl2000_resume(struct usb_interface *interface)
 }
 
 static struct usb_driver fl2000_driver = {
-	.name		= USB_DRIVER_NAME,
-	.probe		= fl2000_probe,
-	.disconnect	= fl2000_disconnect,
-	.suspend	= fl2000_suspend,
-	.resume		= fl2000_resume,
-	.id_table	= fl2000_id_table,
+	.name = USB_DRIVER_NAME,
+	.probe = fl2000_probe,
+	.disconnect = fl2000_disconnect,
+	.suspend = fl2000_suspend,
+	.resume = fl2000_resume,
+	.id_table = fl2000_id_table,
 };
 
 module_usb_driver(fl2000_driver);
