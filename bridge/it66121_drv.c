@@ -314,8 +314,10 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 
 	while (remain > 0) {
 		/* Add bytes that will be lost during EDID read */
-		int size = ((remain + EDID_LOSS_LEN) > EDID_FIFO_SIZE) ?
-				EDID_FIFO_SIZE : (remain + EDID_LOSS_LEN);
+		int size = remain + EDID_LOSS_LEN;
+
+		/* ... and check size fits FIFO */
+		size = size > EDID_FIFO_SIZE ? EDID_FIFO_SIZE : size;
 
 		/* Clear DDC FIFO */
 		ret = it66121_clear_ddc_fifo(priv);
