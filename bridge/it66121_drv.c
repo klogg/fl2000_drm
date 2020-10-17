@@ -25,7 +25,7 @@ struct it66121_priv {
 	struct regmap *regmap;
 	struct drm_bridge bridge;
 	struct drm_connector connector;
-	enum drm_connector_status status;
+	enum drm_connector_status conn_status;
 
 	struct delayed_work work;
 	struct workqueue_struct *work_queue;
@@ -46,10 +46,10 @@ struct it66121_priv {
 
 	struct edid *edid;
 	bool dvi_mode;
-	enum drm_connector_status conn_status;
 };
 
 static int it66121_remove(struct i2c_client *client);
+static void it66121_is_hpd_detect(struct it66121_priv *priv);
 
 /* According to datasheet IT66121 addresses are 0x98 or 0x9A including cmd */
 static const unsigned short it66121_addr[] = { (0x98 >> 1), /*(0x9A >> 1),*/ I2C_CLIENT_END };
@@ -255,6 +255,9 @@ static void it66121_intr_work(struct work_struct *work_item)
 	struct delayed_work *dwork = container_of(work_item, struct delayed_work, work);
 	struct it66121_priv *priv = container_of(dwork, struct it66121_priv, work);
 	struct device *dev = priv->bridge.dev->dev;
+	bool event;
+
+	/* XXX: lock */
 
 	ret = regmap_field_read(priv->irq_pending, &val);
 	if (ret)
@@ -278,12 +281,25 @@ static void it66121_intr_work(struct work_struct *work_item)
 		} else {
 			if (status_1.ddc_fifo_err)
 				it66121_clear_ddc_fifo(priv);
-			if (status_1.ddc_bus_hang)
+			if (status_1.ddc_bus_hang || status_1.ddc_noack)
 				it66121_abort_ddc_ops(priv);
+			if (status_1.hpd_plug) {
+				it66121_is_hpd_detect(priv);
+				event = true;
+				if (priv->conn_status == connector_status_disconnected) {
+					kfree(priv->edid);
+					priv->edid = NULL;
+				}
+			}
 		}
 
 		regmap_field_write(priv->clr_irq, 1);
 	}
+
+	/* XXX: unlock */
+
+	if (event)
+		drm_helper_hpd_irq_event(priv->bridge.dev);
 
 	if (atomic_read(&priv->state) != RUN)
 		return;
@@ -392,24 +408,29 @@ static struct drm_connector_helper_funcs it66121_connector_helper_funcs = {
 	.mode_valid = it66121_connector_mode_valid,
 };
 
-static enum drm_connector_status it66121_connector_detect(struct drm_connector *connector,
-							  bool force)
+static void it66121_is_hpd_detect(struct it66121_priv *priv)
 {
 	int ret;
 	unsigned int val;
-	struct it66121_priv *priv = container_of(connector, struct it66121_priv, connector);
 	struct device *dev = priv->bridge.dev->dev;
 
-	if (force || priv->conn_status == connector_status_unknown) {
-		ret = regmap_field_read(priv->hpd, &val);
-		if (ret) {
-			priv->conn_status = connector_status_unknown;
-			dev_err(dev, "Cannot get monitor status (%d)", ret);
-		} else {
-			priv->conn_status = val ? connector_status_connected :
-							connector_status_disconnected;
-		}
+	ret = regmap_field_read(priv->hpd, &val);
+	if (ret) {
+		dev_err(dev, "Cannot get monitor status (%d)", ret);
+		priv->conn_status = connector_status_unknown;
+	} else {
+		priv->conn_status = val ? connector_status_connected :
+						connector_status_disconnected;
 	}
+}
+
+static enum drm_connector_status it66121_connector_detect(struct drm_connector *connector,
+							  bool force)
+{
+	struct it66121_priv *priv = container_of(connector, struct it66121_priv, connector);
+
+	if (force || priv->conn_status == connector_status_unknown)
+		it66121_is_hpd_detect(priv);
 
 	return priv->conn_status;
 }
