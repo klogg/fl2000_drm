@@ -311,6 +311,7 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 		return ret;
 
 	ret = fl2000_debugfs_i2c_init(adapter);
+	if (ret)
 		return ret;
 
 	dev_info(&adapter->dev, "Connected FL2000 I2C adapter");
