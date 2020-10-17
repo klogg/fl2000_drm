@@ -4,8 +4,7 @@ fl2000-y := \
 	fl2000_interrupt.o \
 	fl2000_streaming.o \
 	fl2000_i2c.o \
-	fl2000_drm.o \
-	fl2000_avcontrol.o
+	fl2000_drm.o
 
 it66121-y := \
 	bridge/it66121_drv.o

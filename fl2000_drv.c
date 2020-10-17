@@ -29,6 +29,40 @@ static struct usb_device_id fl2000_id_table[] = {
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
+/* Ordered list of "init"/"cleanup functions for sub-devices. Shall be processed forward order on
+ * init and backward on cleanup
+ */
+static const struct {
+	const char *name;
+	int (*init_fn)(struct usb_device *usb_dev);
+	void (*cleanup_fn)(struct usb_device *usb_dev);
+} fl2000_devices[] = { { "registers map", fl2000_regmap_init, fl2000_regmap_cleanup },
+		       { "I2C adapter", fl2000_i2c_init, fl2000_i2c_cleanup },
+		       { "DRM device", fl2000_drm_init, fl2000_drm_cleanup } };
+
+static void fl2000_destroy_devices(struct usb_device *usb_dev)
+{
+	int i;
+
+	for (i = ARRAY_SIZE(fl2000_devices); i > 0; i--)
+		(*fl2000_devices[i - 1].cleanup_fn)(usb_dev);
+}
+
+static int fl2000_create_devices(struct usb_device *usb_dev)
+{
+	int i, ret = 0;
+
+	for (i = 0; i < ARRAY_SIZE(fl2000_devices); i++) {
+		ret = (*fl2000_devices[i].init_fn)(usb_dev);
+		if (ret) {
+			fl2000_destroy_devices(usb_dev);
+			break;
+		}
+	}
+
+	return ret;
+}
+
 static int fl2000_probe(struct usb_interface *interface, const struct usb_device_id *usb_dev_id)
 {
 	int ret;
@@ -42,11 +76,15 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
-		ret = fl2000_avcontrol_create(interface);
+		/* Do nothing */;
+		ret = 0;
 		break;
 
 	case FL2000_USBIF_STREAMING:
 		ret = fl2000_stream_create(interface);
+		if (ret)
+			break;
+		ret = fl2000_create_devices(usb_dev);
 		break;
 
 	case FL2000_USBIF_INTERRUPT:
@@ -65,13 +103,15 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 static void fl2000_disconnect(struct usb_interface *interface)
 {
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
 	switch (iface_num) {
 	case FL2000_USBIF_AVCONTROL:
-		fl2000_avcontrol_destroy(interface);
+		/* Do nothing */;
 		break;
 
 	case FL2000_USBIF_STREAMING:
+		fl2000_destroy_devices(usb_dev);
 		fl2000_stream_destroy(interface);
 		break;
 
