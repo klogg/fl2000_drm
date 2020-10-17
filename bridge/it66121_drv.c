@@ -103,7 +103,7 @@ static const struct regmap_config it66121_regmap_config = {
 
 #define EDID_FIFO_SIZE	32
 
-enum {
+enum it66121_ddc_cmd {
 	DDC_CMD_BURST_READ = 0x0,
 	DDC_CMD_LINK_CHECK = 0x2,
 	DDC_CMD_EDID_READ = 0x3,
@@ -113,7 +113,7 @@ enum {
 	DDC_CMD_FIFO_CLEAR = 0x9,
 	DDC_CMD_SCL_PULSE = 0xA,
 	DDC_CMD_ABORT = 0xF,
-} ddc_cmd;
+};
 
 /* XXX: mode, adjusted_mode can be used here for transformation configuration */
 static int it66121_configure_input(struct it66121_priv *priv)

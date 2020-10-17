@@ -17,7 +17,7 @@
 #define USB_PRODUCT_FL2000		0x2000
 
 /* Known USB interfaces of FL2000 */
-enum {
+enum fl2000_interface {
 	FL2000_USBIF_AVCONTROL = 0,
 	FL2000_USBIF_STREAMING = 1,
 	FL2000_USBIF_INTERRUPT = 2,
