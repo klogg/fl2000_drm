@@ -18,7 +18,7 @@ KSRC ?= /lib/modules/$(KVER)/build
 all:	modules
 
 modules:
-	make -C $(KSRC) M=$(PWD) modules
+	make CHECK="/usr/bin/sparse" -C $(KSRC) M=$(PWD) modules
 
 clean:
 	make -C $(KSRC) M=$(PWD) clean
