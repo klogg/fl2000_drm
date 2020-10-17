@@ -19,12 +19,11 @@
 #define I2C_RDWR_INTERVAL	(200)
 #define I2C_RDWR_TIMEOUT	(256 * 1000)
 
-struct fl2000_i2c_algo_data {
+struct fl2000_i2c_data {
 	struct usb_device *usb_dev;
 #if defined(CONFIG_DEBUG_FS)
 	u8 i2c_debug_address, i2c_debug_offset;
-	struct dentry *root_dir, *i2c_address_file,
-			*i2c_offset_file, *i2c_data_file;
+	struct dentry *root_dir, *i2c_address_file, *i2c_offset_file, *i2c_data_file;
 #endif
 };
 
@@ -50,10 +49,10 @@ static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 	int ret;
 	u32 u32_value;
 	struct i2c_adapter *adapter = data;
-	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
+	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	ret = fl2000_i2c_read_dword(adapter, i2c_algo_data->i2c_debug_address,
-				    i2c_algo_data->i2c_debug_offset, &u32_value);
+	ret = fl2000_i2c_read_dword(adapter, i2c_data->i2c_debug_address,
+			i2c_data->i2c_debug_offset, &u32_value);
 	*value = u32_value;
 	return ret;
 }
@@ -62,54 +61,48 @@ static int fl2000_debugfs_i2c_write(void *data, u64 value)
 {
 	u32 u32_value = value;
 	struct i2c_adapter *adapter = data;
-	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
+	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	return fl2000_i2c_write_dword(adapter, i2c_algo_data->i2c_debug_address,
-			i2c_algo_data->i2c_debug_offset, &u32_value);
+	return fl2000_i2c_write_dword(adapter, i2c_data->i2c_debug_address,
+			i2c_data->i2c_debug_offset, &u32_value);
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read, fl2000_debugfs_i2c_write, "%08llx\n");
 
 static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 {
-	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
+	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	i2c_algo_data->root_dir = debugfs_create_dir("fl2000_i2c", NULL);
-	if (IS_ERR(i2c_algo_data->root_dir))
-		return PTR_ERR(i2c_algo_data->root_dir);
+	i2c_data->root_dir = debugfs_create_dir("fl2000_i2c", NULL);
+	if (IS_ERR(i2c_data->root_dir))
+		return PTR_ERR(i2c_data->root_dir);
 
-	i2c_algo_data->i2c_address_file = debugfs_create_x8("i2c_address",
-							    fl2000_debug_umode,
-							    i2c_algo_data->root_dir,
-			&i2c_algo_data->i2c_debug_address);
-	if (IS_ERR(i2c_algo_data->i2c_address_file))
-		return PTR_ERR(i2c_algo_data->i2c_address_file);
+	i2c_data->i2c_address_file = debugfs_create_x8("i2c_address", fl2000_debug_umode,
+			i2c_data->root_dir, &i2c_data->i2c_debug_address);
+	if (IS_ERR(i2c_data->i2c_address_file))
+		return PTR_ERR(i2c_data->i2c_address_file);
 
-	i2c_algo_data->i2c_offset_file = debugfs_create_x8("i2c_offset",
-							   fl2000_debug_umode,
-							   i2c_algo_data->root_dir,
-			&i2c_algo_data->i2c_debug_offset);
-	if (IS_ERR(i2c_algo_data->i2c_offset_file))
-		return PTR_ERR(i2c_algo_data->i2c_offset_file);
+	i2c_data->i2c_offset_file = debugfs_create_x8("i2c_offset", fl2000_debug_umode,
+			i2c_data->root_dir, &i2c_data->i2c_debug_offset);
+	if (IS_ERR(i2c_data->i2c_offset_file))
+		return PTR_ERR(i2c_data->i2c_offset_file);
 
-	i2c_algo_data->i2c_data_file = debugfs_create_file("i2c_data",
-							   fl2000_debug_umode,
-							   i2c_algo_data->root_dir,
-			adapter, &i2c_ops);
-	if (IS_ERR(i2c_algo_data->i2c_data_file))
-		return PTR_ERR(i2c_algo_data->i2c_data_file);
+	i2c_data->i2c_data_file = debugfs_create_file("i2c_data", fl2000_debug_umode,
+			i2c_data->root_dir, adapter, &i2c_ops);
+	if (IS_ERR(i2c_data->i2c_data_file))
+		return PTR_ERR(i2c_data->i2c_data_file);
 
 	return 0;
 }
 
 static void fl2000_debugfs_i2c_remove(struct i2c_adapter *adapter)
 {
-	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
+	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	debugfs_remove(i2c_algo_data->i2c_data_file);
-	debugfs_remove(i2c_algo_data->i2c_offset_file);
-	debugfs_remove(i2c_algo_data->i2c_address_file);
-	debugfs_remove(i2c_algo_data->root_dir);
+	debugfs_remove(i2c_data->i2c_data_file);
+	debugfs_remove(i2c_data->i2c_offset_file);
+	debugfs_remove(i2c_data->i2c_address_file);
+	debugfs_remove(i2c_data->root_dir);
 }
 
 #else /* CONFIG_DEBUG_FS */
@@ -125,8 +118,8 @@ static int fl2000_i2c_xfer_dword(struct i2c_adapter *adapter, bool read, u16 add
 {
 	int ret;
 	union fl2000_vga_i2c_sc_reg reg = {.val = 0};
-	struct fl2000_i2c_algo_data *i2c_algo_data = adapter->algo_data;
-	struct usb_device *usb_dev = i2c_algo_data->usb_dev;
+	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
+	struct usb_device *usb_dev = i2c_data->usb_dev;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	u32 mask = 0;
 
@@ -287,7 +280,7 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 {
 	int ret;
 	struct i2c_adapter *adapter;
-	struct fl2000_i2c_algo_data *i2c_algo_data;
+	struct fl2000_i2c_data *i2c_data;
 
 	/* Adapter must be allocated before anything else */
 	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter), GFP_KERNEL);
@@ -296,18 +289,18 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	devres_add(&usb_dev->dev, adapter);
 
 	/* On de-initialization of algo_data i2c adapter will be unregistered */
-	i2c_algo_data = devm_kzalloc(&usb_dev->dev, sizeof(*i2c_algo_data), GFP_KERNEL);
-	if (!i2c_algo_data)
+	i2c_data = devm_kzalloc(&usb_dev->dev, sizeof(*i2c_data), GFP_KERNEL);
+	if (!i2c_data)
 		return -ENOMEM;
 
-	i2c_algo_data->usb_dev = usb_dev;
+	i2c_data->usb_dev = usb_dev;
 
 	adapter->owner = THIS_MODULE;
 	adapter->class = I2C_CLASS_HDMI;
 	adapter->algo = &fl2000_i2c_algorithm;
 	adapter->quirks = &fl2000_i2c_quirks;
 
-	adapter->algo_data = i2c_algo_data;
+	adapter->algo_data = i2c_data;
 
 	adapter->dev.parent = &usb_dev->dev;
 
