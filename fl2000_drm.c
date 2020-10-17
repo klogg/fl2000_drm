@@ -199,7 +199,7 @@ static inline u32 fl2000_pll_get_divisor(u64 clock_mil, u32 vco_clk, u64 *min_pp
 }
 
 /* Try to match pixel clock - find parameters with minimal PLL error */
-static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
+static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_calculated)
 {
 	static const u32 prescaler_max = 2;
 	static const u32 multiplier_max = 128;
@@ -226,7 +226,7 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
 			pll->function = vco_clk < 125000000 ? 0 :
 					vco_clk < 250000000 ? 1 :
 					vco_clk < 500000000 ? 2 : 3;
-			*clock = vco_clk / divisor;
+			*clock_calculated = vco_clk / divisor;
 		}
 
 	/* No exact PLL settings found for requested clock */
@@ -236,47 +236,37 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock)
 static int fl2000_mode_calc(const struct drm_display_mode *mode,
 			    struct drm_display_mode *adjusted_mode, struct fl2000_pll *pll)
 {
-	static const int h_adjust_arr[] = {
-			 0,
-			 1,  -1,
-			 2,  -2,
-			 3,  -3,
-			 4,  -4,
-			 5,  -5,
-			 6,  -6,
-			 7,  -7,
-			 8,  -8,
-			 9,  -9,
-			10, -10
-	};
-	unsigned int h_adjust_idx;
 	u64 ppm_err;
-	u32 clock_adjusted;
+	u32 clock_calculated;
+	u64 clock_mil_adjusted;
+	const u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
+	const int max_h_adjustment = 10;
+	int s, m;
+	int d = 0;
 
 	if (mode->clock * 1000 > FL2000_MAX_PIXCLOCK)
 		return -1;
 
 	/* Try to match pixel clock slightly adjusting htotal value */
-	for (h_adjust_idx = 0; h_adjust_idx < ARRAY_SIZE(h_adjust_arr); h_adjust_idx++) {
-		u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
-		int h_adjust = h_adjust_arr[h_adjust_idx];
+	for (m = 0, s = 0; m <= max_h_adjustment * 2; m++, s = -s) {
+		/* 0, -1, 1, -2, 2, -3, 3, -3, 4, -4, 5, -5, ... */
+		d += m * s;
 
 		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get 10^15Hz. Assume
 		 * maximum htotal is 10000 pix (no way) we get 10^19 max value and using u64 which
 		 * is 1.8*10^19 no overflow can occur. Assume all this was checked before
 		 */
-		if (h_adjust != 0)
-			clock_mil = clock_mil * ((s64)mode->htotal + h_adjust) / mode->htotal;
+		clock_mil_adjusted = clock_mil * (mode->htotal + d) / mode->htotal;
 
 		/* To keep precision use clock multiplied by 10^6 */
-		ppm_err = fl2000_pll_calc(clock_mil, pll, &clock_adjusted);
+		ppm_err = fl2000_pll_calc(clock_mil_adjusted, pll, &clock_calculated);
 
 		/* Stop searching as soon as the first valid option found */
 		if (ppm_err < FL2000_PPM_ERR_MAX) {
 			if (adjusted_mode) {
 				drm_mode_copy(adjusted_mode, mode);
-				adjusted_mode->htotal += h_adjust_arr[h_adjust_idx];
-				adjusted_mode->clock = clock_adjusted / 1000;
+				adjusted_mode->htotal +=d;
+				adjusted_mode->clock = clock_calculated / 1000;
 			}
 
 			return 0;
