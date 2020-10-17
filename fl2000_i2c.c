@@ -22,8 +22,8 @@
 struct fl2000_i2c_data {
 	struct usb_device *usb_dev;
 #if defined(CONFIG_DEBUG_FS)
-	u8 i2c_debug_address, i2c_debug_offset;
-	struct dentry *root_dir, *i2c_address_file, *i2c_offset_file, *i2c_data_file;
+	u8 address, offset;
+	struct dentry *root_dir, *address_file, *offset_file, *data_file;
 #endif
 };
 
@@ -51,8 +51,8 @@ static int fl2000_debugfs_i2c_read(void *data, u64 *value)
 	struct i2c_adapter *adapter = data;
 	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	ret = fl2000_i2c_read_dword(adapter, i2c_data->i2c_debug_address,
-			i2c_data->i2c_debug_offset, &u32_value);
+	ret = fl2000_i2c_read_dword(adapter, i2c_data->address,
+			i2c_data->offset, &u32_value);
 	*value = u32_value;
 	return ret;
 }
@@ -63,8 +63,8 @@ static int fl2000_debugfs_i2c_write(void *data, u64 value)
 	struct i2c_adapter *adapter = data;
 	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	return fl2000_i2c_write_dword(adapter, i2c_data->i2c_debug_address,
-			i2c_data->i2c_debug_offset, &u32_value);
+	return fl2000_i2c_write_dword(adapter, i2c_data->address,
+			i2c_data->offset, &u32_value);
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(i2c_ops, fl2000_debugfs_i2c_read, fl2000_debugfs_i2c_write, "%08llx\n");
@@ -77,20 +77,20 @@ static int fl2000_debugfs_i2c_init(struct i2c_adapter *adapter)
 	if (IS_ERR(i2c_data->root_dir))
 		return PTR_ERR(i2c_data->root_dir);
 
-	i2c_data->i2c_address_file = debugfs_create_x8("i2c_address", fl2000_debug_umode,
-			i2c_data->root_dir, &i2c_data->i2c_debug_address);
-	if (IS_ERR(i2c_data->i2c_address_file))
-		return PTR_ERR(i2c_data->i2c_address_file);
+	i2c_data->address_file = debugfs_create_x8("i2c_address", fl2000_debug_umode,
+			i2c_data->root_dir, &i2c_data->address);
+	if (IS_ERR(i2c_data->address_file))
+		return PTR_ERR(i2c_data->address_file);
 
-	i2c_data->i2c_offset_file = debugfs_create_x8("i2c_offset", fl2000_debug_umode,
-			i2c_data->root_dir, &i2c_data->i2c_debug_offset);
-	if (IS_ERR(i2c_data->i2c_offset_file))
-		return PTR_ERR(i2c_data->i2c_offset_file);
+	i2c_data->offset_file = debugfs_create_x8("i2c_offset", fl2000_debug_umode,
+			i2c_data->root_dir, &i2c_data->offset);
+	if (IS_ERR(i2c_data->offset_file))
+		return PTR_ERR(i2c_data->offset_file);
 
-	i2c_data->i2c_data_file = debugfs_create_file("i2c_data", fl2000_debug_umode,
+	i2c_data->data_file = debugfs_create_file("i2c_data", fl2000_debug_umode,
 			i2c_data->root_dir, adapter, &i2c_ops);
-	if (IS_ERR(i2c_data->i2c_data_file))
-		return PTR_ERR(i2c_data->i2c_data_file);
+	if (IS_ERR(i2c_data->data_file))
+		return PTR_ERR(i2c_data->data_file);
 
 	return 0;
 }
@@ -99,9 +99,9 @@ static void fl2000_debugfs_i2c_remove(struct i2c_adapter *adapter)
 {
 	struct fl2000_i2c_data *i2c_data = adapter->algo_data;
 
-	debugfs_remove(i2c_data->i2c_data_file);
-	debugfs_remove(i2c_data->i2c_offset_file);
-	debugfs_remove(i2c_data->i2c_address_file);
+	debugfs_remove(i2c_data->data_file);
+	debugfs_remove(i2c_data->offset_file);
+	debugfs_remove(i2c_data->address_file);
 	debugfs_remove(i2c_data->root_dir);
 }
 
