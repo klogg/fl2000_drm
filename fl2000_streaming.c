@@ -18,10 +18,10 @@
  *  - one buffer for USB transmission
  *  - one buffer for DRM/KMS data copy
  */
-#define FL2000_SB_MIN		3
-#define FL2000_SB_NUM		(FL2000_SB_MIN + 1)
+#define FL2000_SB_MIN 3
+#define FL2000_SB_NUM (FL2000_SB_MIN + 1)
 
-#define FL2000_URB_TIMEOUT	100
+#define FL2000_URB_TIMEOUT 100
 
 struct fl2000_stream_buf {
 	struct list_head list;
@@ -114,7 +114,7 @@ static void fl2000_stream_put_buffers(struct usb_device *usb_dev, struct fl2000_
 {
 	struct fl2000_stream_buf *cur_sb, *temp_sb;
 
-	list_for_each_entry_safe(cur_sb, temp_sb, &stream->render_list, list) {
+	list_for_each_entry_safe (cur_sb, temp_sb, &stream->render_list, list) {
 		list_del(&cur_sb->list);
 		fl2000_free_sb(cur_sb);
 	}
@@ -148,8 +148,8 @@ error:
 static void fl2000_stream_data_completion(struct urb *urb)
 {
 	struct usb_device *usb_dev = urb->dev;
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL,
-			NULL);
+	struct fl2000_stream *stream =
+		devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 	struct fl2000_stream_buf *cur_sb = urb->context;
 
 	spin_lock_irq(&stream->list_lock);
@@ -190,8 +190,8 @@ static void fl2000_stream_work(struct work_struct *work)
 			BUG_ON(list_empty(&stream->wait_list));
 			cur_sb = list_first_entry(&stream->render_list, struct fl2000_stream_buf,
 						  list);
-			last_sb = list_last_entry(&stream->wait_list, struct fl2000_stream_buf,
-						  list);
+			last_sb =
+				list_last_entry(&stream->wait_list, struct fl2000_stream_buf, list);
 			memcpy(cur_sb->vaddr, last_sb->vaddr, stream->buf_size);
 		} else {
 			cur_sb = list_first_entry(&stream->transmit_list, struct fl2000_stream_buf,
@@ -228,8 +228,8 @@ static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf, u32 pixels)
 	unsigned int x, xx = 0;
 
 	for (x = 0; x < pixels; x++) {
-		dbuf[xx++ ^ 4] = (sbuf[x] & 0x000000FF) >>  0;
-		dbuf[xx++ ^ 4] = (sbuf[x] & 0x0000FF00) >>  8;
+		dbuf[xx++ ^ 4] = (sbuf[x] & 0x000000FF) >> 0;
+		dbuf[xx++ ^ 4] = (sbuf[x] & 0x0000FF00) >> 8;
 		dbuf[xx++ ^ 4] = (sbuf[x] & 0x00FF0000) >> 16;
 	}
 }
@@ -239,8 +239,7 @@ static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf, u32 pixels)
 	unsigned int x;
 
 	for (x = 0; x < pixels; x++) {
-		u16 val565 = ((sbuf[x] & 0x00F80000) >> 8) |
-			     ((sbuf[x] & 0x0000FC00) >> 5) |
+		u16 val565 = ((sbuf[x] & 0x00F80000) >> 8) | ((sbuf[x] & 0x0000FC00) >> 5) |
 			     ((sbuf[x] & 0x000000F8) >> 3);
 		dbuf[x ^ 2] = val565;
 	}
@@ -249,8 +248,8 @@ static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf, u32 pixels)
 void fl2000_stream_compress(struct usb_device *usb_dev, struct drm_framebuffer *fb, void *src)
 {
 	struct fl2000_stream_buf *cur_sb;
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL,
-			NULL);
+	struct fl2000_stream *stream =
+		devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 	unsigned int y;
 	void *dst;
 	u32 dst_line_len = fb->width * stream->bytes_pix;
@@ -284,8 +283,8 @@ void fl2000_stream_compress(struct usb_device *usb_dev, struct drm_framebuffer *
 int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix)
 {
 	int ret;
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL,
-			NULL);
+	struct fl2000_stream *stream =
+		devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 	size_t size;
 
 	if (!stream)
@@ -320,8 +319,8 @@ int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix
 int fl2000_stream_enable(struct usb_device *usb_dev)
 {
 	int i;
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL,
-			NULL);
+	struct fl2000_stream *stream =
+		devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 
 	if (!stream)
 		return -ENODEV;
@@ -343,8 +342,8 @@ int fl2000_stream_enable(struct usb_device *usb_dev)
 void fl2000_stream_disable(struct usb_device *usb_dev)
 {
 	struct fl2000_stream_buf *cur_sb;
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL,
-			NULL);
+	struct fl2000_stream *stream =
+		devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 
 	if (!stream)
 		return;
@@ -392,8 +391,7 @@ int fl2000_stream_create(struct usb_interface *interface)
 		return ret;
 	}
 
-	stream = devres_alloc(&fl2000_stream_release, sizeof(*stream),
-			      GFP_KERNEL);
+	stream = devres_alloc(&fl2000_stream_release, sizeof(*stream), GFP_KERNEL);
 	if (!stream) {
 		dev_err(&usb_dev->dev, "Cannot allocate stream");
 		return -ENOMEM;
@@ -423,8 +421,8 @@ int fl2000_stream_create(struct usb_interface *interface)
 void fl2000_stream_destroy(struct usb_interface *interface)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	struct fl2000_stream *stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL,
-			NULL);
+	struct fl2000_stream *stream =
+		devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 
 	if (!stream)
 		return;

@@ -6,20 +6,20 @@
 
 #include "fl2000.h"
 
-#define DRM_DRIVER_NAME		"fl2000_drm"
-#define DRM_DRIVER_DESC		"USB-HDMI"
-#define DRM_DRIVER_DATE		"20181001"
+#define DRM_DRIVER_NAME "fl2000_drm"
+#define DRM_DRIVER_DESC "USB-HDMI"
+#define DRM_DRIVER_DATE "20181001"
 
-#define DRM_DRIVER_MAJOR	0
-#define DRM_DRIVER_MINOR	0
-#define DRM_DRIVER_PATCHLEVEL	1
+#define DRM_DRIVER_MAJOR      0
+#define DRM_DRIVER_MINOR      0
+#define DRM_DRIVER_PATCHLEVEL 1
 
 /* Maximum supported resolution, out-of-the-blue numbers */
-#define FL20000_MAX_WIDTH	4000
-#define FL20000_MAX_HEIGHT	4000
+#define FL20000_MAX_WIDTH  4000
+#define FL20000_MAX_HEIGHT 4000
 
 /* Force using 32-bit XRGB8888 on input for simplicity */
-#define FL2000_FB_BPP		32
+#define FL2000_FB_BPP 32
 static const u32 fl2000_pixel_formats[] = {
 	DRM_FORMAT_XRGB8888,
 };
@@ -27,27 +27,27 @@ static const u32 fl2000_pixel_formats[] = {
 /* Maximum pixel clock set to 500MHz. It is hard to get more or less precise PLL configuration for
  * higher clock
  */
-#define FL2000_MAX_PIXCLOCK	500000000
+#define FL2000_MAX_PIXCLOCK 500000000
 
 /* PLL computing precision is 6 digits after comma */
-#define FL2000_PLL_PRECISION	1000000
+#define FL2000_PLL_PRECISION 1000000
 
 /* Input xtal clock, Hz */
-#define FL2000_XTAL		10000000	/* 10 MHz */
+#define FL2000_XTAL 10000000 /* 10 MHz */
 
 /* Internal vco clock min/max, Hz */
-#define FL2000_VCOCLOCK_MIN	62500000	/* 62.5 MHz */
-#define FL2000_VCOCLOCK_MAX	1000000000	/* 1GHz */
+#define FL2000_VCOCLOCK_MIN 62500000 /* 62.5 MHz */
+#define FL2000_VCOCLOCK_MAX 1000000000 /* 1GHz */
 
 /* Maximum acceptable ppm error */
-#define FL2000_PPM_ERR_MAX	500
+#define FL2000_PPM_ERR_MAX 500
 
 /* Assume bulk transfers can use only 80% of USB bandwidth */
-#define FL2000_BULK_BW_PERCENT		80
+#define FL2000_BULK_BW_PERCENT 80
 
 #define FL2000_BULK_BW_HIGH_SPEED	(480000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
 #define FL2000_BULK_BW_SUPER_SPEED	(5000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
-#define FL2000_BULK_BW_SUPER_SPEED_PLUS	(10000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
+#define FL2000_BULK_BW_SUPER_SPEED_PLUS (10000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
 
 static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 {
@@ -73,11 +73,11 @@ static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 	/* Maximum bytes per pixel with maximum bandwidth */
 	bytes_pix = max_bw / pixclock;
 	switch (bytes_pix) {
-	case 0:		/* Not enough */
-	case 1:		/* RGB 332 not supported*/
+	case 0: /* Not enough */
+	case 1: /* RGB 332 not supported*/
 		return 0;
-	case 2:		/* RGB 565 */
-	case 3:		/* RGB 888 */
+	case 2: /* RGB 565 */
+	case 3: /* RGB 888 */
 		break;
 	default:
 		bytes_pix = 3;
@@ -88,7 +88,7 @@ static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 }
 
 /* List all supported bridges */
-static const char * const fl2000_supported_bridges[] = {
+static const char *const fl2000_supported_bridges[] = {
 	"it66121", /* IT66121 driver name*/
 };
 
@@ -167,19 +167,14 @@ static u64 fl2000_pll_ppm_err(u64 clock_mil, u32 vco_clk, u32 divisor)
 static inline u32 fl2000_pll_get_divisor(u64 clock_mil, u32 vco_clk, u64 *min_ppm_err)
 {
 	static const u32 divisor_arr[] = {
-			       2,        4,        6,   7,   8,   9,  10,
-			 11,  12,  13,  14,  15,  16,  17,  18,  19,  20,
-			 21,  22,  23,  24,  25,  26,  27,  28,  29,  30,
-			 31,  32,  33,  34,  35,  36,  37,  38,  39,  40,
-			 41,  42,  43,  44,  45,  46,  47,  48,  49,  50,
-			 51,  52,  53,  54,  55,  56,  57,  58,  59,  60,
-			 61,  62,  63,  64,  65,  66,  67,  68,  69,  70,
-			 71,  72,  73,  74,  75,  76,  77,  78,  79,  80,
-			 81,  82,  83,  84,  85,  86,  87,  88,  89,  90,
-			 91,  92,  93,  94,  95,  96,  97,  98,  99, 100,
-			101, 102, 103, 104, 105, 106, 107, 108, 109, 110,
-			111, 112, 113, 114, 115, 116, 117, 118, 119, 120,
-			121, 122, 123, 124, 125, 126, 127, 128
+		2,   4,	  6,   7,   8,	 9,   10,  11,	12,  13,  14,  15,  16,	 17,  18,  19,
+		20,  21,  22,  23,  24,	 25,  26,  27,	28,  29,  30,  31,  32,	 33,  34,  35,
+		36,  37,  38,  39,  40,	 41,  42,  43,	44,  45,  46,  47,  48,	 49,  50,  51,
+		52,  53,  54,  55,  56,	 57,  58,  59,	60,  61,  62,  63,  64,	 65,  66,  67,
+		68,  69,  70,  71,  72,	 73,  74,  75,	76,  77,  78,  79,  80,	 81,  82,  83,
+		84,  85,  86,  87,  88,	 89,  90,  91,	92,  93,  94,  95,  96,	 97,  98,  99,
+		100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
+		116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128
 	};
 	unsigned int divisor_idx;
 	u32 best_divisor = 0;
@@ -225,7 +220,8 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_cal
 			pll->divisor = divisor;
 			pll->function = vco_clk < 125000000 ? 0 :
 					vco_clk < 250000000 ? 1 :
-					vco_clk < 500000000 ? 2 : 3;
+					vco_clk < 500000000 ? 2 :
+								    3;
 			*clock_calculated = vco_clk / divisor;
 		}
 
@@ -265,7 +261,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		if (ppm_err < FL2000_PPM_ERR_MAX) {
 			if (adjusted_mode) {
 				drm_mode_copy(adjusted_mode, mode);
-				adjusted_mode->htotal +=d;
+				adjusted_mode->htotal += d;
 				adjusted_mode->clock = clock_calculated / 1000;
 			}
 
@@ -297,7 +293,7 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
 
 static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 				  struct drm_crtc_state *cstate,
-		struct drm_plane_state *plane_state)
+				  struct drm_plane_state *plane_state)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
@@ -333,7 +329,7 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 		struct drm_format_name_buf format_name;
 
 		dev_err(drm->dev, "Only single plane RGB fbs are supported, got %d planes (%s)", n,
-			drm_get_format_name(fb->format->format,	&format_name));
+			drm_get_format_name(fb->format->format, &format_name));
 		return -EINVAL;
 	}
 	return 0;
@@ -372,8 +368,7 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 	}
 
 	if (import_attach) {
-		ret = dma_buf_begin_cpu_access(import_attach->dmabuf,
-					       DMA_FROM_DEVICE);
+		ret = dma_buf_begin_cpu_access(import_attach->dmabuf, DMA_FROM_DEVICE);
 		if (ret)
 			return;
 	}
@@ -561,8 +556,7 @@ static int fl2000_bind(struct device *master)
 					   fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats),
 					   NULL, NULL);
 	if (ret) {
-		dev_err(drm->dev, "Cannot configure simple display pipe (%d)",
-			ret);
+		dev_err(drm->dev, "Cannot configure simple display pipe (%d)", ret);
 		return ret;
 	}
 
@@ -662,8 +656,8 @@ static int fl2000_compare(struct device *dev, void *data)
 
 void fl2000_display_event_check(struct usb_device *usb_dev)
 {
-	struct fl2000_drm_if *drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL,
-			NULL);
+	struct fl2000_drm_if *drm_if =
+		devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
 
 	if (!drm_if)
 		return;
@@ -683,8 +677,7 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 
 	ret = component_master_add_with_match(&usb_dev->dev, &fl2000_drm_master_ops, match);
 	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot register component master (%d)",
-			ret);
+		dev_err(&usb_dev->dev, "Cannot register component master (%d)", ret);
 		return ret;
 	}
 
