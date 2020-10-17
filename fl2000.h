@@ -100,6 +100,7 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, int status, int 
 		break;
 
 	/* URB was unlinked or device shutdown in progress, do nothing */
+	case -ESHUTDOWN:
 	case -ECONNRESET:
 	case -ENOENT:
 	case -ENODEV:
@@ -107,7 +108,6 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, int status, int 
 		break;
 
 	/* Hardware or protocol errors - no recovery, report and do nothing */
-	case -ESHUTDOWN:
 	case -EPROTO:
 	case -EILSEQ:
 	case -ETIME:
@@ -163,11 +163,7 @@ enum fl2000_int_status {
 	ERROR, /* unrecoverable error */
 };
 
-/* AVControl transfer task */
-int fl2000_avcontrol_create(struct usb_interface *interface);
-void fl2000_avcontrol_destroy(struct usb_interface *interface);
-
-/* Stream transfer task */
+/* Streaming transfer task */
 int fl2000_stream_create(struct usb_interface *interface);
 void fl2000_stream_destroy(struct usb_interface *interface);
 
