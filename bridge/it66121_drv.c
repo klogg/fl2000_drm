@@ -657,7 +657,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 	/* Set reset flags */
 	ret = regmap_write_bits(priv->regmap, IT66121_SW_RST,
 				IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST,
-			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST | IT66121_SW_HDCP_RST);
+			IT66121_SW_REF_RST_HDMITX | IT66121_SW_HDMI_VID_RST);
 	if (ret)
 		return;
 
