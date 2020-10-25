@@ -257,11 +257,12 @@ static void it66121_intr_work(struct work_struct *work_item)
 	struct device *dev = priv->bridge.dev->dev;
 	bool event = false;
 
-	/* XXX: lock */
-
 	ret = regmap_field_read(priv->irq_pending, &val);
-	if (ret)
+	if (ret) {
+		/* TODO: Process error? */
 		dev_err(dev, "Cannot read interrupt status (%d)", ret);
+		return;
+	}
 
 	/* XXX: There are at least 5 registers that can source interrupt:
 	 *  - 0x06 (IT66121_INT_STATUS_1)
@@ -272,31 +273,35 @@ static void it66121_intr_work(struct work_struct *work_item)
 	 * For now we process only DDC events of the IT66121_INT_STATUS_1 which implies proper masks
 	 * configuration
 	 */
-	else if (val) {
+	if (val) {
 		union it666121_int_status_1_reg status_1;
 
 		ret = regmap_read(priv->regmap, IT66121_INT_STATUS_1, &status_1.val);
 		if (ret) {
+			/* TODO: Process error? */
 			dev_err(dev, "Cannot read IT66121_INT_STATUS_1 (%d)", ret);
-		} else {
-			if (status_1.ddc_fifo_err)
-				it66121_clear_ddc_fifo(priv);
-			if (status_1.ddc_bus_hang || status_1.ddc_noack)
-				it66121_abort_ddc_ops(priv);
-			if (status_1.hpd_plug) {
-				it66121_is_hpd_detect(priv);
-				event = true;
-				if (priv->conn_status == connector_status_disconnected) {
-					kfree(priv->edid);
-					priv->edid = NULL;
-				}
-			}
+			return;
 		}
 
 		regmap_field_write(priv->clr_irq, 1);
-	}
 
-	/* XXX: unlock */
+		/* XXX: lock */
+
+		if (status_1.ddc_fifo_err)
+			it66121_clear_ddc_fifo(priv);
+		if (status_1.ddc_bus_hang || status_1.ddc_noack)
+			it66121_abort_ddc_ops(priv);
+		if (status_1.hpd_plug) {
+			it66121_is_hpd_detect(priv);
+			event = true;
+			if (priv->conn_status == connector_status_disconnected) {
+				kfree(priv->edid);
+				priv->edid = NULL;
+			}
+		}
+
+		/* XXX: unlock */
+	}
 
 	if (event)
 		drm_helper_hpd_irq_event(priv->bridge.dev);
