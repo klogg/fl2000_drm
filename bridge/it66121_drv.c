@@ -255,7 +255,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 	struct delayed_work *dwork = container_of(work_item, struct delayed_work, work);
 	struct it66121_priv *priv = container_of(dwork, struct it66121_priv, work);
 	struct device *dev = priv->bridge.dev->dev;
-	bool event;
+	bool event = false;
 
 	/* XXX: lock */
 
