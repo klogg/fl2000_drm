@@ -394,24 +394,23 @@ int fl2000_enable_interrupts(struct usb_device *usb_dev)
 	return 0;
 }
 
-enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev)
+int fl2000_check_interrupt(struct usb_device *usb_dev)
 {
 	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	union fl2000_vga_status_reg status;
 	u32 mask = 0;
-	enum fl2000_int_status int_status = CLEAR;
 
 	/* Process interrupt */
 	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot read interrupt register (%d)", ret);
-		return ERROR;
+		return ret;
 	}
 
 	if (status.hdmi_event || status.monitor_event || status.edid_event) {
 		dev_info(&usb_dev->dev, "Connection event 0x%X", status.val);
-		int_status = EVENT;
+		fl2000_display_event_check(usb_dev);
 	}
 
 	/* LBUF issues are recoverable */
@@ -428,16 +427,14 @@ enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev)
 	if (status.lbuf_halt) {
 		/* TODO: Reset LBUF using regmap_field for lbuf_sw_rst */
 		dev_err(&usb_dev->dev, "LBUF halted!");
-		int_status = ERROR;
 	}
 
 	if (status.vga_error) {
 		/* TODO: Don't know how to recover here */
 		dev_err(&usb_dev->dev, "VGA error detected!");
-		int_status = ERROR;
 	}
 
-	return int_status;
+	return 0;
 }
 
 int fl2000_regmap_init(struct usb_device *usb_dev)

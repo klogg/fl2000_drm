@@ -157,12 +157,6 @@ struct fl2000_pll {
 	u32 function;
 };
 
-enum fl2000_int_status {
-	CLEAR, /* nothing to do */
-	EVENT, /* sink connection event */
-	ERROR, /* unrecoverable error */
-};
-
 /* Streaming transfer task */
 int fl2000_stream_create(struct usb_interface *interface);
 void fl2000_stream_destroy(struct usb_interface *interface);
@@ -194,7 +188,7 @@ int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix);
 int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timings);
 int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll);
 int fl2000_enable_interrupts(struct usb_device *usb_dev);
-enum fl2000_int_status fl2000_check_interrupt(struct usb_device *usb_dev);
+int fl2000_check_interrupt(struct usb_device *usb_dev);
 
 /* DRM device creation */
 int fl2000_drm_init(struct usb_device *usb_dev);
