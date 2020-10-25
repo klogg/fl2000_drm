@@ -662,8 +662,7 @@ void fl2000_display_event_check(struct usb_device *usb_dev)
 	if (!drm_if)
 		return;
 
-	if (fl2000_check_interrupt(usb_dev) == EVENT)
-		drm_kms_helper_hotplug_event(&drm_if->drm);
+	drm_kms_helper_hotplug_event(&drm_if->drm);
 }
 
 int fl2000_drm_init(struct usb_device *usb_dev)
