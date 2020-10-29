@@ -19,14 +19,13 @@
 #include <linux/i2c.h>
 #include <linux/component.h>
 #include <linux/regmap.h>
-#include <linux/shmem_fs.h>
+//#include <linux/shmem_fs.h>
 #include <linux/dma-buf.h>
 #include <linux/dma-mapping.h>
 #include <linux/time.h>
 #include <drm/drmP.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_fb_helper.h>
-#include <drm/drm_gem_shmem_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_simple_kms_helper.h>
@@ -157,13 +156,38 @@ struct fl2000_pll {
 	u32 function;
 };
 
+struct fl2000_gem_object {
+	struct drm_gem_object base;
+	size_t num_pages;
+	struct page **pages;
+	struct sg_table *sgt;
+	void *vaddr;
+};
+
+#define to_fl2000_gem_obj(gem_obj) container_of(gem_obj, struct fl2000_gem_object, base)
+
+/* GEM buffers */
+int fl2000_gem_mmap(struct file *filp, struct vm_area_struct *vma);
+struct drm_gem_object *fl2000_gem_create_object_default_funcs(struct drm_device *dev, size_t size);
+int fl2000_gem_dumb_create(struct drm_file *file_priv, struct drm_device *drm,
+			   struct drm_mode_create_dumb *args);
+struct drm_gem_object *fl2000_gem_prime_import_sg_table(struct drm_device *dev,
+							struct dma_buf_attachment *attach,
+							struct sg_table *sgt);
+void fl2000_gem_free(struct drm_gem_object *gem_obj);
+extern const struct vm_operations_struct fl2000_gem_vm_ops;
+struct sg_table *fl2000_gem_prime_get_sg_table(struct drm_gem_object *gem_obj);
+void *fl2000_gem_prime_vmap(struct drm_gem_object *gem_obj);
+void fl2000_gem_prime_vunmap(struct drm_gem_object *gem_obj, void *vaddr);
+
 /* Streaming transfer task */
 int fl2000_stream_create(struct usb_interface *interface);
 void fl2000_stream_destroy(struct usb_interface *interface);
 
 /* Streaming interface */
 int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix);
-void fl2000_stream_compress(struct usb_device *usb_dev, struct drm_framebuffer *fb, void *src);
+void fl2000_stream_compress(struct usb_device *usb_dev, void *src, unsigned int height,
+			    unsigned int width, unsigned int pitch);
 int fl2000_stream_enable(struct usb_device *usb_dev);
 void fl2000_stream_disable(struct usb_device *usb_dev);
 

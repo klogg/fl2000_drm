@@ -245,14 +245,15 @@ static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf, u32 pixels)
 	}
 }
 
-void fl2000_stream_compress(struct usb_device *usb_dev, struct drm_framebuffer *fb, void *src)
+void fl2000_stream_compress(struct usb_device *usb_dev, void *src, unsigned int height,
+			    unsigned int width, unsigned int pitch)
 {
 	struct fl2000_stream_buf *cur_sb;
 	struct fl2000_stream *stream =
 		devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
 	unsigned int y;
 	void *dst;
-	u32 dst_line_len = fb->width * stream->bytes_pix;
+	u32 dst_line_len = width * stream->bytes_pix;
 
 	BUG_ON(list_empty(&stream->render_list));
 
@@ -261,18 +262,18 @@ void fl2000_stream_compress(struct usb_device *usb_dev, struct drm_framebuffer *
 	cur_sb = list_first_entry(&stream->render_list, struct fl2000_stream_buf, list);
 	dst = cur_sb->vaddr;
 
-	for (y = 0; y < fb->height; y++) {
+	for (y = 0; y < height; y++) {
 		switch (stream->bytes_pix) {
 		case 2:
-			fl2000_xrgb888_to_rgb565_line(dst, src, fb->width);
+			fl2000_xrgb888_to_rgb565_line(dst, src, width);
 			break;
 		case 3:
-			fl2000_xrgb888_to_rgb888_line(dst, src, fb->width);
+			fl2000_xrgb888_to_rgb888_line(dst, src, width);
 			break;
 		default: /* Shouldn't happen */
 			break;
 		}
-		src += fb->pitches[0];
+		src += pitch;
 		dst += dst_line_len;
 	}
 
