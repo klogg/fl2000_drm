@@ -113,7 +113,17 @@ static inline struct fl2000_drm_if *fl2000_pipe_to_drm_if(struct drm_simple_disp
 	return container_of(pipe, struct fl2000_drm_if, pipe);
 }
 
-DEFINE_DRM_GEM_SHMEM_FOPS(fl2000_drm_driver_fops);
+static const struct file_operations fl2000_drm_driver_fops = {
+	.owner = THIS_MODULE,
+	.open = drm_open,
+	.release = drm_release,
+	.unlocked_ioctl = drm_ioctl,
+	.compat_ioctl = drm_compat_ioctl,
+	.poll = drm_poll,
+	.read = drm_read,
+	.llseek = noop_llseek,
+	.mmap = fl2000_gem_mmap,
+};
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
@@ -129,7 +139,20 @@ static struct drm_driver fl2000_drm_driver = {
 	.fops = &fl2000_drm_driver_fops,
 	.release = fl2000_drm_release,
 
-	DRM_GEM_SHMEM_DRIVER_OPS,
+	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
+	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
+	.gem_prime_import_sg_table = fl2000_gem_prime_import_sg_table,
+	.gem_prime_mmap = drm_gem_prime_mmap,
+	.dumb_create = fl2000_gem_dumb_create,
+
+	.gem_create_object = fl2000_gem_create_object_default_funcs,
+	.gem_free_object_unlocked = fl2000_gem_free,
+	.gem_vm_ops = &fl2000_gem_vm_ops,
+	.gem_prime_import = drm_gem_prime_import,
+	.gem_prime_export = drm_gem_prime_export,
+	.gem_prime_get_sg_table = fl2000_gem_prime_get_sg_table,
+	.gem_prime_vmap = fl2000_gem_prime_vmap,
+	.gem_prime_vunmap = fl2000_gem_prime_vunmap,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
@@ -352,18 +375,11 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 	int idx, ret;
 	struct drm_device *drm = fb->dev;
 	struct usb_device *usb_dev = drm->dev_private;
-	struct drm_gem_object *gem = drm_gem_fb_get_obj(fb, 0);
-	struct dma_buf_attachment *import_attach = gem->import_attach;
-	void *vaddr;
+	struct drm_gem_object *gem_obj = drm_gem_fb_get_obj(fb, 0);
+	struct dma_buf_attachment *import_attach = gem_obj->import_attach;
 
 	if (!drm_dev_enter(fb->dev, &idx)) {
 		dev_err(drm->dev, "DRM enter failed!");
-		return;
-	}
-
-	vaddr = drm_gem_shmem_vmap(gem);
-	if (!vaddr) {
-		dev_err(drm->dev, "FB vmap failed!");
 		return;
 	}
 
@@ -373,12 +389,11 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 			return;
 	}
 
-	fl2000_stream_compress(usb_dev, fb, vaddr);
+	fl2000_stream_compress(usb_dev, to_fl2000_gem_obj(gem_obj)->vaddr, fb->height, fb->width,
+			       fb->pitches[0]);
 
 	if (import_attach)
 		dma_buf_end_cpu_access(import_attach->dmabuf, DMA_FROM_DEVICE);
-
-	drm_gem_shmem_vunmap(drm_gem_fb_get_obj(fb, 0), vaddr);
 
 	drm_dev_exit(idx);
 }
