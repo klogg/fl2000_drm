@@ -56,8 +56,7 @@ static void fl2000_free_sb(struct fl2000_stream_buf *sb)
 {
 	int i;
 
-	if (sb->vaddr)
-		vunmap(sb->vaddr);
+	vunmap(sb->vaddr);
 
 	sg_free_table(&sb->sgt);
 
@@ -95,7 +94,7 @@ static struct fl2000_stream_buf *fl2000_alloc_sb(size_t size)
 	if (ret != 0)
 		goto error;
 
-	sb->vaddr = vmap(sb->pages, nr_pages, VM_MAP | VM_IOREMAP, PAGE_KERNEL);
+	sb->vaddr = vmap(sb->pages, nr_pages, VM_MAP, PAGE_KERNEL);
 	if (!sb->vaddr)
 		goto error;
 
