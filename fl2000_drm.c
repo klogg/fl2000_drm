@@ -129,7 +129,6 @@ static void fl2000_drm_release(struct drm_device *drm)
 {
 	drm_atomic_helper_shutdown(drm);
 	drm_mode_config_cleanup(drm);
-	drm_dev_fini(drm);
 }
 
 static struct drm_driver fl2000_drm_driver = {
@@ -148,8 +147,6 @@ static struct drm_driver fl2000_drm_driver = {
 	.gem_create_object = fl2000_gem_create_object_default_funcs,
 	.gem_free_object_unlocked = fl2000_gem_free,
 	.gem_vm_ops = &fl2000_gem_vm_ops,
-	.gem_prime_import = drm_gem_prime_import,
-	.gem_prime_export = drm_gem_prime_export,
 	.gem_prime_get_sg_table = fl2000_gem_prime_get_sg_table,
 	.gem_prime_vmap = fl2000_gem_prime_vmap,
 	.gem_prime_vunmap = fl2000_gem_prime_vunmap,
@@ -296,10 +293,10 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 	return -1;
 }
 
-static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
+static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_pipe *pipe,
 						      const struct drm_display_mode *mode)
 {
-	struct drm_device *drm = crtc->dev;
+	struct drm_device *drm = pipe->crtc.dev;
 	struct usb_device *usb_dev = drm->dev_private;
 	struct drm_display_mode adjusted_mode;
 	struct fl2000_pll pll;
@@ -607,11 +604,7 @@ static int fl2000_bind(struct device *master)
 	fl2000_reset(usb_dev);
 	fl2000_usb_magic(usb_dev);
 
-	ret = drm_fbdev_generic_setup(drm, FL2000_FB_BPP);
-	if (ret) {
-		dev_err(drm->dev, "Cannot initialize framebuffer (%d)", ret);
-		return ret;
-	}
+	drm_fbdev_generic_setup(drm, FL2000_FB_BPP);
 
 	return 0;
 }

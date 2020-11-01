@@ -479,10 +479,15 @@ static const struct component_ops it66121_component_ops = {
 };
 
 /* TODO: rewrite register access properly, add error processing */
-static int it66121_bridge_attach(struct drm_bridge *bridge)
+static int it66121_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_attach_flags flags)
 {
 	int ret;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv, bridge);
+
+	if (flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR) {
+		DRM_ERROR("Need connector for mode configuration");
+		return -ENODEV;
+	}
 
 	if (!bridge->encoder) {
 		DRM_ERROR("Parent encoder object not found");
