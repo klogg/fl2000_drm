@@ -31,7 +31,7 @@ struct fl2000_reg_data {
 	void *data;
 #if defined(CONFIG_DEBUG_FS)
 	unsigned int reg_debug_address;
-	struct dentry *root_dir, *reg_address_file, *reg_data_file;
+	struct dentry *root_dir, *reg_data_file;
 
 #endif
 };
@@ -168,11 +168,8 @@ static int fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 	if (IS_ERR(reg_data->root_dir))
 		return PTR_ERR(reg_data->root_dir);
 
-	reg_data->reg_address_file = debugfs_create_x32("reg_address", fl2000_debug_umode,
-							reg_data->root_dir,
-							&reg_data->reg_debug_address);
-	if (IS_ERR(reg_data->reg_address_file))
-		return PTR_ERR(reg_data->reg_address_file);
+	debugfs_create_x32("reg_address", fl2000_debug_umode, reg_data->root_dir,
+			   &reg_data->reg_debug_address);
 
 	reg_data->reg_data_file = debugfs_create_file("reg_data", fl2000_debug_umode,
 						      reg_data->root_dir, usb_dev, &reg_ops);
@@ -185,7 +182,6 @@ static int fl2000_debugfs_reg_init(struct fl2000_reg_data *reg_data)
 static void fl2000_debugfs_reg_remove(struct fl2000_reg_data *reg_data)
 {
 	debugfs_remove(reg_data->reg_data_file);
-	debugfs_remove(reg_data->reg_address_file);
 	debugfs_remove(reg_data->root_dir);
 }
 
