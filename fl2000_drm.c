@@ -293,10 +293,17 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 	return -1;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
 static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_pipe *pipe,
 						      const struct drm_display_mode *mode)
 {
 	struct drm_device *drm = pipe->crtc.dev;
+#else
+static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
+						      const struct drm_display_mode *mode)
+{
+	struct drm_device *drm = crtc->dev;
+#endif
 	struct usb_device *usb_dev = drm->dev_private;
 	struct drm_display_mode adjusted_mode;
 	struct fl2000_pll pll;

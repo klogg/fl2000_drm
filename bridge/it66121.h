@@ -6,14 +6,13 @@
 #ifndef __IT66121_H__
 #define __IT66121_H__
 
+#include <linux/version.h>
 #include <linux/device.h>
 #include <linux/module.h>
-
 #include <linux/hdmi.h>
 #include <linux/i2c.h>
 #include <linux/component.h>
 #include <linux/regmap.h>
-
 #include <drm/drm_atomic.h>
 #include <drm/drm_bridge.h>
 #include <drm/drm_print.h>
