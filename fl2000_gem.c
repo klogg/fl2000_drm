@@ -125,7 +125,7 @@ static struct fl2000_gem_object *fl2000_gem_create_with_handle(struct drm_file *
 	ret = drm_gem_handle_create(file_priv, gem_obj, handle);
 
 	/* drop reference from allocate - handle holds it now. */
-	drm_gem_object_put_unlocked(gem_obj);
+	drm_gem_object_put(gem_obj);
 
 	if (ret)
 		return ERR_PTR(ret);
@@ -201,7 +201,7 @@ struct sg_table *fl2000_gem_prime_get_sg_table(struct drm_gem_object *gem_obj)
 	if (!obj->pages)
 		return ERR_PTR(-ENOMEM);
 
-	return drm_prime_pages_to_sg(obj->pages, obj->num_pages);
+	return drm_prime_pages_to_sg(obj->base.dev, obj->pages, obj->num_pages);
 }
 
 struct drm_gem_object *fl2000_gem_prime_import_sg_table(struct drm_device *drm,

@@ -538,24 +538,16 @@ static int fl2000_bind(struct device *master)
 
 	dev_info(master, "Binding FL2000 master component");
 
-	drm_if = devres_alloc(&fl2000_drm_if_release, sizeof(*drm_if), GFP_KERNEL);
-	if (!drm_if) {
-		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure");
-		return -ENOMEM;
-	}
-	devres_add(master, drm_if);
+	drm_if = devm_drm_dev_alloc(master, &fl2000_drm_driver, struct fl2000_drm_if, drm);
+
+	if (IS_ERR(drm_if))
+		return PTR_ERR(drm_if);
 
 	drm = &drm_if->drm;
-	ret = drm_dev_init(drm, &fl2000_drm_driver, master);
-	if (ret) {
-		dev_err(master, "Cannot initialize DRM device (%d)", ret);
-		return ret;
-	}
+	ret = drmm_mode_config_init(drm);
+	if (ret)
+		return(ret);
 
-	/* For register operations */
-	drm->dev_private = usb_dev;
-
-	drm_mode_config_init(drm);
 	mode_config = &drm->mode_config;
 	mode_config->funcs = &fl2000_mode_config_funcs;
 	mode_config->min_width = 1;
