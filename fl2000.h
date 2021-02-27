@@ -7,8 +7,6 @@
 #ifndef __FL2000_DRM_H__
 #define __FL2000_DRM_H__
 
-#define DEBUG 1
-
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -23,6 +21,7 @@
 #include <linux/dma-buf.h>
 #include <linux/dma-mapping.h>
 #include <linux/time.h>
+#include <linux/device.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_prime.h>
 #include <drm/drm_vblank.h>
@@ -39,16 +38,12 @@
 
 #include "fl2000_registers.h"
 
-#if defined(CONFIG_DEBUG_FS)
-
-/* NOTE: it might be unsafe / insecure to use allow rw access everyone */
-#include <linux/debugfs.h>
-static const umode_t fl2000_debug_umode = 0666;
-
-#endif /* CONFIG_DEBUG_FS */
-
-/* Custom code for DRM bridge autodetection since there is no DT support */
-#define I2C_CLASS_HDMI BIT(9)
+/* Known USB interfaces of FL2000 */
+enum fl2000_interface {
+	FL2000_USBIF_AVCONTROL = 0,
+	FL2000_USBIF_STREAMING = 1,
+	FL2000_USBIF_INTERRUPT = 2,
+};
 
 /**
  * fl2000_add_bitmask - Set bitmask for structure field
@@ -95,46 +90,13 @@ static inline int fl2000_submit_urb(struct urb *urb)
 
 static inline int fl2000_urb_status(struct usb_device *usb_dev, int status, int pipe)
 {
-	int ret = 0;
+	int ret = status;
 
 	switch (status) {
-	/* All went well */
-	case 0:
-		break;
-
-	/* URB was unlinked or device shutdown in progress, do nothing */
-	case -ESHUTDOWN:
-	case -ECONNRESET:
-	case -ENOENT:
-	case -ENODEV:
-		ret = -1;
-		break;
-
-	/* Hardware or protocol errors - no recovery, report and do nothing */
-	case -EPROTO:
-	case -EILSEQ:
-	case -ETIME:
-		dev_err(&usb_dev->dev, "USB hardware unrecoverable error %d", status);
-		ret = -1;
-		break;
-
 	/* Stalled endpoint */
 	case -EPIPE:
-		dev_err(&usb_dev->dev, "Pipe %d stalled", pipe);
 		ret = usb_clear_halt(usb_dev, pipe);
-		if (ret != 0) {
-			dev_err(&usb_dev->dev, "Cannot reset endpoint, error %d", ret);
-			ret = -1;
-		}
 		break;
-
-	/* Shutting down */
-	case -EPERM:
-		dev_err(&usb_dev->dev, "Shutting down interface, URB canceled");
-		ret = 0;
-		break;
-
-	/* All the rest cases - igonore */
 	default:
 		break;
 	}
@@ -168,6 +130,10 @@ struct fl2000_gem_object {
 	void *vaddr;
 };
 
+/* Timeout in us for I2C read/write operations */
+#define I2C_RDWR_INTERVAL (200)
+#define I2C_RDWR_TIMEOUT  (256 * 1000)
+
 #define to_fl2000_gem_obj(gem_obj) container_of(gem_obj, struct fl2000_gem_object, base)
 
 /* GEM buffers */
@@ -185,27 +151,27 @@ void *fl2000_gem_prime_vmap(struct drm_gem_object *gem_obj);
 void fl2000_gem_prime_vunmap(struct drm_gem_object *gem_obj, void *vaddr);
 
 /* Streaming transfer task */
-int fl2000_stream_create(struct usb_interface *interface);
-void fl2000_stream_destroy(struct usb_interface *interface);
+struct fl2000_stream;
+struct fl2000_stream *fl2000_stream_create(struct usb_device *usb_dev, struct drm_crtc *crtc);
+void fl2000_stream_destroy(struct usb_device *usb_dev);
 
 /* Streaming interface */
-int fl2000_stream_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix);
-void fl2000_stream_compress(struct usb_device *usb_dev, void *src, unsigned int height,
+int fl2000_stream_mode_set(struct fl2000_stream *stream, int pixels, u32 bytes_pix);
+void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned int height,
 			    unsigned int width, unsigned int pitch);
-int fl2000_stream_enable(struct usb_device *usb_dev);
-void fl2000_stream_disable(struct usb_device *usb_dev);
+int fl2000_stream_enable(struct fl2000_stream *stream);
+void fl2000_stream_disable(struct fl2000_stream *stream);
 
 /* Interrupt polling task */
-int fl2000_intr_create(struct usb_interface *interface);
-void fl2000_intr_destroy(struct usb_interface *interface);
+struct fl2000_intr;
+struct fl2000_intr *fl2000_intr_create(struct usb_device *usb_dev, struct drm_device *drm);
+void fl2000_intr_destroy(struct usb_device *usb_dev);
 
 /* I2C adapter interface creation */
-int fl2000_i2c_init(struct usb_device *usb_dev);
-void fl2000_i2c_cleanup(struct usb_device *usb_dev);
+struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev);
 
 /* Register map creation */
-int fl2000_regmap_init(struct usb_device *usb_dev);
-void fl2000_regmap_cleanup(struct usb_device *usb_dev);
+struct regmap *fl2000_regmap_init(struct usb_device *usb_dev);
 
 /* Registers interface */
 int fl2000_reset(struct usb_device *usb_dev);
@@ -217,13 +183,10 @@ int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timing
 int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll);
 int fl2000_enable_interrupts(struct usb_device *usb_dev);
 int fl2000_check_interrupt(struct usb_device *usb_dev);
+int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data);
 
 /* DRM device creation */
-int fl2000_drm_init(struct usb_device *usb_dev);
-void fl2000_drm_cleanup(struct usb_device *usb_dev);
-
-/* DRM interface */
-void fl2000_display_vblank(struct usb_device *usb_dev);
-void fl2000_display_event_check(struct usb_device *usb_dev);
+int fl2000_drm_bind(struct device *master);
+void fl2000_drm_unbind(struct device *master);
 
 #endif /* __FL2000_DRM_H__ */

@@ -17,8 +17,9 @@ fi
 # NOTE: There is a bug in qemu that does not properly allow using together
 # kernel_irqchip=split and intremao=on. There is work being done to re-enable
 # fastpath for INTx but it is not merged yet as of now
-virtme-run --pwd --installed-kernel --qemu-opts -cpu host \
-	-m 4G \
+virtme-run --pwd --installed-kernel --kopt "crashkernel=384M-:128M" \
+	--qemu-opts \
+	-cpu host -m 4G \
 	-nic user,ipv6=off,model=e1000 \
 	-machine q35,accel=kvm,kernel_irqchip=split \
 	-device $IOMMU,intremap=on,caching-mode=on,device-iotlb=on \

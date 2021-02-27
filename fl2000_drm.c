@@ -49,13 +49,13 @@ static const u32 fl2000_pixel_formats[] = {
 #define FL2000_BULK_BW_SUPER_SPEED	(5000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
 #define FL2000_BULK_BW_SUPER_SPEED_PLUS (10000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
 
-static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
+static u32 fl2000_get_bytes_pix(enum usb_device_speed speed, u32 pixclock)
 {
 	int bytes_pix;
 	u64 max_bw;
 
 	/* Calculate maximum bandwidth, bytes per second */
-	switch (usb_dev->speed) {
+	switch (speed) {
 	case USB_SPEED_HIGH:
 		max_bw = FL2000_BULK_BW_HIGH_SPEED;
 		break;
@@ -66,7 +66,6 @@ static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 		max_bw = FL2000_BULK_BW_SUPER_SPEED_PLUS;
 		break;
 	default:
-		dev_err(&usb_dev->dev, "Unsupported USB bus detected");
 		return 0;
 	}
 
@@ -87,31 +86,13 @@ static u32 fl2000_get_bytes_pix(struct usb_device *usb_dev, u32 pixclock)
 	return bytes_pix;
 }
 
-/* List all supported bridges */
-static const char *const fl2000_supported_bridges[] = {
-	"it66121", /* IT66121 driver name*/
-};
-
 struct fl2000_drm_if {
-	struct drm_device drm;
+	struct usb_device *usb_dev;
+	struct drm_device *drm;
 	struct drm_simple_display_pipe pipe;
-	bool vblank_enabled;
+	struct fl2000_stream *stream;
+	struct fl2000_intr *intr;
 };
-
-static void fl2000_drm_if_release(struct device *dev, void *res)
-{
-	/* Noop */
-}
-
-static inline struct fl2000_drm_if *fl2000_drm_to_drm_if(struct drm_device *drm)
-{
-	return container_of(drm, struct fl2000_drm_if, drm);
-}
-
-static inline struct fl2000_drm_if *fl2000_pipe_to_drm_if(struct drm_simple_display_pipe *pipe)
-{
-	return container_of(pipe, struct fl2000_drm_if, pipe);
-}
 
 static const struct file_operations fl2000_drm_driver_fops = {
 	.owner = THIS_MODULE,
@@ -157,10 +138,6 @@ static struct drm_driver fl2000_drm_driver = {
 	.major = DRM_DRIVER_MAJOR,
 	.minor = DRM_DRIVER_MINOR,
 	.patchlevel = DRM_DRIVER_PATCHLEVEL,
-
-#if defined(_DISABLED_CONFIG_DEBUG_FS)
-	.debugfs_init = fl2000_debugfs_init,
-#endif
 };
 
 static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
@@ -304,15 +281,16 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
 {
 	struct drm_device *drm = crtc->dev;
 #endif
-	struct usb_device *usb_dev = drm->dev_private;
 	struct drm_display_mode adjusted_mode;
 	struct fl2000_pll pll;
+	struct fl2000_drm_if *drm_if = drm->dev_private;
+	struct usb_device *usb_dev = drm_if->usb_dev;
 
 	/* Get PLL configuration and check if mode adjustments needed */
 	if (fl2000_mode_calc(mode, &adjusted_mode, &pll))
 		return MODE_BAD;
 
-	if (!fl2000_get_bytes_pix(usb_dev, adjusted_mode.clock))
+	if (!fl2000_get_bytes_pix(usb_dev->speed, adjusted_mode.clock))
 		return MODE_BAD;
 
 	return MODE_OK;
@@ -323,10 +301,12 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 				  struct drm_plane_state *plane_state)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
-	struct drm_device *drm = crtc->dev;
-	struct usb_device *usb_dev = drm->dev_private;
+	struct drm_device *drm = pipe->crtc.dev;
+	struct fl2000_drm_if *drm_if = drm->dev_private;
 
-	fl2000_stream_enable(usb_dev);
+	/* TODO: check cstate/pstate? */
+
+	fl2000_stream_enable(drm_if->stream);
 
 	drm_crtc_vblank_on(crtc);
 }
@@ -334,10 +314,10 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 static void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 {
 	struct drm_crtc *crtc = &pipe->crtc;
-	struct drm_device *drm = crtc->dev;
-	struct usb_device *usb_dev = drm->dev_private;
+	struct drm_device *drm = pipe->crtc.dev;
+	struct fl2000_drm_if *drm_if = drm->dev_private;
 
-	fl2000_stream_disable(usb_dev);
+	fl2000_stream_disable(drm_if->stream);
 
 	drm_crtc_vblank_off(crtc);
 }
@@ -362,25 +342,13 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 	return 0;
 }
 
-void fl2000_display_vblank(struct usb_device *usb_dev)
-{
-	struct fl2000_drm_if *drm_if;
-
-	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
-	if (!drm_if)
-		return;
-
-	if (drm_if->vblank_enabled && drm_if->pipe.crtc.enabled)
-		drm_crtc_handle_vblank(&drm_if->pipe.crtc);
-}
-
 static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 {
 	int idx, ret;
 	struct drm_device *drm = fb->dev;
-	struct usb_device *usb_dev = drm->dev_private;
 	struct drm_gem_object *gem_obj = drm_gem_fb_get_obj(fb, 0);
 	struct dma_buf_attachment *import_attach = gem_obj->import_attach;
+	struct fl2000_drm_if *drm_if = drm->dev_private;
 
 	if (!drm_dev_enter(fb->dev, &idx)) {
 		dev_err(drm->dev, "DRM enter failed!");
@@ -393,8 +361,8 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 			return;
 	}
 
-	fl2000_stream_compress(usb_dev, to_fl2000_gem_obj(gem_obj)->vaddr, fb->height, fb->width,
-			       fb->pitches[0]);
+	fl2000_stream_compress(drm_if->stream, to_fl2000_gem_obj(gem_obj)->vaddr, fb->height,
+			       fb->width, fb->pitches[0]);
 
 	if (import_attach)
 		dma_buf_end_cpu_access(import_attach->dmabuf, DMA_FROM_DEVICE);
@@ -426,36 +394,6 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	}
 }
 
-static int fl2000_display_enable_vblank(struct drm_simple_display_pipe *pipe)
-{
-	struct drm_crtc *crtc = &pipe->crtc;
-	struct drm_device *drm = crtc->dev;
-	struct usb_device *usb_dev = drm->dev_private;
-	struct fl2000_drm_if *drm_if;
-
-	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
-	if (!drm_if)
-		return -ENODEV;
-
-	drm_if->vblank_enabled = true;
-
-	return 0;
-}
-
-static void fl2000_display_disable_vblank(struct drm_simple_display_pipe *pipe)
-{
-	struct drm_crtc *crtc = &pipe->crtc;
-	struct drm_device *drm = crtc->dev;
-	struct usb_device *usb_dev = drm->dev_private;
-	struct fl2000_drm_if *drm_if;
-
-	drm_if = devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
-	if (!drm_if)
-		return;
-
-	drm_if->vblank_enabled = false;
-}
-
 /* Logical pipe management (no HW configuration here) */
 static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_display_mode_valid,
@@ -463,8 +401,6 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.disable = fl2000_display_disable,
 	.check = fl2000_display_check,
 	.update = fl2000_display_update,
-	.enable_vblank = fl2000_display_enable_vblank,
-	.disable_vblank = fl2000_display_disable_vblank,
 	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
 };
 
@@ -472,7 +408,8 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_displ
 				   struct drm_display_mode *adjusted_mode)
 {
 	struct drm_device *drm = encoder->dev;
-	struct usb_device *usb_dev = drm->dev_private;
+	struct fl2000_drm_if *drm_if = drm->dev_private;
+	struct usb_device *usb_dev = drm_if->usb_dev;
 	struct fl2000_timings timings;
 	struct fl2000_pll pll;
 	u32 bytes_pix;
@@ -482,7 +419,7 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_displ
 		return;
 
 	/* Check how many bytes per pixel shall be used with adjusted clock */
-	bytes_pix = fl2000_get_bytes_pix(usb_dev, adjusted_mode->clock);
+	bytes_pix = fl2000_get_bytes_pix(usb_dev->speed, adjusted_mode->clock);
 	if (!bytes_pix)
 		return;
 
@@ -519,7 +456,7 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_displ
 
 	fl2000_afe_magic(usb_dev);
 
-	fl2000_stream_mode_set(usb_dev, mode->hdisplay * mode->vdisplay, bytes_pix);
+	fl2000_stream_mode_set(drm_if->stream, mode->hdisplay * mode->vdisplay, bytes_pix);
 }
 
 /* FL2000 HW control functions: mode configuration, turn on/off */
@@ -527,33 +464,57 @@ static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
 	.mode_set = fl2000_output_mode_set,
 };
 
-static int fl2000_bind(struct device *master)
+static void fl2000_drm_if_release(struct device *dev, void *res)
+{
+	struct fl2000_drm_if *drm_if = res;
+	struct drm_device *drm = drm_if->drm;
+	struct usb_device *usb_dev = drm_if->usb_dev;
+
+	dev_info(dev, "Unbinding FL2000 master");
+
+	/* Detach bridge */
+	component_unbind_all(dev, drm);
+
+	/* Start streaming interface */
+	fl2000_stream_destroy(usb_dev);
+
+	/* Start interrupts interface */
+	fl2000_intr_destroy(usb_dev);
+
+	/* Prepare to DRM device shutdown */
+	drm_kms_helper_poll_fini(drm);
+	drm_dev_unplug(drm);
+	drm_dev_put(drm);
+}
+
+/* TODO: release on errors! */
+int fl2000_drm_bind(struct device *master)
 {
 	int ret = 0;
+	struct usb_device *usb_dev = to_usb_device(master->parent);
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct drm_mode_config *mode_config;
-	struct usb_device *usb_dev = container_of(master, struct usb_device, dev);
 	u64 dma_mask;
 
-	dev_info(master, "Binding FL2000 master component");
+	dev_info(master, "Binding FL2000 master");
 
 	drm_if = devres_alloc(&fl2000_drm_if_release, sizeof(*drm_if), GFP_KERNEL);
 	if (!drm_if) {
 		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure");
 		return -ENOMEM;
 	}
-	devres_add(master, drm_if);
+	devres_add(&usb_dev->dev, drm_if);
 
-	drm = &drm_if->drm;
-	ret = drm_dev_init(drm, &fl2000_drm_driver, master);
-	if (ret) {
-		dev_err(master, "Cannot initialize DRM device (%d)", ret);
-		return ret;
+	drm = drm_dev_alloc(&fl2000_drm_driver, master);
+	if (IS_ERR(drm)) {
+		dev_err(master, "Cannot allocate DRM device (%ld)", PTR_ERR(drm));
+		return PTR_ERR(drm);
 	}
+	drm_if->drm = drm;
 
-	/* For register operations */
-	drm->dev_private = usb_dev;
+	drm_if->usb_dev = usb_dev;
+	drm->dev_private = drm_if;
 
 	drm_mode_config_init(drm);
 	mode_config = &drm->mode_config;
@@ -581,6 +542,12 @@ static int fl2000_bind(struct device *master)
 
 	/* Register 'mode_set' function to operate prior to bridge */
 	drm_encoder_helper_add(&drm_if->pipe.encoder, &fl2000_encoder_funcs);
+
+	/* Start streaming interface */
+	drm_if->stream = fl2000_stream_create(usb_dev, &drm_if->pipe.crtc);
+
+	/* Start interrupts interface */
+	drm_if->intr = fl2000_intr_create(usb_dev, drm);
 
 	/* Attach bridge */
 	ret = component_bind_all(master, &drm_if->pipe);
@@ -616,89 +583,8 @@ static int fl2000_bind(struct device *master)
 	return 0;
 }
 
-static void fl2000_unbind(struct device *master)
+void fl2000_drm_unbind(struct device *master)
 {
-	struct fl2000_drm_if *drm_if;
-	struct drm_device *drm;
-
-	dev_info(master, "Unbinding FL2000 master component");
-
-	drm_if = devres_find(master, fl2000_drm_if_release, NULL, NULL);
-	if (!drm_if)
-		return;
-
-	drm = &drm_if->drm;
-	if (!drm)
-		return;
-
-	/* Detach bridge */
-	component_unbind_all(master, drm);
-
-	/* Prepare to DRM device shutdown */
-	drm_kms_helper_poll_fini(drm);
-	drm_dev_unplug(drm);
-	drm_dev_put(drm);
-}
-
-static struct component_master_ops fl2000_drm_master_ops = {
-	.bind = fl2000_bind,
-	.unbind = fl2000_unbind,
-};
-
-static void fl2000_match_release(struct device *dev, void *data)
-{
-	/* Noop */
-}
-
-static int fl2000_compare(struct device *dev, void *data)
-{
-	int i;
-	struct usb_device *usb_dev = data;
-
-	/* Check component's parent (must be our USB device) */
-	if (dev->parent->parent != &usb_dev->dev)
-		return 0;
-
-	/* Check this is a supported DRM bridge */
-	for (i = 0; i < ARRAY_SIZE(fl2000_supported_bridges); i++)
-		if (!strcmp(fl2000_supported_bridges[i], dev->driver->name)) {
-			dev_info(dev, "Found bridge %s", dev->driver->name);
-			return (i + 1); /* Must be not 0 for success */
-		}
-
-	return 0;
-}
-
-void fl2000_display_event_check(struct usb_device *usb_dev)
-{
-	struct fl2000_drm_if *drm_if =
-		devres_find(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
-
-	if (!drm_if)
-		return;
-
-	drm_kms_helper_hotplug_event(&drm_if->drm);
-}
-
-int fl2000_drm_init(struct usb_device *usb_dev)
-{
-	int ret = 0;
-	struct component_match *match = NULL;
-
-	/* Make USB interface master */
-	component_match_add_release(&usb_dev->dev, &match, fl2000_match_release, fl2000_compare,
-				    usb_dev);
-
-	ret = component_master_add_with_match(&usb_dev->dev, &fl2000_drm_master_ops, match);
-	if (ret) {
-		dev_err(&usb_dev->dev, "Cannot register component master (%d)", ret);
-		return ret;
-	}
-
-	return 0;
-}
-
-void fl2000_drm_cleanup(struct usb_device *usb_dev)
-{
-	component_master_del(&usb_dev->dev, &fl2000_drm_master_ops);
+	struct usb_device *usb_dev = to_usb_device(master->parent);
+	devres_release(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
 }

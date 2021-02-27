@@ -16,17 +16,36 @@
 	}
 
 /* #### USB Control Registers Bank #### */
+/* Some unknown & undocumented FL2000 USB settings */
+
 #define FL2000_USB_CONTROL_OFFSET 0x0000
 
-#define FL2000_USB_LPM (FL2000_USB_CONTROL_OFFSET + 0x70)
-static const struct reg_field FL2000_USB_LPM_magic = REG_FIELD(FL2000_USB_LPM, 13, 13);
-static const struct reg_field FL2000_USB_LPM_u2_reject = REG_FIELD(FL2000_USB_LPM, 19, 19);
-static const struct reg_field FL2000_USB_LPM_u1_reject = REG_FIELD(FL2000_USB_LPM, 20, 20);
+#define FL2000_USB_LPM_REG (FL2000_USB_CONTROL_OFFSET + 0x70)
+union fl2000_usb_lpm_reg {
+	u32 val;
+	struct {
+		u32 __reserved1	: 13;
+		u32 magic	: 1;
+		u32 __reserved2	: 5;
+		u32 u2_reject	: 1;
+		u32 u1_reject	: 1;
+		u32 __reserved3	: 11;
+	} __aligned(4) __packed;
+};
 
-#define FL2000_USB_CTRL (FL2000_USB_CONTROL_OFFSET + 0x78)
-static const struct reg_field FL2000_USB_CTRL_wake_nrdy = REG_FIELD(FL2000_USB_CTRL, 17, 17);
+#define FL2000_USB_CTRL_REG (FL2000_USB_CONTROL_OFFSET + 0x78)
+union fl2000_usb_ctrl_reg {
+	u32 val;
+	struct {
+		u32 __reserved1	: 17;
+		u32 wake_nrdy	: 1;
+		u32 __reserved2	: 14;
+	} __aligned(4) __packed;
+};
 
 /* #### VGA Control Registers Bank #### */
+/* Taken from the 'FL200DX Memory Mapped Address Space Registers' spec */
+
 #define FL2000_VGA_CONTROL_OFFSET 0x8000
 
 #define FL2000_VGA_STATUS_REG (FL2000_VGA_CONTROL_OFFSET + 0x00)
@@ -162,11 +181,6 @@ union fl2000_vga_i2c_sc_reg {
 	} __aligned(4) __packed;
 };
 
-static const struct reg_field FL2000_VGA_I2C_SC_REG_edid_detect =
-	REG_FIELD(FL2000_VGA_I2C_SC_REG, 30, 30);
-static const struct reg_field FL2000_VGA_I2C_SC_REG_mon_detect =
-	REG_FIELD(FL2000_VGA_I2C_SC_REG, 28, 28);
-
 #define FL2000_VGA_I2C_RD_REG (FL2000_VGA_CONTROL_OFFSET + 0x24)
 #define FL2000_VGA_I2C_WR_REG (FL2000_VGA_CONTROL_OFFSET + 0x28)
 
@@ -269,8 +283,28 @@ union fl2000_vga_vcnt_reg {
 };
 
 #define FL2000_RST_CTRL_REG (FL2000_VGA_CONTROL_OFFSET + 0x48)
-static const struct reg_field FL2000_RST_CTRL_REG_app_reset =
-	REG_FIELD(FL2000_RST_CTRL_REG, 15, 15);
+union fl2000_rst_cntrl_reg {
+	u32 val;
+	struct {
+		u32 dis_hot_rst2_port	: 1;
+		u32 dis_warm_rst2_port	: 1;
+		u32 dis_hot_reset_pipe	: 1;
+		u32 dis_warm_reset_pipe	: 1;
+		u32 dis_hot_reset_pix	: 1;
+		u32 dis_warm_reset_pix	: 1;
+		u32 dis_usb2_reset_pix	: 1;
+		u32 dis_pll_reset_pix	: 1;
+		u32 dis_sw_reset_pix	: 1;
+		u32 dis_usb2_reset_buf	: 1;
+		u32 dis_sw_reset_buf	: 1;
+		u32 dis_lbuf_reset_pix	: 1;
+		u32 dis_hot_reset_port	: 1;
+		u32 dis_warm_reset_port	: 1;
+		u32 set_slow_clk_predft	: 1;
+		u32 sw_reset		: 1;
+		u32 frame_first_itp_wl	: 16;
+	} __aligned(4) __packed;
+};
 
 #define FL2000_BIAC_CTRL1_REG (FL2000_VGA_CONTROL_OFFSET + 0x4C)
 union fl2000_cfg_biac_ctrl1_reg {
@@ -349,8 +383,14 @@ union fl2000_vga_ctrl2_reg_axclk {
 #define FL2000_TEST_STAT3     (FL2000_VGA_CONTROL_OFFSET + 0x84)
 
 #define FL2000_VGA_CTRL_REG_3 (FL2000_VGA_CONTROL_OFFSET + 0x88)
-static const struct reg_field FL2000_VGA_CTRL_REG_3_wakeup_clr_en =
-	REG_FIELD(FL2000_VGA_CTRL_REG_3, 10, 10);
+union fl2000_vga_ctrl_reg_3 {
+	u32 val;
+	struct {
+		u32 __reserved1	  : 10;
+		u32 wakeup_clr_en : 1;
+		u32 __reserved2	  : 21;
+	} __aligned(4) __packed;
+};
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x8C) */
 

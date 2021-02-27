@@ -24,9 +24,6 @@
 
 #include "it66121_registers.h"
 
-/* Custom code for DRM bridge autodetection since there is no DT support */
-#define I2C_CLASS_HDMI BIT(9)
-
 /* HW defect leading to losing 3 first bytes during EDID read operation */
 #define EDID_LOSS_LEN 3
 
