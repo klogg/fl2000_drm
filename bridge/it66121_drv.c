@@ -16,12 +16,9 @@
 
 #define IRQ_POLL_INTRVL 100
 
-enum it66121_intr_state {
-	RUN = (1U),
-	STOP = (0U),
-};
-
 struct it66121_priv {
+	struct i2c_adapter *adapter;
+	struct i2c_client *client;
 	struct regmap *regmap;
 	struct drm_bridge bridge;
 	struct drm_connector connector;
@@ -29,7 +26,6 @@ struct it66121_priv {
 
 	struct delayed_work work;
 	struct workqueue_struct *work_queue;
-	atomic_t state;
 
 	struct regmap_field *irq_pending;
 	struct regmap_field *hpd;
@@ -48,11 +44,12 @@ struct it66121_priv {
 	bool dvi_mode;
 };
 
-static int it66121_remove(struct i2c_client *client);
-static void it66121_is_hpd_detect(struct it66121_priv *priv);
-
-/* According to datasheet IT66121 addresses are 0x98 or 0x9A including cmd */
-static const unsigned short it66121_addr[] = { (0x98 >> 1), /*(0x9A >> 1),*/ I2C_CLIENT_END };
+/* XXX: Only one instance of IT66121 is supported!!!
+ *  - need to have a way to configure several I2C buses to scan
+ *  - need to have a list of objects for registration / deregistration */
+static struct it66121_priv *ctx;
+static int i2c_bus_num = 0;
+module_param(i2c_bus_num, int, 0660);
 
 static const struct regmap_range_cfg it66121_regmap_banks[] = {
 	/* Do not put common registers to any range, this will lead to skipping "bank" configuration
@@ -247,6 +244,22 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	return 0;
 }
 
+static void it66121_is_hpd_detect(struct it66121_priv *priv)
+{
+	int ret;
+	unsigned int val;
+	struct device *dev = priv->bridge.dev->dev;
+
+	ret = regmap_field_read(priv->hpd, &val);
+	if (ret) {
+		dev_err(dev, "Cannot get monitor status (%d)", ret);
+		priv->conn_status = connector_status_unknown;
+	} else {
+		priv->conn_status = val ? connector_status_connected :
+						connector_status_disconnected;
+	}
+}
+
 /* TODO: Add protection for I2C register / EDID / SPI access, e.g. mutex*/
 static void it66121_intr_work(struct work_struct *work_item)
 {
@@ -305,11 +318,6 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 	if (event)
 		drm_helper_hpd_irq_event(priv->bridge.dev);
-
-	if (atomic_read(&priv->state) != RUN)
-		return;
-
-	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 
 	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(IRQ_POLL_INTRVL));
 }
@@ -413,22 +421,6 @@ static struct drm_connector_helper_funcs it66121_connector_helper_funcs = {
 	.mode_valid = it66121_connector_mode_valid,
 };
 
-static void it66121_is_hpd_detect(struct it66121_priv *priv)
-{
-	int ret;
-	unsigned int val;
-	struct device *dev = priv->bridge.dev->dev;
-
-	ret = regmap_field_read(priv->hpd, &val);
-	if (ret) {
-		dev_err(dev, "Cannot get monitor status (%d)", ret);
-		priv->conn_status = connector_status_unknown;
-	} else {
-		priv->conn_status = val ? connector_status_connected :
-						connector_status_disconnected;
-	}
-}
-
 static enum drm_connector_status it66121_connector_detect(struct drm_connector *connector,
 							  bool force)
 {
@@ -454,14 +446,18 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 	int ret;
 	struct drm_bridge *bridge = dev_get_drvdata(comp);
 	struct drm_simple_display_pipe *pipe = master_data;
+	struct i2c_adapter *adapter = i2c_verify_adapter(master);
+
+	if(!adapter)
+		return -ENODEV;
 
 	dev_info(comp, "Binding IT66121 component");
 
-	/* TODO: Do some checks? */
+	/* XXX: check adapter, check bridge */
 
 	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
 	if (ret)
-		dev_err(comp, "Cannot attach IT66121 bridge");
+		dev_err(comp, "Cannot attach IT66121 bridge (%d)", ret);
 
 	return ret;
 }
@@ -470,7 +466,7 @@ static void it66121_unbind(struct device *comp, struct device *master, void *mas
 {
 	dev_info(comp, "Unbinding IT66121 component");
 
-	/* TODO: Detach? */
+	/* TODO: drm_bridge_detach()? */
 }
 
 static const struct component_ops it66121_component_ops = {
@@ -559,7 +555,6 @@ static int it66121_bridge_attach(struct drm_bridge *bridge)
 
 	/* Start interrupts */
 	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1, IT66121_MASK_DDC, 0);
-	atomic_set(&priv->state, RUN);
 	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(IRQ_POLL_INTRVL));
 
@@ -730,24 +725,13 @@ static const struct drm_bridge_funcs it66121_bridge_funcs = {
 	.mode_set = it66121_bridge_mode_set,
 };
 
-static int it66121_probe(struct i2c_client *client)
+
+static int it66121_regs_init(struct it66121_priv *priv, struct i2c_client *client)
 {
-	int ret;
-	struct it66121_priv *priv;
-
-	dev_info(&client->dev, "Probing IT66121 client");
-
-	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	priv->conn_status = connector_status_unknown;
 
 	priv->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
 	if (IS_ERR(priv->regmap))
 		return PTR_ERR(priv);
-
-	priv->bridge.funcs = &it66121_bridge_funcs;
 
 	priv->irq_pending =
 		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_SYS_STATUS_irq_pending);
@@ -774,89 +758,42 @@ static int it66121_probe(struct i2c_client *client)
 		return -1;
 	}
 
-	drm_bridge_add(&priv->bridge);
-
-	/* Setup work queue for interrupt processing work */
-	priv->work_queue = create_workqueue("work_queue");
-	if (!priv->work_queue) {
-		dev_err(&client->dev, "Create interrupt workqueue failed");
-		drm_bridge_remove(&priv->bridge);
-		return -ENOMEM;
-	}
-
-	/* Important and somewhat unsafe - bridge pointer is in device structure. Ideally, after
-	 * detecting connection encoder would need to find bridge using connection's peer device
-	 * name, but this is not supported yet
-	 */
-	i2c_set_clientdata(client, &priv->bridge);
-
-	ret = component_add(&client->dev, &it66121_component_ops);
-	if (ret) {
-		dev_err(&client->dev, "Cannot register IT66121 component");
-		destroy_workqueue(priv->work_queue);
-		drm_bridge_remove(&priv->bridge);
-		return ret;
-	}
-
 	return 0;
 }
 
-static int it66121_remove(struct i2c_client *client)
+static int it66121_i2c_probe(struct i2c_adapter *adapter, unsigned short address)
 {
-	struct drm_bridge *bridge = i2c_get_clientdata(client);
-	struct it66121_priv *priv;
-
-	if (!bridge)
-		return 0;
-
-	priv = container_of(bridge, struct it66121_priv, bridge);
-
-	if (!priv)
-		return 0;
-
-	atomic_set(&priv->state, STOP);
-	drain_workqueue(priv->work_queue);
-	destroy_workqueue(priv->work_queue);
-
-	component_del(&client->dev, &it66121_component_ops);
-
-	kfree(priv->edid);
-
-	drm_bridge_remove(bridge);
-
-	i2c_set_clientdata(client, NULL);
-
-	return 0;
-}
-
-static int it66121_detect(struct i2c_client *client, struct i2c_board_info *info)
-{
-	int i, ret, address = client->addr;
-	struct i2c_adapter *adapter = client->adapter;
+	int i, ret;
+	u8 id_regs[] = {IT66121_VENDOR_ID_1, IT66121_VENDOR_ID_2,
+			IT66121_DEVICE_ID_1, IT66121_DEVICE_ID_2};
 	union {
 		struct {
 			u16 vendor;
 			u16 device;
 		};
-		u8 b[4];
+		u8 b[ARRAY_SIZE(id_regs)];
 	} id;
-	dev_info(&adapter->dev, "Detecting IT66121 at address 0x%X on %s", address, adapter->name);
+
+	dev_dbg(&adapter->dev, "Detecting IT66121 at address 0x%X on %s", address, adapter->name);
 
 	/* We rely on full I2C protocol + 1 byte SMBUS read for detection */
 	ret = i2c_check_functionality(adapter, I2C_FUNC_I2C | I2C_FUNC_SMBUS_READ_BYTE);
 	if (!ret) {
-		dev_info(&adapter->dev, "Adapter does not support I2C functions properly");
+		dev_dbg(&adapter->dev, "Adapter does not support I2C functions properly");
 		return -ENODEV;
 	}
 
-	/* No regmap here yet: we will allocate it if detection succeeds */
-	for (i = 0; i < 4; i++) {
-		ret = i2c_smbus_read_byte_data(client, i);
+	for (i = 0; i < ARRAY_SIZE(id_regs); i++) {
+		struct i2c_msg msgs[] = {
+			{ .addr = address, .flags = 0,		.len = 1, .buf = &id_regs[i]},
+			{ .addr = address, .flags = I2C_M_RD,	.len = 1, .buf = &id.b[i]}
+		};
+
+		ret = i2c_transfer(adapter, msgs, ARRAY_SIZE(msgs));
 		if (ret < 0) {
 			dev_err(&adapter->dev, "I2C transfer failed (%d)", ret);
 			return -ENODEV;
 		}
-		id.b[i] = ret;
 	}
 
 	if (id.vendor != VENDOR_ID || (id.device & ~REVISION_MASK) != DEVICE_ID) {
@@ -865,29 +802,103 @@ static int it66121_detect(struct i2c_client *client, struct i2c_board_info *info
 	}
 
 	dev_info(&adapter->dev, "IT66121 found, revision %d",
-		 (id.device & REVISION_MASK) >> REVISION_SHIFT);
+			(id.device & REVISION_MASK) >> REVISION_SHIFT);
 
-	strlcpy(info->type, "it66121", I2C_NAME_SIZE);
 	return 0;
 }
 
-static const struct i2c_device_id it66121_i2c_ids[] = { { "it66121", 0 }, {} };
-MODULE_DEVICE_TABLE(i2c, it66121_i2c_ids);
+static struct i2c_client *it66121_i2c_init(void)
+{
+	struct i2c_client *client;
+	struct i2c_board_info board_info = { I2C_BOARD_INFO("it66121", 0) };
+	struct i2c_adapter *adapter;
 
-static struct i2c_driver it66121_driver = {
-	.class = I2C_CLASS_HDMI,
-	.driver = {
-		.name = "it66121",
-		.of_match_table = of_match_ptr(it66121_of_ids),
-	},
-	.id_table = it66121_i2c_ids,
-	.probe_new = it66121_probe,
-	.remove = it66121_remove,
-	.detect = it66121_detect,
-	.address_list = it66121_addr,
-};
+	/* According to datasheet IT66121 addresses are 0x98 or 0x9A including cmd */
+	const unsigned short it66121_addr[] = { (0x98 >> 1), (0x9A >> 1), I2C_CLIENT_END };
 
-module_i2c_driver(it66121_driver);
+	adapter = i2c_get_adapter(i2c_bus_num);
+	if (!adapter)
+		return ERR_PTR(-ENODEV);
+
+	client = i2c_new_scanned_device(adapter, &board_info, it66121_addr, it66121_i2c_probe);
+
+	i2c_put_adapter(adapter);
+
+	return client;
+}
+
+static void __exit it66121_remove(void)
+{
+	struct it66121_priv *priv = ctx;
+
+	cancel_delayed_work_sync(&priv->work);
+
+	destroy_workqueue(priv->work_queue);
+
+	component_del(&priv->client->dev, &it66121_component_ops);
+
+	kfree(priv->edid);
+
+	drm_bridge_remove(&priv->bridge);
+
+	i2c_unregister_device(priv->client);
+
+	kfree(priv);
+}
+
+static int __init it66121_probe(void)
+{
+	int ret;
+	struct it66121_priv *priv;
+
+	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
+	if (!priv)
+		return -ENOMEM;
+
+	priv->client = it66121_i2c_init();
+	if (IS_ERR(priv->client)) {
+		printk(KERN_ERR "Cannot find IT66121 I2C client");
+		kfree(priv);
+		return PTR_ERR(priv->client);
+	}
+
+	it66121_regs_init(priv, priv->client);
+
+	priv->conn_status = connector_status_unknown;
+	priv->bridge.funcs = &it66121_bridge_funcs;
+
+	drm_bridge_add(&priv->bridge);
+
+	/* XXX: Store private context properly*/
+	ctx = priv;
+
+	/* Setup work queue for interrupt processing work */
+	priv->work_queue = create_workqueue("work_queue");
+	if (!priv->work_queue) {
+		printk(KERN_ERR "Create interrupt workqueue failed");
+		drm_bridge_remove(&priv->bridge);
+		kfree(priv);
+		return -ENOMEM;
+	}
+
+	/* Store bridge pointer at I2C client device for further binding */
+	dev_set_drvdata(&priv->client->dev, &priv->bridge);
+
+	/* Bind component of I2C client to master I2C adapter */
+	ret = component_add(&priv->client->dev, &it66121_component_ops);
+	if (ret) {
+		printk(KERN_ERR "Cannot register IT66121 component");
+		destroy_workqueue(priv->work_queue);
+		drm_bridge_remove(&priv->bridge);
+		kfree(priv);
+		return ret;
+	}
+
+	return 0;
+}
+
+module_init(it66121_probe);
+module_exit(it66121_remove);
 
 MODULE_AUTHOR("Artem Mygaiev");
 MODULE_DESCRIPTION("IT66121 HDMI transmitter driver");
