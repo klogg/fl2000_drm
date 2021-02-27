@@ -491,7 +491,6 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 		return ret;
 	}
 
-	dev_info(&usb_dev->dev, "Configured FL2000 registers");
 	return 0;
 }
 
