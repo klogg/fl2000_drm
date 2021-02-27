@@ -272,6 +272,7 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	int ret;
 	struct i2c_adapter *adapter;
 	struct fl2000_i2c_data *i2c_data;
+	u8 usb_path[32];
 
 	/* Adapter must be allocated before anything else */
 	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter), GFP_KERNEL);
@@ -295,7 +296,7 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 
 	adapter->dev.parent = &usb_dev->dev;
 
-	usb_make_path(usb_dev, adapter->name, sizeof(adapter->name));
+	strscpy(adapter->name, "FL2000 bridge I2C bus", sizeof(adapter->name));
 
 	ret = i2c_add_adapter(adapter);
 	if (ret)
@@ -305,7 +306,9 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	if (ret)
 		return ret;
 
-	dev_info(&adapter->dev, "Connected FL2000 I2C adapter");
+	usb_make_path(usb_dev, usb_path, sizeof(usb_path));
+	dev_dbg(&adapter->dev, "Created FL2000 bridge I2C bus %d at interface %s",
+			i2c_adapter_id(adapter), usb_path);
 	return 0;
 }
 
