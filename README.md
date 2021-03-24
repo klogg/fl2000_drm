@@ -18,7 +18,11 @@ with sudo or in root shell to start the driver. If you are running on a system w
 ```
 ./scritps/sign.sh
 ```
-
+ensure that DRM components are loaded in your system, if not - please use
+```
+modprobe drm
+modprobe drm_kms_helper
+```
 **NOTE:** proper kernel headers and build tools (e.g. "build-essential" package) must be installed on the system. Driver is developed and tested on Ubuntu 20.10 with **Linux kernel 5.8**, so better to test it this way. Please use gcc-8 or newer to build the driver
 
 For more information check project's [Wiki](https://github.com/klogg/fl2000_drm/wiki)
