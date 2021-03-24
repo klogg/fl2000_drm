@@ -94,9 +94,12 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 		return -ENODEV;
 	}
 
-	if (!devs && (devs = fl2000_get_devices(usb_dev)) && IS_ERR(devs)) {
-		dev_err(&usb_dev->dev, "Cannot initialize I2C and regmap!");
-		return -ENODEV;
+	if (!devs) {
+		devs = fl2000_get_devices(usb_dev);
+		if (IS_ERR(devs)) {
+			dev_err(&usb_dev->dev, "Cannot initialize I2C and regmap!");
+			return -ENODEV;
+		}
 	}
 
 	switch (iface_num) {
