@@ -820,7 +820,11 @@ static struct i2c_client *it66121_i2c_init(void)
 	if (!adapter)
 		return ERR_PTR(-ENODEV);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 	client = i2c_new_scanned_device(adapter, &board_info, it66121_addr, it66121_i2c_probe);
+#else
+	client = i2c_new_probed_device(adapter, &board_info, it66121_addr, it66121_i2c_probe);
+#endif
 
 	i2c_put_adapter(adapter);
 
