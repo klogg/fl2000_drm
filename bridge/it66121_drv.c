@@ -861,9 +861,10 @@ static int __init it66121_probe(void)
 
 	priv->client = it66121_i2c_init();
 	if (IS_ERR(priv->client)) {
+		ret = PTR_ERR(priv->client);
 		printk(KERN_ERR "Cannot find IT66121 I2C client");
 		kfree(priv);
-		return PTR_ERR(priv->client);
+		return ret;
 	}
 
 	it66121_regs_init(priv, priv->client);
