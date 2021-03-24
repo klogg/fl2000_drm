@@ -88,7 +88,7 @@ static u32 fl2000_get_bytes_pix(enum usb_device_speed speed, u32 pixclock)
 
 struct fl2000_drm_if {
 	struct usb_device *usb_dev;
-	struct drm_device *drm;
+	struct drm_device drm;
 	struct drm_simple_display_pipe pipe;
 	struct fl2000_stream *stream;
 	struct fl2000_intr *intr;
@@ -467,7 +467,7 @@ static const struct drm_encoder_helper_funcs fl2000_encoder_funcs = {
 static void fl2000_drm_if_release(struct device *dev, void *res)
 {
 	struct fl2000_drm_if *drm_if = res;
-	struct drm_device *drm = drm_if->drm;
+	struct drm_device *drm = &drm_if->drm;
 	struct usb_device *usb_dev = drm_if->usb_dev;
 
 	dev_info(dev, "Unbinding FL2000 master");
@@ -499,6 +499,13 @@ int fl2000_drm_bind(struct device *master)
 
 	dev_info(master, "Binding FL2000 master");
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
+	drm_if = devm_drm_dev_alloc(master, &fl2000_drm_driver, struct fl2000_drm_if, drm);
+	if (IS_ERR(drm_if)) {
+		dev_err(master, "Cannot allocate DRM structure (%ld)", PTR_ERR(drm_if));
+		return PTR_ERR(drm_if);
+	}
+#else
 	drm_if = devres_alloc(&fl2000_drm_if_release, sizeof(*drm_if), GFP_KERNEL);
 	if (!drm_if) {
 		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure");
@@ -506,17 +513,26 @@ int fl2000_drm_bind(struct device *master)
 	}
 	devres_add(&usb_dev->dev, drm_if);
 
-	drm = drm_dev_alloc(&fl2000_drm_driver, master);
-	if (IS_ERR(drm)) {
-		dev_err(master, "Cannot allocate DRM device (%ld)", PTR_ERR(drm));
-		return PTR_ERR(drm);
+	ret = drm_dev_init(&drm_if->drm, &fl2000_drm_driver, master);
+	if (ret) {
+		dev_err(master, "Cannot initialize DRM device (%d)", ret);
+		return ret;
 	}
-	drm_if->drm = drm;
-
+#endif
+	drm = &drm_if->drm;
 	drm_if->usb_dev = usb_dev;
 	drm->dev_private = drm_if;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
+	ret = drmm_mode_config_init(drm);
+	if (ret) {
+		dev_err(master, "Cannot initialize DRM mode (%d)", ret);
+		return ret;
+	}
+#else
 	drm_mode_config_init(drm);
+#endif
+
 	mode_config = &drm->mode_config;
 	mode_config->funcs = &fl2000_mode_config_funcs;
 	mode_config->min_width = 1;
