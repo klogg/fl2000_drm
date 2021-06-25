@@ -18,6 +18,7 @@
 #include <linux/i2c.h>
 #include <linux/component.h>
 #include <linux/regmap.h>
+#include <linux/vmalloc.h>
 #include <linux/dma-buf.h>
 #include <linux/dma-mapping.h>
 #include <linux/time.h>
