@@ -279,6 +279,8 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_
 static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
 						      const struct drm_display_mode *mode)
 {
+	// struct drm_device *drm = crtc->dev;
+	struct drm_crtc *crtc = &pipe->crtc;
 	struct drm_device *drm = crtc->dev;
 #endif
 	struct drm_display_mode adjusted_mode;
