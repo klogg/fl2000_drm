@@ -4,8 +4,8 @@ fl2000-y := \
 	fl2000_interrupt.o \
 	fl2000_streaming.o \
 	fl2000_i2c.o \
-	fl2000_drm.o \
-	fl2000_avcontrol.o 
+	fl2000_gem.o \
+	fl2000_drm.o
 
 it66121-y := \
 	bridge/it66121_drv.o
@@ -18,7 +18,7 @@ KSRC ?= /lib/modules/$(KVER)/build
 all:	modules
 
 modules:
-	make -C $(KSRC) M=$(PWD) modules
+	make CHECK="/usr/bin/sparse" -C $(KSRC) M=$(PWD) modules
 
 clean:
 	make -C $(KSRC) M=$(PWD) clean
