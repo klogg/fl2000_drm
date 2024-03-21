@@ -94,17 +94,7 @@ struct fl2000_drm_if {
 	struct fl2000_intr *intr;
 };
 
-static const struct file_operations fl2000_drm_driver_fops = {
-	.owner = THIS_MODULE,
-	.open = drm_open,
-	.release = drm_release,
-	.unlocked_ioctl = drm_ioctl,
-	.compat_ioctl = drm_compat_ioctl,
-	.poll = drm_poll,
-	.read = drm_read,
-	.llseek = noop_llseek,
-	.mmap = fl2000_gem_mmap,
-};
+DEFINE_DRM_GEM_DMA_FOPS(fl2000_drm_driver_fops);
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
@@ -119,18 +109,7 @@ static struct drm_driver fl2000_drm_driver = {
 	.fops = &fl2000_drm_driver_fops,
 	.release = fl2000_drm_release,
 
-	.prime_handle_to_fd = drm_gem_prime_handle_to_fd,
-	.prime_fd_to_handle = drm_gem_prime_fd_to_handle,
-	.gem_prime_import_sg_table = fl2000_gem_prime_import_sg_table,
-	.gem_prime_mmap = drm_gem_prime_mmap,
-	.dumb_create = fl2000_gem_dumb_create,
-
-	.gem_create_object = fl2000_gem_create_object_default_funcs,
-	.gem_free_object_unlocked = fl2000_gem_free,
-	.gem_vm_ops = &fl2000_gem_vm_ops,
-	.gem_prime_get_sg_table = fl2000_gem_prime_get_sg_table,
-	.gem_prime_vmap = fl2000_gem_prime_vmap,
-	.gem_prime_vunmap = fl2000_gem_prime_vunmap,
+	DRM_GEM_DMA_DRIVER_OPS_VMAP,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
@@ -270,17 +249,10 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 	return -1;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
 static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_pipe *pipe,
 						      const struct drm_display_mode *mode)
 {
 	struct drm_device *drm = pipe->crtc.dev;
-#else
-static enum drm_mode_status fl2000_display_mode_valid(struct drm_crtc *crtc,
-						      const struct drm_display_mode *mode)
-{
-	struct drm_device *drm = crtc->dev;
-#endif
 	struct drm_display_mode adjusted_mode;
 	struct fl2000_pll pll;
 	struct fl2000_drm_if *drm_if = drm->dev_private;
@@ -322,50 +294,26 @@ static void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 	drm_crtc_vblank_off(crtc);
 }
 
-static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
-				struct drm_plane_state *plane_state,
-				struct drm_crtc_state *crtc_state)
-{
-	struct drm_crtc *crtc = &pipe->crtc;
-	struct drm_device *drm = crtc->dev;
-	struct drm_framebuffer *fb = plane_state->fb;
-	int n;
-
-	n = fb->format->num_planes;
-	if (n > 1) {
-		struct drm_format_name_buf format_name;
-
-		dev_err(drm->dev, "Only single plane RGB fbs are supported, got %d planes (%s)", n,
-			drm_get_format_name(fb->format->format, &format_name));
-		return -EINVAL;
-	}
-	return 0;
-}
-
 static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 {
 	int idx, ret;
 	struct drm_device *drm = fb->dev;
-	struct drm_gem_object *gem_obj = drm_gem_fb_get_obj(fb, 0);
-	struct dma_buf_attachment *import_attach = gem_obj->import_attach;
 	struct fl2000_drm_if *drm_if = drm->dev_private;
+	struct drm_gem_dma_object *dma_obj = drm_fb_dma_get_gem_obj(fb, 0);
 
 	if (!drm_dev_enter(fb->dev, &idx)) {
 		dev_err(drm->dev, "DRM enter failed!");
 		return;
 	}
 
-	if (import_attach) {
-		ret = dma_buf_begin_cpu_access(import_attach->dmabuf, DMA_FROM_DEVICE);
-		if (ret)
-			return;
-	}
+	ret = drm_gem_fb_begin_cpu_access(fb, DMA_FROM_DEVICE);
+	if (ret)
+		return;
 
-	fl2000_stream_compress(drm_if->stream, to_fl2000_gem_obj(gem_obj)->vaddr, fb->height,
-			       fb->width, fb->pitches[0]);
+	fl2000_stream_compress(drm_if->stream, dma_obj->vaddr, fb->height,
+							fb->width, fb->pitches[0]);
 
-	if (import_attach)
-		dma_buf_end_cpu_access(import_attach->dmabuf, DMA_FROM_DEVICE);
+	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
 
 	drm_dev_exit(idx);
 }
@@ -399,9 +347,7 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_display_mode_valid,
 	.enable = fl2000_display_enable,
 	.disable = fl2000_display_disable,
-	.check = fl2000_display_check,
-	.update = fl2000_display_update,
-	.prepare_fb = drm_gem_fb_simple_display_pipe_prepare_fb,
+	.update = fl2000_display_update
 };
 
 static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
@@ -499,39 +445,20 @@ int fl2000_drm_bind(struct device *master)
 
 	dev_info(master, "Binding FL2000 master");
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
 	drm_if = devm_drm_dev_alloc(master, &fl2000_drm_driver, struct fl2000_drm_if, drm);
 	if (IS_ERR(drm_if)) {
 		dev_err(master, "Cannot allocate DRM structure (%ld)", PTR_ERR(drm_if));
 		return PTR_ERR(drm_if);
 	}
-#else
-	drm_if = devres_alloc(&fl2000_drm_if_release, sizeof(*drm_if), GFP_KERNEL);
-	if (!drm_if) {
-		dev_err(&usb_dev->dev, "Cannot allocate DRM private structure");
-		return -ENOMEM;
-	}
-	devres_add(&usb_dev->dev, drm_if);
-
-	ret = drm_dev_init(&drm_if->drm, &fl2000_drm_driver, master);
-	if (ret) {
-		dev_err(master, "Cannot initialize DRM device (%d)", ret);
-		return ret;
-	}
-#endif
 	drm = &drm_if->drm;
 	drm_if->usb_dev = usb_dev;
 	drm->dev_private = drm_if;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,8,0)
 	ret = drmm_mode_config_init(drm);
 	if (ret) {
 		dev_err(master, "Cannot initialize DRM mode (%d)", ret);
 		return ret;
 	}
-#else
-	drm_mode_config_init(drm);
-#endif
 
 	mode_config = &drm->mode_config;
 	mode_config->funcs = &fl2000_mode_config_funcs;

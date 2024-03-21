@@ -10,7 +10,6 @@
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
-#include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/printk.h>
 #include <linux/init.h>
@@ -30,12 +29,16 @@
 #include <drm/drm_drv.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_fb_helper.h>
+#include <drm/drm_framebuffer.h>
+#include <drm/drm_fbdev_generic.h>
 #include <drm/drm_gem_framebuffer_helper.h>
+#include <drm/drm_gem_dma_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_damage_helper.h>
+#include <drm/drm_fb_dma_helper.h>
 
 #include "fl2000_registers.h"
 
@@ -123,33 +126,9 @@ struct fl2000_pll {
 	u32 function;
 };
 
-struct fl2000_gem_object {
-	struct drm_gem_object base;
-	size_t num_pages;
-	struct page **pages;
-	struct sg_table *sgt;
-	void *vaddr;
-};
-
 /* Timeout in us for I2C read/write operations */
 #define I2C_RDWR_INTERVAL (200)
 #define I2C_RDWR_TIMEOUT  (256 * 1000)
-
-#define to_fl2000_gem_obj(gem_obj) container_of(gem_obj, struct fl2000_gem_object, base)
-
-/* GEM buffers */
-int fl2000_gem_mmap(struct file *filp, struct vm_area_struct *vma);
-struct drm_gem_object *fl2000_gem_create_object_default_funcs(struct drm_device *dev, size_t size);
-int fl2000_gem_dumb_create(struct drm_file *file_priv, struct drm_device *drm,
-			   struct drm_mode_create_dumb *args);
-struct drm_gem_object *fl2000_gem_prime_import_sg_table(struct drm_device *dev,
-							struct dma_buf_attachment *attach,
-							struct sg_table *sgt);
-void fl2000_gem_free(struct drm_gem_object *gem_obj);
-extern const struct vm_operations_struct fl2000_gem_vm_ops;
-struct sg_table *fl2000_gem_prime_get_sg_table(struct drm_gem_object *gem_obj);
-void *fl2000_gem_prime_vmap(struct drm_gem_object *gem_obj);
-void fl2000_gem_prime_vunmap(struct drm_gem_object *gem_obj, void *vaddr);
 
 /* Streaming transfer task */
 struct fl2000_stream;

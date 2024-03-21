@@ -475,21 +475,15 @@ static const struct component_ops it66121_component_ops = {
 };
 
 /* TODO: rewrite register access properly, add error processing */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 static int it66121_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_attach_flags flags)
-#else
-static int it66121_bridge_attach(struct drm_bridge *bridge)
-#endif
 {
 	int ret;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv, bridge);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 	if (flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR) {
 		DRM_ERROR("Need connector for mode configuration");
 		return -ENODEV;
 	}
-#endif
 
 	if (!bridge->encoder) {
 		DRM_ERROR("Parent encoder object not found");
@@ -820,11 +814,7 @@ static struct i2c_client *it66121_i2c_init(void)
 	if (!adapter)
 		return ERR_PTR(-ENODEV);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,7,0)
 	client = i2c_new_scanned_device(adapter, &board_info, it66121_addr, it66121_i2c_probe);
-#else
-	client = i2c_new_probed_device(adapter, &board_info, it66121_addr, it66121_i2c_probe);
-#endif
 
 	i2c_put_adapter(adapter);
 
