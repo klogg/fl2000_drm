@@ -34,8 +34,8 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 		return -ENOMEM;
 
 	ret = usb_control_msg(usb_dev, usb_rcvctrlpipe(usb_dev, 0), CONTROL_MSG_READ,
-			      (USB_DIR_IN | USB_TYPE_VENDOR), 0, offset, usb_rw_data,
-			      sizeof(u32), USB_CTRL_GET_TIMEOUT);
+			      (USB_DIR_IN | USB_TYPE_VENDOR), 0, offset, usb_rw_data, sizeof(u32),
+			      USB_CTRL_GET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != sizeof(u32))
 			ret = -1;
@@ -64,8 +64,8 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	*usb_rw_data = val;
 
 	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0), CONTROL_MSG_WRITE,
-			      (USB_DIR_OUT | USB_TYPE_VENDOR), 0, offset, usb_rw_data,
-			      sizeof(u32), USB_CTRL_SET_TIMEOUT);
+			      (USB_DIR_OUT | USB_TYPE_VENDOR), 0, offset, usb_rw_data, sizeof(u32),
+			      USB_CTRL_SET_TIMEOUT);
 	if (ret > 0) {
 		if (ret != sizeof(u32))
 			ret = -1;
@@ -259,7 +259,6 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	usb_lpm_reg.u2_reject = true;
 	fl2000_add_bitmask(mask, union fl2000_usb_lpm_reg, u2_reject);
 	regmap_write_bits(regmap, FL2000_USB_LPM_REG, mask, usb_lpm_reg.val);
-
 
 	mask = 0;
 	usb_ctrl_reg.wake_nrdy = false;

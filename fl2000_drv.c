@@ -16,9 +16,8 @@
 #define USB_VENDOR_FRESCO_LOGIC 0x1D5C
 #define USB_PRODUCT_FL2000	0x2000
 
-#define FL2000_ALL_IFS 	(BIT(FL2000_USBIF_AVCONTROL) | \
-			BIT(FL2000_USBIF_STREAMING) | \
-			BIT(FL2000_USBIF_INTERRUPT))
+#define FL2000_ALL_IFS \
+	(BIT(FL2000_USBIF_AVCONTROL) | BIT(FL2000_USBIF_STREAMING) | BIT(FL2000_USBIF_INTERRUPT))
 
 static struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, USB_CLASS_AV) },
@@ -118,7 +117,7 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 	/* When all interfaces are up - proceed with registration */
 	if (devs->active_if == FL2000_ALL_IFS) {
 		ret = component_master_add_with_match(&devs->adapter->dev, &fl2000_master_ops,
-				devs->match);
+						      devs->match);
 		if (ret) {
 			dev_err(&usb_dev->dev, "Cannot register component master (%d)", ret);
 			return ret;

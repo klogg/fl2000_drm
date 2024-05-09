@@ -130,8 +130,8 @@ struct fl2000_intr *fl2000_intr_create(struct usb_device *usb_dev, struct drm_de
 	}
 
 	/* Interrupt URB configuration is static, including allocated buffer */
-	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, 3),
-			 intr->buf, INTR_BUFSIZE, fl2000_intr_completion, intr, intr->poll_interval);
+	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, 3), intr->buf, INTR_BUFSIZE,
+			 fl2000_intr_completion, intr, intr->poll_interval);
 	intr->urb->transfer_dma = intr->transfer_dma;
 	intr->urb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP; /* use urb->transfer_dma */
 
