@@ -139,7 +139,7 @@ struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev)
 
 	usb_make_path(usb_dev, usb_path, sizeof(usb_path));
 	dev_dbg(&usb_dev->dev, "Created FL2000 bridge I2C bus %d at interface %s",
-			i2c_adapter_id(adapter), usb_path);
+		i2c_adapter_id(adapter), usb_path);
 
 	return adapter;
 }

@@ -256,7 +256,7 @@ static void it66121_is_hpd_detect(struct it66121_priv *priv)
 		priv->conn_status = connector_status_unknown;
 	} else {
 		priv->conn_status = val ? connector_status_connected :
-						connector_status_disconnected;
+					  connector_status_disconnected;
 	}
 }
 
@@ -448,7 +448,7 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 	struct drm_simple_display_pipe *pipe = master_data;
 	struct i2c_adapter *adapter = i2c_verify_adapter(master);
 
-	if(!adapter)
+	if (!adapter)
 		return -ENODEV;
 
 	dev_info(comp, "Binding IT66121 component");
@@ -719,10 +719,8 @@ static const struct drm_bridge_funcs it66121_bridge_funcs = {
 	.mode_set = it66121_bridge_mode_set,
 };
 
-
 static int it66121_regs_init(struct it66121_priv *priv, struct i2c_client *client)
 {
-
 	priv->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
 	if (IS_ERR(priv->regmap))
 		return PTR_ERR(priv);
@@ -758,8 +756,8 @@ static int it66121_regs_init(struct it66121_priv *priv, struct i2c_client *clien
 static int it66121_i2c_probe(struct i2c_adapter *adapter, unsigned short address)
 {
 	int i, ret;
-	u8 id_regs[] = {IT66121_VENDOR_ID_1, IT66121_VENDOR_ID_2,
-			IT66121_DEVICE_ID_1, IT66121_DEVICE_ID_2};
+	u8 id_regs[] = { IT66121_VENDOR_ID_1, IT66121_VENDOR_ID_2, IT66121_DEVICE_ID_1,
+			 IT66121_DEVICE_ID_2 };
 	union {
 		struct {
 			u16 vendor;
@@ -779,8 +777,8 @@ static int it66121_i2c_probe(struct i2c_adapter *adapter, unsigned short address
 
 	for (i = 0; i < ARRAY_SIZE(id_regs); i++) {
 		struct i2c_msg msgs[] = {
-			{ .addr = address, .flags = 0,		.len = 1, .buf = &id_regs[i]},
-			{ .addr = address, .flags = I2C_M_RD,	.len = 1, .buf = &id.b[i]}
+			{ .addr = address, .flags = 0, .len = 1, .buf = &id_regs[i] },
+			{ .addr = address, .flags = I2C_M_RD, .len = 1, .buf = &id.b[i] }
 		};
 
 		ret = i2c_transfer(adapter, msgs, ARRAY_SIZE(msgs));
@@ -796,7 +794,7 @@ static int it66121_i2c_probe(struct i2c_adapter *adapter, unsigned short address
 	}
 
 	dev_info(&adapter->dev, "IT66121 found, revision %d",
-			(id.device & REVISION_MASK) >> REVISION_SHIFT);
+		 (id.device & REVISION_MASK) >> REVISION_SHIFT);
 
 	return 0;
 }

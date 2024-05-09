@@ -197,7 +197,7 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_cal
 			pll->function = vco_clk < 125000000 ? 0 :
 					vco_clk < 250000000 ? 1 :
 					vco_clk < 500000000 ? 2 :
-								    3;
+							      3;
 			*clock_calculated = vco_clk / divisor;
 		}
 
@@ -310,8 +310,8 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 	if (ret)
 		return;
 
-	fl2000_stream_compress(drm_if->stream, dma_obj->vaddr, fb->height,
-							fb->width, fb->pitches[0]);
+	fl2000_stream_compress(drm_if->stream, dma_obj->vaddr, fb->height, fb->width,
+			       fb->pitches[0]);
 
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
 

@@ -24,12 +24,12 @@
 union fl2000_usb_lpm_reg {
 	u32 val;
 	struct {
-		u32 __reserved1	: 13;
+		u32 __reserved1 : 13;
 		u32 magic	: 1;
-		u32 __reserved2	: 5;
+		u32 __reserved2 : 5;
 		u32 u2_reject	: 1;
 		u32 u1_reject	: 1;
-		u32 __reserved3	: 11;
+		u32 __reserved3 : 11;
 	} __aligned(4) __packed;
 };
 
@@ -37,9 +37,9 @@ union fl2000_usb_lpm_reg {
 union fl2000_usb_ctrl_reg {
 	u32 val;
 	struct {
-		u32 __reserved1	: 17;
+		u32 __reserved1 : 17;
 		u32 wake_nrdy	: 1;
-		u32 __reserved2	: 14;
+		u32 __reserved2 : 14;
 	} __aligned(4) __packed;
 };
 
@@ -289,7 +289,7 @@ union fl2000_rst_cntrl_reg {
 		u32 dis_hot_rst2_port	: 1;
 		u32 dis_warm_rst2_port	: 1;
 		u32 dis_hot_reset_pipe	: 1;
-		u32 dis_warm_reset_pipe	: 1;
+		u32 dis_warm_reset_pipe : 1;
 		u32 dis_hot_reset_pix	: 1;
 		u32 dis_warm_reset_pix	: 1;
 		u32 dis_usb2_reset_pix	: 1;
@@ -299,8 +299,8 @@ union fl2000_rst_cntrl_reg {
 		u32 dis_sw_reset_buf	: 1;
 		u32 dis_lbuf_reset_pix	: 1;
 		u32 dis_hot_reset_port	: 1;
-		u32 dis_warm_reset_port	: 1;
-		u32 set_slow_clk_predft	: 1;
+		u32 dis_warm_reset_port : 1;
+		u32 set_slow_clk_predft : 1;
 		u32 sw_reset		: 1;
 		u32 frame_first_itp_wl	: 16;
 	} __aligned(4) __packed;

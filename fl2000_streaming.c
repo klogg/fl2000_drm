@@ -109,7 +109,7 @@ static void fl2000_stream_put_buffers(struct fl2000_stream *stream)
 {
 	struct fl2000_stream_buf *cur_sb, *temp_sb;
 
-	list_for_each_entry_safe (cur_sb, temp_sb, &stream->render_list, list) {
+	list_for_each_entry_safe(cur_sb, temp_sb, &stream->render_list, list) {
 		list_del(&cur_sb->list);
 		fl2000_free_sb(cur_sb);
 	}
@@ -194,10 +194,10 @@ static void fl2000_stream_work(struct work_struct *work)
 		if (list_empty(&stream->transmit_list)) {
 			if (list_empty(&stream->wait_list))
 				last_sb = list_last_entry(&stream->render_list,
-						          struct fl2000_stream_buf, list);
+							  struct fl2000_stream_buf, list);
 			else
 				last_sb = list_last_entry(&stream->wait_list,
-						          struct fl2000_stream_buf, list);
+							  struct fl2000_stream_buf, list);
 			cur_sb = list_first_entry(&stream->render_list, struct fl2000_stream_buf,
 						  list);
 			memcpy(cur_sb->vaddr, last_sb->vaddr, stream->buf_size);
