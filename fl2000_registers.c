@@ -319,13 +319,9 @@ int fl2000_check_interrupt(struct usb_device *usb_dev)
 		fl2000_add_bitmask(mask, union fl2000_vga_status_reg, lbuf_underflow);
 	regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, mask, status.val);
 
-	if (status.lbuf_halt) {
-		/* TODO: Reset LBUF using regmap_field for lbuf_sw_rst */
-	}
+	/* TODO: Reset LBUF using regmap_field if (status.lbuf_halt) */
 
-	if (status.vga_error) {
-		/* TODO: Don't know how to recover here */
-	}
+	/* TODO: Don't know how to recover if (status.vga_error) */
 
 	return sink_event;
 }

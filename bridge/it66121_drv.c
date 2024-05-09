@@ -46,9 +46,10 @@ struct it66121_priv {
 
 /* XXX: Only one instance of IT66121 is supported!!!
  *  - need to have a way to configure several I2C buses to scan
- *  - need to have a list of objects for registration / deregistration */
+ *  - need to have a list of objects for registration / deregistration
+ */
 static struct it66121_priv *ctx;
-static int i2c_bus_num = 0;
+static int i2c_bus_num;
 module_param(i2c_bus_num, int, 0660);
 
 static const struct regmap_range_cfg it66121_regmap_banks[] = {
@@ -850,7 +851,7 @@ static int __init it66121_probe(void)
 	priv->client = it66121_i2c_init();
 	if (IS_ERR(priv->client)) {
 		ret = PTR_ERR(priv->client);
-		printk(KERN_ERR "Cannot find IT66121 I2C client");
+		pr_err("Cannot find IT66121 I2C client");
 		kfree(priv);
 		return ret;
 	}
@@ -868,7 +869,7 @@ static int __init it66121_probe(void)
 	/* Setup work queue for interrupt processing work */
 	priv->work_queue = create_workqueue("work_queue");
 	if (!priv->work_queue) {
-		printk(KERN_ERR "Create interrupt workqueue failed");
+		pr_err("Create interrupt workqueue failed");
 		drm_bridge_remove(&priv->bridge);
 		kfree(priv);
 		return -ENOMEM;
@@ -880,7 +881,7 @@ static int __init it66121_probe(void)
 	/* Bind component of I2C client to master I2C adapter */
 	ret = component_add(&priv->client->dev, &it66121_component_ops);
 	if (ret) {
-		printk(KERN_ERR "Cannot register IT66121 component");
+		pr_err("Cannot register IT66121 component");
 		destroy_workqueue(priv->work_queue);
 		drm_bridge_remove(&priv->bridge);
 		kfree(priv);
