@@ -9,6 +9,7 @@ modules.order
 *.mod
 *.mod.c
 *.ur-safe
+.clang-format
 .cproject
 .project
 .settings
