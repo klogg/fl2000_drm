@@ -529,5 +529,6 @@ int fl2000_drm_bind(struct device *master)
 void fl2000_drm_unbind(struct device *master)
 {
 	struct usb_device *usb_dev = to_usb_device(master->parent);
+
 	devres_release(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
 }

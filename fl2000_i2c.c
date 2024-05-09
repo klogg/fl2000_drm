@@ -44,15 +44,16 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 	 * - 2 messages, each 1 byte, first write than read
 	 * - 1 message, 2 bytes, write
 	 */
-	if (num == 2)
+	if (num == 2) {
 		read = true;
-	else if (num == 1) {
+	} else if (num == 1) {
 		if (msgs[0].len == 2 && !(msgs[0].flags & I2C_M_RD))
 			read = false;
 		else
 			return -ENOTSUPP;
-	} else
+	} else {
 		return -ENOTSUPP;
+	}
 
 	/* Somehow the original FL2000 driver forces offset to be bound to 4-byte margin. This is
 	 * really strange because i2c operation shall not depend on i2c margin, unless the HW design
@@ -107,7 +108,8 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 {
 	struct i2c_adapter *adapter = res;
-	dev_info(dev, "!!! fl2000_i2c_adapter_release");
+
+	dev_info(dev, "Releasing I2C adapter");
 	i2c_del_adapter(adapter);
 }
 
