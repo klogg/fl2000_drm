@@ -70,6 +70,7 @@ static const struct regmap_range_cfg it66121_regmap_banks[] = {
 
 static bool it66121_reg_volatile(struct device *dev, unsigned int reg)
 {
+	UNUSED(dev);
 	return IT66121_REG_VOLATILE(reg);
 }
 
@@ -414,6 +415,8 @@ static enum drm_mode_status it66121_connector_mode_valid(struct drm_connector *c
 							 struct drm_display_mode *mode)
 {
 	/* TODO: validate mode */
+	UNUSED(connector);
+	UNUSED(mode);
 
 	return MODE_OK;
 }
@@ -466,9 +469,11 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 
 static void it66121_unbind(struct device *comp, struct device *master, void *master_data)
 {
-	dev_info(comp, "Unbinding IT66121 component");
-
 	/* TODO: drm_bridge_detach()? */
+	UNUSED(master);
+	UNUSED(master_data);
+
+	dev_info(comp, "Unbinding IT66121 component");
 }
 
 static const struct component_ops it66121_component_ops = {
@@ -607,6 +612,8 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 		IT66121_HDMI_AVIINFO_DB10, IT66121_HDMI_AVIINFO_DB11, IT66121_HDMI_AVIINFO_DB12,
 		IT66121_HDMI_AVIINFO_DB13
 	};
+
+	UNUSED(adjusted_mode);
 
 	dev_info(bridge->dev->dev, "Setting AVI infoframe for mode: " DRM_MODE_FMT,
 		 DRM_MODE_ARG(mode));

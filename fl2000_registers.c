@@ -13,11 +13,13 @@
 
 static bool fl2000_reg_precious(struct device *dev, unsigned int reg)
 {
+	UNUSED(dev);
 	return FL2000_REG_PRECIOUS(reg);
 }
 
 static bool fl2000_reg_volatile(struct device *dev, unsigned int reg)
 {
+	UNUSED(dev);
 	return FL2000_REG_VOLATILE(reg);
 }
 

@@ -86,6 +86,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 
 static u32 fl2000_i2c_func(struct i2c_adapter *adap)
 {
+	UNUSED(adap);
 	return I2C_FUNC_I2C | I2C_FUNC_NOSTART;
 }
 
