@@ -281,6 +281,8 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
 	struct fl2000_drm_if *drm_if = drm->dev_private;
 
 	/* TODO: check cstate/pstate? */
+	UNUSED(cstate);
+	UNUSED(plane_state);
 
 	fl2000_stream_enable(drm_if->stream);
 
@@ -304,6 +306,8 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 	struct drm_device *drm = fb->dev;
 	struct fl2000_drm_if *drm_if = drm->dev_private;
 	struct drm_gem_dma_object *dma_obj = drm_fb_dma_get_gem_obj(fb, 0);
+
+	UNUSED(rect);
 
 	if (!drm_dev_enter(fb->dev, &idx)) {
 		dev_err(drm->dev, "DRM enter failed!");

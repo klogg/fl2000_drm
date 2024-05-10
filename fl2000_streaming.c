@@ -143,6 +143,8 @@ static void fl2000_stream_release(struct device *dev, void *res)
 {
 	struct fl2000_stream *stream = res;
 
+	UNUSED(dev);
+
 	fl2000_stream_disable(stream);
 	destroy_workqueue(stream->work_queue);
 	fl2000_stream_put_buffers(stream);

@@ -46,6 +46,8 @@ static int fl2000_compare(struct device *dev, void *data)
 		"it66121", /* IT66121 driver name*/
 	};
 
+	UNUSED(data);
+
 	if (!client)
 		return 0;
 
@@ -87,6 +89,8 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_devs *devs = dev_get_drvdata(&usb_dev->dev);
+
+	UNUSED(usb_dev_id);
 
 	if (usb_dev->speed < USB_SPEED_HIGH) {
 		dev_err(&usb_dev->dev, "USB 1.1 is not supported!");
@@ -155,6 +159,8 @@ static void fl2000_disconnect(struct usb_interface *interface)
 static int fl2000_suspend(struct usb_interface *interface, pm_message_t message)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
+
+	UNUSED(message);
 
 	dev_dbg(&usb_dev->dev, "resume");
 
