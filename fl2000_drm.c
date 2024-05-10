@@ -194,10 +194,15 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_cal
 			pll->prescaler = prescaler;
 			pll->multiplier = multiplier;
 			pll->divisor = divisor;
-			pll->function = vco_clk < 125000000 ? 0 :
-					vco_clk < 250000000 ? 1 :
-					vco_clk < 500000000 ? 2 :
-							      3;
+			if (vco_clk < 125000000) {
+				pll->function = 0;
+			} else if (vco_clk < 250000000) {
+				pll->function = 1;
+			} else if (vco_clk < 500000000) {
+				pll->function = 2;
+			} else {
+				pll->function = 3;
+			}
 			*clock_calculated = vco_clk / divisor;
 		}
 
