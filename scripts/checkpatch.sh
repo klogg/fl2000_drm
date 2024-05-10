@@ -18,7 +18,7 @@ do
 	if [[ $file == *.mod.c ]]; then
 		continue
 	fi
-	./checkpatch.pl --strict --no-summary --no-tree "$@" -f "$file"
+	perl checkpatch.pl --strict --no-summary --no-tree "$@" -f "$file"
 	status=$status+$?
 done
 
