@@ -325,7 +325,8 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, size_t len)
 {
-	int i, ret, remain = len, offset = block & 1 ? 128 : 0;
+	int i, ret, offset = block & 1 ? 128 : 0;
+	size_t remain = len;
 	unsigned int rd_fifo_val, segment = block >> 1;
 	static const u8 header[EDID_LOSS_LEN] = { 0x00, 0xFF, 0xFF };
 	struct it66121_priv *priv = context;
@@ -344,7 +345,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 
 	while (remain > 0) {
 		/* Add bytes that will be lost during EDID read */
-		int size = remain + EDID_LOSS_LEN;
+		size_t size = remain + EDID_LOSS_LEN;
 
 		/* ... and check size fits FIFO */
 		size = size > EDID_FIFO_SIZE ? EDID_FIFO_SIZE : size;
@@ -362,7 +363,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 		ret = regmap_write(priv->regmap, IT66121_DDC_OFFSET, offset - EDID_LOSS_LEN);
 		if (ret)
 			break;
-		ret = regmap_write(priv->regmap, IT66121_DDC_SIZE, size);
+		ret = regmap_write(priv->regmap, IT66121_DDC_SIZE, (unsigned int)size);
 		if (ret)
 			break;
 		ret = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, segment);
@@ -724,7 +725,7 @@ static int it66121_regs_init(struct it66121_priv *priv, struct i2c_client *clien
 {
 	priv->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
 	if (IS_ERR(priv->regmap))
-		return PTR_ERR(priv);
+		return (int)PTR_ERR(priv->regmap);
 
 	priv->irq_pending =
 		devm_regmap_field_alloc(&client->dev, priv->regmap, IT66121_SYS_STATUS_irq_pending);
@@ -850,7 +851,7 @@ static int __init it66121_probe(void)
 
 	priv->client = it66121_i2c_init();
 	if (IS_ERR(priv->client)) {
-		ret = PTR_ERR(priv->client);
+		ret = (int)PTR_ERR(priv->client);
 		pr_err("Cannot find IT66121 I2C client");
 		kfree(priv);
 		return ret;

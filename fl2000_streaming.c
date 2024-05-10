@@ -27,7 +27,7 @@ struct fl2000_stream_buf {
 	struct list_head list;
 	struct sg_table sgt;
 	struct page **pages;
-	int nr_pages;
+	unsigned int nr_pages;
 	void *vaddr;
 };
 
@@ -40,7 +40,7 @@ struct fl2000_stream {
 	struct list_head wait_list;
 	spinlock_t list_lock; /* List access from bh and interrupt contexts */
 	size_t buf_size;
-	int bytes_pix;
+	u32 bytes_pix;
 	struct work_struct work;
 	struct workqueue_struct *work_queue;
 	struct semaphore work_sem;
@@ -64,11 +64,11 @@ static void fl2000_free_sb(struct fl2000_stream_buf *sb)
 	kfree(sb);
 }
 
-static struct fl2000_stream_buf *fl2000_alloc_sb(size_t size)
+static struct fl2000_stream_buf *fl2000_alloc_sb(unsigned int size)
 {
 	int i, ret;
 	struct fl2000_stream_buf *sb;
-	int nr_pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
+	unsigned int nr_pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
 
 	sb = kzalloc(sizeof(*sb), GFP_KERNEL);
 	if (!sb)
@@ -115,7 +115,7 @@ static void fl2000_stream_put_buffers(struct fl2000_stream *stream)
 	}
 }
 
-static int fl2000_stream_get_buffers(struct fl2000_stream *stream, size_t size)
+static int fl2000_stream_get_buffers(struct fl2000_stream *stream, unsigned int size)
 {
 	int i, ret;
 	struct fl2000_stream_buf *cur_sb;
@@ -220,7 +220,7 @@ static void fl2000_stream_work(struct work_struct *work)
 		 * transfer_buffer field of URB which is unused due to SGT
 		 */
 		usb_fill_bulk_urb(data_urb, usb_dev, usb_sndbulkpipe(usb_dev, 1), cur_sb,
-				  stream->buf_size, fl2000_stream_data_completion, stream);
+				  (int)stream->buf_size, fl2000_stream_data_completion, stream);
 		data_urb->interval = 0;
 		data_urb->sg = cur_sb->sgt.sgl;
 		data_urb->num_sgs = cur_sb->sgt.nents;
@@ -296,10 +296,10 @@ void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned in
 int fl2000_stream_mode_set(struct fl2000_stream *stream, int pixels, u32 bytes_pix)
 {
 	int ret;
-	size_t size;
+	unsigned int size;
 
 	/* Round buffer size up to multiple of 8 to meet HW expectations */
-	size = (pixels * bytes_pix + 7) & ~(size_t)7;
+	size = (pixels * bytes_pix + 7) & ~(unsigned int)7;
 
 	stream->bytes_pix = bytes_pix;
 

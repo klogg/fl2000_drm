@@ -49,10 +49,9 @@ static const u32 fl2000_pixel_formats[] = {
 #define FL2000_BULK_BW_SUPER_SPEED	(5000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
 #define FL2000_BULK_BW_SUPER_SPEED_PLUS (10000000000ull * 100 / FL2000_BULK_BW_PERCENT / 8)
 
-static u32 fl2000_get_bytes_pix(enum usb_device_speed speed, u32 pixclock)
+static unsigned int fl2000_get_bytes_pix(enum usb_device_speed speed, unsigned int pixclock)
 {
-	int bytes_pix;
-	u64 max_bw;
+	unsigned int bytes_pix, max_bw;
 
 	/* Calculate maximum bandwidth, bytes per second */
 	switch (speed) {
@@ -267,7 +266,7 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_
 	if (fl2000_mode_calc(mode, &adjusted_mode, &pll))
 		return MODE_BAD;
 
-	if (!fl2000_get_bytes_pix(usb_dev->speed, adjusted_mode.clock))
+	if (fl2000_get_bytes_pix(usb_dev->speed, adjusted_mode.clock) == 0)
 		return MODE_BAD;
 
 	return MODE_OK;
@@ -363,7 +362,7 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_displ
 	struct usb_device *usb_dev = drm_if->usb_dev;
 	struct fl2000_timings timings;
 	struct fl2000_pll pll;
-	u32 bytes_pix;
+	unsigned int bytes_pix;
 
 	/* Get PLL configuration and cehc if mode adjustments needed */
 	if (fl2000_mode_calc(mode, adjusted_mode, &pll))
@@ -453,7 +452,7 @@ int fl2000_drm_bind(struct device *master)
 	drm_if = devm_drm_dev_alloc(master, &fl2000_drm_driver, struct fl2000_drm_if, drm);
 	if (IS_ERR(drm_if)) {
 		dev_err(master, "Cannot allocate DRM structure (%ld)", PTR_ERR(drm_if));
-		return PTR_ERR(drm_if);
+		return (int)PTR_ERR(drm_if);
 	}
 	drm = &drm_if->drm;
 	drm_if->usb_dev = usb_dev;
