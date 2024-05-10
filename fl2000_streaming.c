@@ -183,7 +183,8 @@ static void fl2000_stream_work(struct work_struct *work)
 		ret = down_interruptible(&stream->work_sem);
 		if (ret) {
 			dev_err(&usb_dev->dev, "Work interrupt error %d", ret);
-			break;
+			stream->enabled = false;
+			return;
 		}
 
 		spin_lock_irq(&stream->list_lock);
@@ -211,7 +212,8 @@ static void fl2000_stream_work(struct work_struct *work)
 		data_urb = usb_alloc_urb(0, GFP_KERNEL);
 		if (!data_urb) {
 			dev_err(&usb_dev->dev, "Data URB allocation error");
-			break;
+			stream->enabled = false;
+			return;
 		}
 
 		/* Endpoint 1 bulk out. We store pointer to current stream buffer structure in
