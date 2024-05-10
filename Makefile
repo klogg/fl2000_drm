@@ -14,6 +14,8 @@ obj-m := fl2000.o it66121.o
 KVER ?= $(shell uname -r)
 KSRC ?= /lib/modules/$(KVER)/build
 
+EXTRA_CFLAGS := -Wall
+
 all:	modules
 
 modules:
