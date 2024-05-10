@@ -1,0 +1,21 @@
+name: Check coding style
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: apt update && apt install clang-format
+
+    - name: Run check
+      run: scripts/clang-format.sh --dry-run
