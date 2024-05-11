@@ -24,7 +24,7 @@
 
 #include "it66121_registers.h"
 
-#define UNUSED(x) (void)(x)
+#define UNUSED(x) ((void)(x))
 
 /* HW defect leading to losing 3 first bytes during EDID read operation */
 #define EDID_LOSS_LEN 3
