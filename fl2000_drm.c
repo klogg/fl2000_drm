@@ -51,7 +51,8 @@ static const u32 fl2000_pixel_formats[] = {
 
 static unsigned int fl2000_get_bytes_pix(enum usb_device_speed speed, unsigned int pixclock)
 {
-	unsigned int bytes_pix, max_bw;
+	unsigned int bytes_pix;
+	unsigned int max_bw;
 
 	/* Calculate maximum bandwidth, bytes per second */
 	switch (speed) {
@@ -151,12 +152,11 @@ static inline u32 fl2000_pll_get_divisor(u64 clock_mil, u32 vco_clk, u64 *min_pp
 		100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
 		116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128
 	};
-	unsigned int divisor_idx;
 	u32 best_divisor = 0;
 
 	/* Iterate over array */
-	for (divisor_idx = 0; divisor_idx < ARRAY_SIZE(divisor_arr); divisor_idx++) {
-		u32 divisor = divisor_arr[divisor_idx];
+	for (int i = 0; i < ARRAY_SIZE(divisor_arr); i++) {
+		u32 divisor = divisor_arr[i];
 		u64 ppm_err = fl2000_pll_ppm_err(clock_mil, vco_clk, divisor);
 
 		if (ppm_err < *min_ppm_err) {
@@ -173,12 +173,10 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_cal
 {
 	static const u32 prescaler_max = 2;
 	static const u32 multiplier_max = 128;
-	u32 prescaler;
-	u32 multiplier;
 	u64 min_ppm_err = (u64)(-1);
 
-	for (prescaler = 1; prescaler <= prescaler_max; prescaler++)
-		for (multiplier = 1; multiplier <= multiplier_max; multiplier++) {
+	for (u32 prescaler = 1; prescaler <= prescaler_max; prescaler++)
+		for (u32 multiplier = 1; multiplier <= multiplier_max; multiplier++) {
 			/* Do not need precision here yet, no 10^6 multiply */
 			u32 vco_clk = FL2000_XTAL / prescaler * multiplier;
 			u32 divisor;
@@ -205,7 +203,6 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_cal
 			*clock_calculated = vco_clk / divisor;
 		}
 
-	/* No exact PLL settings found for requested clock */
 	return min_ppm_err;
 }
 
@@ -217,17 +214,15 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 	u64 clock_mil_adjusted;
 	const u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
 	const int max_h_adjustment = 10;
-	int s, m;
-	int d = 0;
 
 	if (mode->clock * 1000 > FL2000_MAX_PIXCLOCK)
 		return -1;
 
-	/* Try to match pixel clock slightly adjusting htotal value */
-	for (m = 0, s = 0; m <= max_h_adjustment * 2; m++, s = -s) {
-		/* 0, -1, 1, -2, 2, -3, 3, -3, 4, -4, 5, -5, ... */
-		d += m * s;
-
+	/* Try to match pixel clock slightly adjusting htotal value, sequence is:
+	   0, -1, 1, -2, 2, -3, 3, -3, 4, -4, 5, -5, ...
+	   Here, 's' is used for sign, 'm' is used for modulo, and 'd' is the adjustment value
+	 */
+	for (int m = 0, s = 0, d = 0; m <= max_h_adjustment * 2; m++, s = -s, d += m * s) {
 		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get 10^15Hz. Assume
 		 * maximum htotal is 10000 pix (no way) we get 10^19 max value and using u64 which
 		 * is 1.8*10^19 no overflow can occur. Assume all this was checked before
@@ -302,7 +297,8 @@ static void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 
 static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 {
-	int idx, ret;
+	int ret;
+	int idx;
 	struct drm_device *drm = fb->dev;
 	struct fl2000_drm_if *drm_if = drm->dev_private;
 	struct drm_gem_dma_object *dma_obj = drm_fb_dma_get_gem_obj(fb, 0);

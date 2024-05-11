@@ -50,13 +50,11 @@ struct fl2000_stream {
 
 static void fl2000_free_sb(struct fl2000_stream_buf *sb)
 {
-	int i;
-
 	vunmap(sb->vaddr);
 
 	sg_free_table(&sb->sgt);
 
-	for (i = 0; i < sb->nr_pages && sb->pages[i]; i++)
+	for (int i = 0; i < sb->nr_pages && sb->pages[i]; i++)
 		__free_page(sb->pages[i]);
 
 	kfree(sb->pages);
@@ -66,7 +64,7 @@ static void fl2000_free_sb(struct fl2000_stream_buf *sb)
 
 static struct fl2000_stream_buf *fl2000_alloc_sb(unsigned int size)
 {
-	int i, ret;
+	int ret;
 	struct fl2000_stream_buf *sb;
 	unsigned int nr_pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
 
@@ -80,7 +78,7 @@ static struct fl2000_stream_buf *fl2000_alloc_sb(unsigned int size)
 	if (!sb->pages)
 		goto error;
 
-	for (i = 0; i < nr_pages; i++) {
+	for (int i = 0; i < nr_pages; i++) {
 		sb->pages[i] = alloc_page(GFP_KERNEL);
 		if (!sb->pages[i])
 			goto error;
@@ -107,7 +105,8 @@ error:
 
 static void fl2000_stream_put_buffers(struct fl2000_stream *stream)
 {
-	struct fl2000_stream_buf *cur_sb, *temp_sb;
+	struct fl2000_stream_buf *cur_sb;
+	struct fl2000_stream_buf *temp_sb;
 
 	list_for_each_entry_safe(cur_sb, temp_sb, &stream->render_list, list) {
 		list_del(&cur_sb->list);
@@ -117,12 +116,12 @@ static void fl2000_stream_put_buffers(struct fl2000_stream *stream)
 
 static int fl2000_stream_get_buffers(struct fl2000_stream *stream, unsigned int size)
 {
-	int i, ret;
+	int ret;
 	struct fl2000_stream_buf *cur_sb;
 
 	BUG_ON(!list_empty(&stream->render_list));
 
-	for (i = 0; i < FL2000_SB_NUM; i++) {
+	for (int i = 0; i < FL2000_SB_NUM; i++) {
 		cur_sb = fl2000_alloc_sb(size);
 		if (!cur_sb) {
 			ret = -ENOMEM;
@@ -178,7 +177,8 @@ static void fl2000_stream_work(struct work_struct *work)
 	int ret;
 	struct fl2000_stream *stream = container_of(work, struct fl2000_stream, work);
 	struct usb_device *usb_dev = stream->usb_dev;
-	struct fl2000_stream_buf *cur_sb, *last_sb;
+	struct fl2000_stream_buf *cur_sb;
+	struct fl2000_stream_buf *last_sb;
 	struct urb *data_urb;
 
 	while (stream->enabled) {
@@ -240,9 +240,9 @@ static void fl2000_stream_work(struct work_struct *work)
 
 static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf, u32 pixels)
 {
-	unsigned int x, xx = 0;
+	unsigned int xx = 0;
 
-	for (x = 0; x < pixels; x++) {
+	for (unsigned int x = 0; x < pixels; x++) {
 		dbuf[xx++ ^ 4] = (sbuf[x] & 0x000000FF) >> 0;
 		dbuf[xx++ ^ 4] = (sbuf[x] & 0x0000FF00) >> 8;
 		dbuf[xx++ ^ 4] = (sbuf[x] & 0x00FF0000) >> 16;
@@ -251,9 +251,7 @@ static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf, u32 pixels)
 
 static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf, u32 pixels)
 {
-	unsigned int x;
-
-	for (x = 0; x < pixels; x++) {
+	for (unsigned int x = 0; x < pixels; x++) {
 		u16 val565 = ((sbuf[x] & 0x00F80000) >> 8) | ((sbuf[x] & 0x0000FC00) >> 5) |
 			     ((sbuf[x] & 0x000000F8) >> 3);
 		dbuf[x ^ 2] = val565;
@@ -264,7 +262,6 @@ void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned in
 			    unsigned int width, unsigned int pitch)
 {
 	struct fl2000_stream_buf *cur_sb;
-	unsigned int y;
 	void *dst;
 	u32 dst_line_len;
 
@@ -276,7 +273,7 @@ void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned in
 	dst = cur_sb->vaddr;
 	dst_line_len = width * stream->bytes_pix;
 
-	for (y = 0; y < height; y++) {
+	for (unsigned int y = 0; y < height; y++) {
 		switch (stream->bytes_pix) {
 		case 2:
 			fl2000_xrgb888_to_rgb565_line(dst, src, width);
@@ -328,8 +325,6 @@ int fl2000_stream_mode_set(struct fl2000_stream *stream, int pixels, u32 bytes_p
 
 int fl2000_stream_enable(struct fl2000_stream *stream)
 {
-	int i;
-
 	BUG_ON(list_empty(&stream->transmit_list));
 
 	sema_init(&stream->work_sem, 0);
@@ -337,7 +332,7 @@ int fl2000_stream_enable(struct fl2000_stream *stream)
 	queue_work(stream->work_queue, &stream->work);
 
 	/* Kick transmit workqueue with minimum buffers submitted */
-	for (i = 0; i < FL2000_SB_MIN; i++)
+	for (int i = 0; i < FL2000_SB_MIN; i++)
 		up(&stream->work_sem);
 
 	return 0;
