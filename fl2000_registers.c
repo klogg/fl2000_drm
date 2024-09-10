@@ -298,34 +298,39 @@ int fl2000_enable_interrupts(struct usb_device *usb_dev)
 	return 0;
 }
 
+/*
+ * Check for sink events and recoverable errors
+ * Return: 1 if sink event detected, 0 otherwise, negative on error
+ */
 int fl2000_check_interrupt(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	union fl2000_vga_status_reg status;
+	bool sink_event;
 	int ret;
-	int sink_event = 0;
-	u32 mask = 0;
 
 	/* Process interrupt */
 	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
 	if (ret)
-		return 0; /* XXX: Cannot report error here */
+		return ret;
 
-	if (status.hdmi_event || status.monitor_event || status.edid_event)
-		sink_event = 1;
+	sink_event = status.hdmi_event || status.monitor_event || status.edid_event;
 
 	/* LBUF issues are recoverable */
 	if (status.lbuf_overflow)
 		fl2000_add_bitmask(mask, union fl2000_vga_status_reg, lbuf_overflow);
 	if (status.lbuf_underflow)
 		fl2000_add_bitmask(mask, union fl2000_vga_status_reg, lbuf_underflow);
-	regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, mask, status.val);
+	ret = regmap_write_bits(regmap, FL2000_VGA_STATUS_REG, mask, status.val);
+	if (ret)
+		return ret;
 
 	/* TODO: Reset LBUF using regmap_field if (status.lbuf_halt) */
 
 	/* TODO: Don't know how to recover if (status.vga_error) */
 
-	return sink_event;
+	ret = sink_event ? 1 : 0;
+	return ret;
 }
 
 int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data)
@@ -382,13 +387,22 @@ int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset,
 	return 0;
 }
 
-struct regmap *fl2000_regmap_init(struct usb_device *usb_dev)
+int fl2000_regmap_init(struct usb_device *usb_dev)
 {
 	struct regmap *regmap;
 
 	regmap = devm_regmap_init(&usb_dev->dev, NULL, usb_dev, &fl2000_regmap_config);
 	if (IS_ERR(regmap))
-		dev_err(&usb_dev->dev, "Registers map failed (%ld)", PTR_ERR(regmap));
+		return  PTR_ERR(regmap);
 
-	return regmap;
+	return 0;
+}
+
+void fl2000_regmap_cleanup(struct usb_device *usb_dev)
+{
+	/* TODO: Anything here?
+	 * There is no devm_regmap_cleanup()
+	 */
+
+	UNUSED(usb_dev);
 }

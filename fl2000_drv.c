@@ -8,163 +8,124 @@
 
 #define USB_DRIVER_NAME "fl2000_usb"
 
-#define USB_CLASS_AV		0x10
-#define USB_SUBCLASS_AV_CONTROL 0x01
-#define USB_SUBCLASS_AV_VIDEO	0x02
-#define USB_SUBCLASS_AV_AUDIO	0x03
-
 #define USB_VENDOR_FRESCO_LOGIC 0x1D5C
 #define USB_PRODUCT_FL2000	0x2000
 
-#define FL2000_ALL_IFS \
-	(BIT(FL2000_USBIF_AVCONTROL) | BIT(FL2000_USBIF_STREAMING) | BIT(FL2000_USBIF_INTERRUPT))
-
-static struct usb_device_id fl2000_id_table[] = {
-	{ USB_DEVICE_INTERFACE_CLASS(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, USB_CLASS_AV) },
-	{},
-};
-MODULE_DEVICE_TABLE(usb, fl2000_id_table);
-
-/* Devices that are independent of interfaces, created for the lifetime of USB device instance */
-struct fl2000_devs {
-	struct regmap *regmap;
-	struct i2c_adapter *adapter;
-	struct component_match *match;
-	int active_if;
-};
-
-static struct component_master_ops fl2000_master_ops = {
-	.bind = fl2000_drm_bind,
-	.unbind = fl2000_drm_unbind,
-};
-
-static int fl2000_compare(struct device *dev, void *data)
+struct fl2000_if_api
 {
-	struct i2c_client *client = i2c_verify_client(dev);
-	static const char *const fl2000_supported_bridges[] = {
-		"it66121", /* IT66121 driver name*/
-	};
+	int(*create)(struct usb_interface *interface);
+	void(*destroy)(struct usb_interface *interface);
+};
 
-	UNUSED(data);
+static int fl2000_avcontrol_create(struct usb_interface *interface)
+{
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	struct component_match *match = NULL;
+	int ret;
 
-	if (!client)
-		return 0;
+	/* This seem to be needed to workaround buggy implementation of EPs */
+	ret = usb_set_interface(usb_dev, FL2000_USBIF_AVCONTROL, 1);
+	if (ret) {
+		dev_err(&interface->dev, "Cannot set streaming interface for bulk transfers (%d)", ret);
+		return ret;
+	}
 
-	/* Check this is a supported DRM bridge */
-	for (int i = 0; i < ARRAY_SIZE(fl2000_supported_bridges); i++)
-		if (!strncmp(fl2000_supported_bridges[i], client->name, sizeof(client->name)))
-			return 1; /* Must be not 0 for success */
+	ret = fl2000_regmap_init(usb_dev);
+	if (ret) {
+		dev_err(&interface->dev, "Cannot initialize regmap (%d)", ret);
+		return ret;
+	}
+
+	ret = fl2000_i2c_init(usb_dev);
+	if (ret) {
+		dev_err(&interface->dev, "Cannot initialize I2C (%d)", ret);
+		return ret;
+	}
+
+	ret = fl2000_drm_init(usb_dev);
+	if (ret) {
+		dev_err(&interface->dev, "Cannot initialize DRM (%d)", ret);
+		return ret;
+	}
 
 	return 0;
 }
 
-static struct fl2000_devs *fl2000_get_devices(struct usb_device *usb_dev)
+static void fl2000_avcontrol_destroy(struct usb_interface *interface)
 {
-	struct fl2000_devs *devs;
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
-	devs = devm_kzalloc(&usb_dev->dev, sizeof(*devs), GFP_KERNEL);
-	if (!devs)
-		return (ERR_PTR(-ENOMEM));
-
-	devs->regmap = fl2000_regmap_init(usb_dev);
-	if (IS_ERR(devs->regmap))
-		return ERR_CAST(devs->regmap);
-
-	devs->adapter = fl2000_i2c_init(usb_dev);
-	if (IS_ERR(devs->adapter))
-		return ERR_CAST(devs->adapter);
-
-	component_match_add(&devs->adapter->dev, &devs->match, fl2000_compare, NULL);
-
-	dev_set_drvdata(&usb_dev->dev, devs);
-
-	return devs;
+	fl2000_drm_cleanup(usb_dev);
+	fl2000_i2c_cleanup(usb_dev);
+	fl2000_regmap_cleanup(usb_dev);
 }
 
-/* TODO: Halt driver on initialization failure */
+/* I2C interface, registers, master component */
+static const struct fl2000_if_api fl2000_avcontrol = {
+	.create = fl2000_avcontrol_create,
+	.destroy = fl2000_avcontrol_destroy,
+};
+
+/* DRM device, FB device, screen rendering (bulk/iso transfers) */
+static const struct fl2000_if_api fl2000_streaming = {
+	.create = fl2000_streaming_create,
+	.destroy = fl2000_streaming_destroy,
+};
+
+/* Interrupt polling (int transfers) */
+static const struct fl2000_if_api fl2000_interrupt = {
+	.create = fl2000_interrupt_create,
+	.destroy = fl2000_interrupt_destroy,
+};
+
+static const struct usb_device_id fl2000_id_table[] = {
+	{ USB_DEVICE_INTERFACE_NUMBER(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, FL2000_USBIF_AVCONTROL), .driver_info = &fl2000_avcontrol },
+	{ USB_DEVICE_INTERFACE_NUMBER(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, FL2000_USBIF_STREAMING), .driver_info = &fl2000_streaming },
+	{ USB_DEVICE_INTERFACE_NUMBER(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, FL2000_USBIF_INTERRUPT), .driver_info = &fl2000_interrupt },
+	{},
+};
+MODULE_DEVICE_TABLE(usb, fl2000_id_table);
+
 static int fl2000_probe(struct usb_interface *interface, const struct usb_device_id *usb_dev_id)
 {
-	int ret = 0;
-	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	struct fl2000_devs *devs = dev_get_drvdata(&usb_dev->dev);
-
-	UNUSED(usb_dev_id);
+	const struct fl2000_if_api *api = (const struct fl2000_if_api *)usb_dev_id->driver_info;
 
 	if (usb_dev->speed < USB_SPEED_HIGH) {
 		dev_err(&usb_dev->dev, "USB 1.1 is not supported!");
 		return -ENODEV;
 	}
 
-	if (!devs) {
-		devs = fl2000_get_devices(usb_dev);
-		if (IS_ERR(devs)) {
-			dev_err(&usb_dev->dev, "Cannot initialize I2C and regmap!");
-			return -ENODEV;
-		}
-	}
+	if (api->create)
+		return api->create(interface);
 
-	switch (iface_num) {
-	case FL2000_USBIF_AVCONTROL:
-	case FL2000_USBIF_STREAMING:
-	case FL2000_USBIF_INTERRUPT:
-		devs->active_if |= BIT(iface_num);
-		break;
-
-	default: /* Device does not have any other interfaces */
-		dev_warn(&interface->dev, "What interface %d?", iface_num);
-		ret = -ENODEV;
-		break;
-	}
-
-	/* When all interfaces are up - proceed with registration */
-	if (devs->active_if == FL2000_ALL_IFS) {
-		ret = component_master_add_with_match(&devs->adapter->dev, &fl2000_master_ops,
-						      devs->match);
-		if (ret) {
-			dev_err(&usb_dev->dev, "Cannot register component master (%d)", ret);
-			return ret;
-		}
-	}
-
-	return ret;
+	return 0;
 }
 
 static void fl2000_disconnect(struct usb_interface *interface)
 {
-	u8 iface_num = interface->cur_altsetting->desc.bInterfaceNumber;
-	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	struct fl2000_devs *devs = dev_get_drvdata(&usb_dev->dev);
+	const struct usb_device_id *usb_match_id;;
+	const struct fl2000_if_api *api;
 
-	if (!devs)
+	usb_match_id = usb_match_id(interface, fl2000_id_table);
+	if (!usb_match_id) {
+		dev_err(&interface->dev, "Cannot find matching USB ID");
 		return;
-
-	if (devs->active_if == FL2000_ALL_IFS)
-		component_master_del(&devs->adapter->dev, &fl2000_master_ops);
-
-	switch (iface_num) {
-	case FL2000_USBIF_AVCONTROL:
-	case FL2000_USBIF_STREAMING:
-	case FL2000_USBIF_INTERRUPT:
-		devs->active_if &= ~BIT(iface_num);
-		break;
-
-	default: /* Device does not have any other interfaces */
-		dev_warn(&interface->dev, "What interface %d?", iface_num);
-		break;
 	}
+
+	api = (const struct fl2000_if_api *)usb_match_id->driver_info;
+	if (api && api->destroy)
+		api->destroy(interface);
 }
 
 static int fl2000_suspend(struct usb_interface *interface, pm_message_t message)
 {
-	struct usb_device *usb_dev = interface_to_usbdev(interface);
-
 	UNUSED(message);
 
-	dev_dbg(&usb_dev->dev, "resume");
+	dev_dbg(&interface->dev, "suspend");
 
 	/* TODO: suspend
-	 * drm_mode_config_helper_suspend()
+	 * e.g. drm_mode_config_helper_suspend()
 	 */
 
 	return 0;
@@ -172,12 +133,10 @@ static int fl2000_suspend(struct usb_interface *interface, pm_message_t message)
 
 static int fl2000_resume(struct usb_interface *interface)
 {
-	struct usb_device *usb_dev = interface_to_usbdev(interface);
-
-	dev_dbg(&usb_dev->dev, "suspend");
+	dev_dbg(&interface->dev, "resume");
 
 	/* TODO: resume
-	 * drm_mode_config_helper_resume()
+	 * e.g. drm_mode_config_helper_resume()
 	 */
 
 	return 0;

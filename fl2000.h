@@ -71,53 +71,6 @@ enum fl2000_interface {
 		(__mask) |= __data.__val;           \
 	})
 
-static inline int fl2000_submit_urb(struct urb *urb)
-{
-	int ret;
-	int attempts = 10;
-
-	do {
-		ret = usb_submit_urb(urb, GFP_KERNEL);
-		switch (ret) {
-		case -ENXIO:
-		case -ENOMEM:
-			if (attempts--) {
-				cond_resched();
-				ret = -EAGAIN;
-			}
-			break;
-		default:
-			break;
-		}
-	} while (ret == -EAGAIN);
-
-	return ret;
-}
-
-static inline int fl2000_urb_status(struct usb_device *usb_dev, int status, int pipe)
-{
-	int ret = status;
-
-	switch (status) {
-	/* Stalled endpoint */
-	case -EPIPE:
-		ret = usb_clear_halt(usb_dev, pipe);
-		break;
-	case -ECONNRESET:
-		fallthrough;
-	case -ENOENT:
-		fallthrough;
-	case -ESHUTDOWN:
-		/* Not an error */
-		break;
-	default:
-		dev_err(&usb_dev->dev, "Nonzero urb status, %d\n", status);
-		break;
-	}
-
-	return ret;
-}
-
 struct fl2000_timings {
 	u32 hactive;
 	u32 htotal;
@@ -137,33 +90,38 @@ struct fl2000_pll {
 };
 
 /* Timeout in us for I2C read/write operations */
-#define I2C_RDWR_INTERVAL (200)
+#define I2C_RDWR_INTERVAL 200
 #define I2C_RDWR_TIMEOUT  (256 * 1000)
 
-/* Streaming transfer task */
-struct fl2000_stream;
-struct fl2000_stream *fl2000_stream_create(struct usb_device *usb_dev, struct drm_crtc *crtc);
-void fl2000_stream_destroy(struct usb_device *usb_dev);
+/* Endpoints we want to use for Bulk streaming and Interrupt transfers */
+#define STREAMING_EP 1
+#define INTERRUPT_EP 3
 
-/* Streaming interface */
-int fl2000_stream_mode_set(struct fl2000_stream *stream, int pixels, u32 bytes_pix);
-void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned int height,
+/* Streaming transfer task creation */
+int fl2000_streaming_create(struct usb_interface *interface);
+void fl2000_streaming_destroy(struct usb_interface *interface);
+/* ... and interface */
+int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix);
+void fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned int height,
 			    unsigned int width, unsigned int pitch);
-int fl2000_stream_enable(struct fl2000_stream *stream);
-void fl2000_stream_disable(struct fl2000_stream *stream);
+int fl2000_streaming_enable(struct usb_device *usb_dev);
+void fl2000_streaming_disable(struct usb_device *usb_dev);
 
-/* Interrupt polling task */
-struct fl2000_intr;
-struct fl2000_intr *fl2000_intr_create(struct usb_device *usb_dev, struct drm_device *drm);
-void fl2000_intr_destroy(struct usb_device *usb_dev);
+/* Interrupt polling task creation */
+int fl2000_interrupt_create(struct usb_interface *interface);
+void fl2000_interrupt_destroy(struct usb_interface *interface);
+/* ... and interface */
+int fl2000_enable_interrupt(struct usb_device *usb_dev);
+int fl2000_disable_interrupt(struct usb_device *usb_dev);
 
 /* I2C adapter interface creation */
-struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev);
+int fl2000_i2c_init(struct usb_device *usb_dev);
+void fl2000_i2c_cleanup(struct usb_device *usb_dev);
 
 /* Register map creation */
-struct regmap *fl2000_regmap_init(struct usb_device *usb_dev);
-
-/* Registers interface */
+int fl2000_regmap_init(struct usb_device *usb_dev);
+void fl2000_regmap_cleanup(struct usb_device *usb_dev);
+/* ... and interface */
 int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
@@ -176,7 +134,10 @@ int fl2000_check_interrupt(struct usb_device *usb_dev);
 int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data);
 
 /* DRM device creation */
-int fl2000_drm_bind(struct device *master);
-void fl2000_drm_unbind(struct device *master);
+int fl2000_drm_init(struct usb_device *usb_dev);
+void fl2000_drm_cleanup(struct usb_device *usb_dev);
+/* ... and interface */
+void fl2000_drm_hotplug(struct usb_device *usb_dev);
+bool fl2000_drm_vblank(struct usb_device *usb_dev);
 
 #endif /* __FL2000_DRM_H__ */
