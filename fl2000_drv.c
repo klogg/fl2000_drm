@@ -19,6 +19,7 @@ struct fl2000_if_api
 
 static int fl2000_avcontrol_create(struct usb_interface *interface)
 {
+
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct component_match *match = NULL;
 	int ret;

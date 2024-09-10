@@ -184,15 +184,14 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_cal
 			pll->prescaler = prescaler;
 			pll->multiplier = multiplier;
 			pll->divisor = divisor;
-			if (vco_clk < 125000000) {
+			if (vco_clk < 125000000)
 				pll->function = 0;
-			} else if (vco_clk < 250000000) {
+			else if (vco_clk < 250000000)
 				pll->function = 1;
-			} else if (vco_clk < 500000000) {
+			else if (vco_clk < 500000000)
 				pll->function = 2;
-			} else {
+			else
 				pll->function = 3;
-			}
 			*clock_calculated = vco_clk / divisor;
 		}
 
@@ -212,8 +211,8 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		return -1;
 
 	/* Try to match pixel clock slightly adjusting htotal value, sequence is:
-	   0, -1, 1, -2, 2, -3, 3, -3, 4, -4, 5, -5, ...
-	   Here, 's' is used for sign, 'm' is used for modulo, and 'd' is the adjustment value
+	 * 0, -1, 1, -2, 2, -3, 3, -3, 4, -4, 5, -5, ...
+	 * Here, 's' is used for sign, 'm' is used for modulo, and 'd' is the adjustment value
 	 */
 	for (int m = 0, s = 0, d = 0; m <= max_h_adjustment * 2; m++, s = -s, d += m * s) {
 		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get 10^15Hz. Assume

@@ -355,7 +355,7 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 	}
 
 	/* Round buffer size up to multiple of 8 to meet HW expectations */
-	size = (pixels * bytes_pix + 7) & ~(unsigned int)7;
+	size = (pixels * bytes_pix + 7) & ~7U;
 
 	/* If there are buffers with same size - keep them */
 	if (stream->buf_size == size)
