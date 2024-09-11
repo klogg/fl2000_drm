@@ -898,10 +898,7 @@ static int __init it66121_probe(void)
 	return 0;
 }
 
-static const struct i2c_device_id it66121_ids[] = {
-	{ "it66121", 0 },
-	{ }
-};
+static const struct i2c_device_id it66121_ids[] = { { "it66121", 0 }, {} };
 MODULE_DEVICE_TABLE(i2c, it66121_ids);
 
 static struct i2c_driver it66121_driver = {

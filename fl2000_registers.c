@@ -304,10 +304,11 @@ int fl2000_enable_interrupts(struct usb_device *usb_dev)
  */
 int fl2000_check_interrupt(struct usb_device *usb_dev)
 {
+	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	union fl2000_vga_status_reg status;
 	bool sink_event;
-	int ret;
+	u32 mask = 0;
 
 	/* Process interrupt */
 	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
@@ -393,7 +394,7 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 
 	regmap = devm_regmap_init(&usb_dev->dev, NULL, usb_dev, &fl2000_regmap_config);
 	if (IS_ERR(regmap))
-		return  PTR_ERR(regmap);
+		return PTR_ERR(regmap);
 
 	return 0;
 }

@@ -8,26 +8,29 @@
 
 #define USB_DRIVER_NAME "fl2000_usb"
 
-#define USB_VENDOR_FRESCO_LOGIC 0x1D5C
-#define USB_PRODUCT_FL2000	0x2000
+#define FL2000_USB_VENDOR  0x1D5C
+#define FL2000_USB_PRODUCT 0x2000
+#define FL2000_USB_INTERFACE(ifnum, api_addr)                                              \
+	{                                                                                  \
+		USB_DEVICE_INTERFACE_NUMBER(FL2000_USB_VENDOR, FL2000_USB_PRODUCT, ifnum), \
+			.driver_info = (kernel_ulong_t)(api_addr)                          \
+	}
 
-struct fl2000_if_api
-{
-	int(*create)(struct usb_interface *interface);
-	void(*destroy)(struct usb_interface *interface);
+struct fl2000_if_api {
+	int (*create)(struct usb_interface *interface);
+	void (*destroy)(struct usb_interface *interface);
 };
 
 static int fl2000_avcontrol_create(struct usb_interface *interface)
 {
-
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
-	struct component_match *match = NULL;
 	int ret;
 
 	/* This seem to be needed to workaround buggy implementation of EPs */
 	ret = usb_set_interface(usb_dev, FL2000_USBIF_AVCONTROL, 1);
 	if (ret) {
-		dev_err(&interface->dev, "Cannot set streaming interface for bulk transfers (%d)", ret);
+		dev_err(&interface->dev, "Cannot set streaming interface for bulk transfers (%d)",
+			ret);
 		return ret;
 	}
 
@@ -80,9 +83,9 @@ static const struct fl2000_if_api fl2000_interrupt = {
 };
 
 static const struct usb_device_id fl2000_id_table[] = {
-	{ USB_DEVICE_INTERFACE_NUMBER(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, FL2000_USBIF_AVCONTROL), .driver_info = &fl2000_avcontrol },
-	{ USB_DEVICE_INTERFACE_NUMBER(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, FL2000_USBIF_STREAMING), .driver_info = &fl2000_streaming },
-	{ USB_DEVICE_INTERFACE_NUMBER(USB_VENDOR_FRESCO_LOGIC, USB_PRODUCT_FL2000, FL2000_USBIF_INTERRUPT), .driver_info = &fl2000_interrupt },
+	FL2000_USB_INTERFACE(FL2000_USBIF_AVCONTROL, &fl2000_avcontrol),
+	FL2000_USB_INTERFACE(FL2000_USBIF_STREAMING, &fl2000_streaming),
+	FL2000_USB_INTERFACE(FL2000_USBIF_INTERRUPT, &fl2000_interrupt),
 	{},
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
@@ -105,16 +108,16 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 
 static void fl2000_disconnect(struct usb_interface *interface)
 {
-	const struct usb_device_id *usb_match_id;;
+	const struct usb_device_id *id;
 	const struct fl2000_if_api *api;
 
-	usb_match_id = usb_match_id(interface, fl2000_id_table);
-	if (!usb_match_id) {
+	id = usb_match_id(interface, fl2000_id_table);
+	if (!id) {
 		dev_err(&interface->dev, "Cannot find matching USB ID");
 		return;
 	}
 
-	api = (const struct fl2000_if_api *)usb_match_id->driver_info;
+	api = (const struct fl2000_if_api *)id->driver_info;
 	if (api && api->destroy)
 		api->destroy(interface);
 }

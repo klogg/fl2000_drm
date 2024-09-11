@@ -142,6 +142,7 @@ static int fl2000_get_buffers(struct list_head *buffers_list, unsigned int size)
 	if (!list_empty(buffers_list)) {
 		/* Try fixing non-empty list putting buffers back */
 		fl2000_put_buffers(buffers_list);
+	}
 
 	for (int i = 0; i < FL2000_SB_NUM; i++) {
 		cur_sb = fl2000_alloc_sb(size);
@@ -165,14 +166,17 @@ static void fl2000_data_completion(struct urb *urb);
 /* TODO: use anchors more wisely */
 static int fl2000_send_stream(struct usb_device *usb_dev, struct fl2000_stream *stream)
 {
-	if (stream->enabled) do {
+	do {
 		int ret;
 		struct fl2000_stream_buf *cur_sb;
 		struct fl2000_stream_buf *last_sb;
-		struct urb *data_urb;
+		struct urb *urb;
 
-		data_urb = usb_alloc_urb(0, GFP_KERNEL);
-		if (!data_urb) {
+		if (!stream->enabled)
+			break;
+
+		urb = usb_alloc_urb(0, GFP_KERNEL);
+		if (!urb) {
 			dev_err(&usb_dev->dev, "Data URB allocation error");
 			return -ENOMEM;
 		}
@@ -184,15 +188,18 @@ static int fl2000_send_stream(struct usb_device *usb_dev, struct fl2000_stream *
 		 */
 		if (list_empty(&stream->transmit_list)) {
 			if (list_empty(&stream->wait_list))
-				last_sb = list_last_entry(&stream->render_list, struct fl2000_stream_buf, list);
+				last_sb = list_last_entry(&stream->render_list,
+							  struct fl2000_stream_buf, list);
 			else
-				last_sb = list_last_entry(&stream->wait_list, struct fl2000_stream_buf, list);
+				last_sb = list_last_entry(&stream->wait_list,
+							  struct fl2000_stream_buf, list);
 			cur_sb = list_first_entry(&stream->render_list, struct fl2000_stream_buf,
-							list);
+						  list);
 			if (cur_sb && last_sb) /* Both non-NULL */
 				memcpy(cur_sb->vaddr, last_sb->vaddr, stream->buf_size);
 		} else {
-			cur_sb = list_first_entry(&stream->transmit_list, struct fl2000_stream_buf, list);
+			cur_sb = list_first_entry(&stream->transmit_list, struct fl2000_stream_buf,
+						  list);
 		}
 		list_move_tail(&cur_sb->list, &stream->wait_list);
 		spin_unlock(&stream->list_lock);
@@ -200,14 +207,14 @@ static int fl2000_send_stream(struct usb_device *usb_dev, struct fl2000_stream *
 		/* Endpoint 1 bulk out. We store pointer to current stream buffer structure in
 		 * transfer_buffer field of URB which is unused due to SGT
 		 */
-		usb_fill_bulk_urb(data_urb, usb_dev, usb_sndbulkpipe(usb_dev, STREAMING_EP), cur_sb,
-					(int)stream->buf_size, fl2000_data_completion, stream);
-		data_urb->interval = 0;
-		data_urb->sg = cur_sb->sgt.sgl;
-		data_urb->num_sgs = cur_sb->sgt.nents;
-		data_urb->transfer_flags |= URB_ZERO_PACKET;
+		usb_fill_bulk_urb(urb, usb_dev, usb_sndbulkpipe(usb_dev, STREAMING_EP), cur_sb,
+				  (int)stream->buf_size, fl2000_data_completion, stream);
+		urb->interval = 0;
+		urb->sg = cur_sb->sgt.sgl;
+		urb->num_sgs = cur_sb->sgt.nents;
+		urb->transfer_flags |= URB_ZERO_PACKET;
 
-		usb_anchor_urb(data_urb, &stream->anchor);
+		usb_anchor_urb(urb, &stream->anchor);
 		ret = usb_submit_urb(urb, GFP_KERNEL);
 		if (ret) {
 			dev_err(&usb_dev->dev, "Data URB error %d", ret);
@@ -216,10 +223,12 @@ static int fl2000_send_stream(struct usb_device *usb_dev, struct fl2000_stream *
 			list_move_tail(&cur_sb->list, &stream->render_list);
 			spin_unlock(&stream->list_lock);
 
-			usb_unanchor_urb(data_urb);
-			usb_free_urb(data_urb);
+			usb_unanchor_urb(urb);
+			usb_free_urb(urb);
 
-			/* NOTE: actually in some cases we can try and resend the URB (-EAGAIN, some -ENOMEM) */
+			/* NOTE: actually in some cases we can try and resend the URB after sleep
+			 * e.g. -EAGAIN, few attempts on -ENOMEM... We will need work for this
+			 */
 			return ret;
 		}
 	} while (atomic_dec_and_test(&stream->urb_cnt));
@@ -238,7 +247,7 @@ static void fl2000_data_completion(struct urb *urb)
 	list_move_tail(&cur_sb->list, &stream->render_list);
 	spin_unlock(&stream->list_lock);
 
-	atomic_inc(stream->urb_cnt);
+	atomic_inc(&stream->urb_cnt);
 
 	fl2000_drm_vblank(usb_dev);
 
@@ -275,16 +284,14 @@ static void fl2000_streaming_release(struct device *dev, void *res)
 {
 	struct fl2000_stream *stream = res;
 
-	UNUSED(dev);
-
-	fl2000_streaming_disable(stream);
+	fl2000_streaming_disable(to_usb_device(dev));
 
 	fl2000_put_buffers(&stream->render_list);
 }
 
 /**
  * fl2000_streaming_compress() - compress XRGB888 data to RGB565 or RGB888
- * 
+ *
  * @usb_dev: USB device
  * @src: Source buffer
  * @height: Image height
@@ -292,20 +299,20 @@ static void fl2000_streaming_release(struct device *dev, void *res)
  * @pitch: Image pitch
  */
 void fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch)
+			       unsigned int width, unsigned int pitch)
 {
 	struct fl2000_stream_buf *cur_sb;
 	void *dst;
 	u32 dst_line_len;
 	struct fl2000_stream *stream;
 
-	stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
+	stream = devres_find(&usb_dev->dev, fl2000_streaming_release, NULL, NULL);
 	if (!stream) {
 		dev_err(&usb_dev->dev, "Cannot find streaming context");
 		return;
 	}
 
-	if (list_empty(&stream->render_list)
+	if (list_empty(&stream->render_list))
 		return;
 
 	spin_lock_irq(&stream->list_lock);
@@ -335,11 +342,11 @@ void fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned i
 
 /**
  * fl2000_streaming_mode_set() - streaming mode setup
- * 
+ *
  * @usb_dev: USB device
  * @pixels: Number of pixels in a line
  * @bytes_pix: Bytes per pixel
- * 
+ *
  * @returns: Operation result
  */
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix)
@@ -348,7 +355,7 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 	unsigned int size;
 	struct fl2000_stream *stream;
 
-	stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
+	stream = devres_find(&usb_dev->dev, fl2000_streaming_release, NULL, NULL);
 	if (!stream) {
 		dev_err(&usb_dev->dev, "Cannot find streaming context");
 		return -ENODEV;
@@ -376,9 +383,9 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 
 /**
  * fl2000_streaming_enable() - streaming processing start
- * 
+ *
  * @usb_dev: USB device
- * 
+ *
  * @returns: Operation result
  */
 int fl2000_streaming_enable(struct usb_device *usb_dev)
@@ -386,7 +393,7 @@ int fl2000_streaming_enable(struct usb_device *usb_dev)
 	int ret;
 	struct fl2000_stream *stream;
 
-	stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
+	stream = devres_find(&usb_dev->dev, fl2000_streaming_release, NULL, NULL);
 	if (!stream) {
 		dev_err(&usb_dev->dev, "Cannot find streaming context");
 		return -ENODEV;
@@ -411,7 +418,7 @@ int fl2000_streaming_enable(struct usb_device *usb_dev)
 
 /**
  * fl2000_streaming_disable() - streaming processing stop
- * 
+ *
  * @usb_dev: USB device
  */
 void fl2000_streaming_disable(struct usb_device *usb_dev)
@@ -419,10 +426,10 @@ void fl2000_streaming_disable(struct usb_device *usb_dev)
 	struct fl2000_stream_buf *cur_sb;
 	struct fl2000_stream *stream;
 
-	stream = devres_find(&usb_dev->dev, fl2000_stream_release, NULL, NULL);
+	stream = devres_find(&usb_dev->dev, fl2000_streaming_release, NULL, NULL);
 	if (!stream) {
 		dev_err(&usb_dev->dev, "Cannot find streaming context");
-		return -ENODEV;
+		return;
 	}
 
 	stream->enabled = false;
@@ -446,17 +453,16 @@ void fl2000_streaming_disable(struct usb_device *usb_dev)
 
 /**
  * fl2000_streaming_create() - streaming processing context creation
- * 
+ *
  * It shall not initiate any USB transfers. URB is not allocated here because we do not know the
  * stream requirements yet.
- * 
+ *
  * @interface:	streaming transfers interface
- * 
+ *
  * @returns: Operation result
  */
 int fl2000_streaming_create(struct usb_interface *interface)
 {
-	int ret;
 	struct fl2000_stream *stream;
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 
@@ -472,7 +478,7 @@ int fl2000_streaming_create(struct usb_interface *interface)
 	spin_lock_init(&stream->list_lock);
 	init_usb_anchor(&stream->anchor);
 
-	stream->urb_cnt = ATOMIC_INIT(FL2000_SB_MIN);
+	atomic_set(&stream->urb_cnt, FL2000_SB_MIN);
 	stream->enabled = false;
 
 	devres_add(&usb_dev->dev, stream);
@@ -482,7 +488,7 @@ int fl2000_streaming_create(struct usb_interface *interface)
 
 /**
  * fl2000_streaming_destroy() - streaming processing context destruction
- * 
+ *
  * @interface:	streaming transfers interface
  */
 void fl2000_streaming_destroy(struct usb_interface *interface)

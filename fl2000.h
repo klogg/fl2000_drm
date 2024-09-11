@@ -39,6 +39,7 @@
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_damage_helper.h>
 #include <drm/drm_fb_dma_helper.h>
+#include <drm/drm_fbdev_dma.h>
 
 #include "fl2000_registers.h"
 
@@ -103,7 +104,7 @@ void fl2000_streaming_destroy(struct usb_interface *interface);
 /* ... and interface */
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix);
 void fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch);
+			       unsigned int width, unsigned int pitch);
 int fl2000_streaming_enable(struct usb_device *usb_dev);
 void fl2000_streaming_disable(struct usb_device *usb_dev);
 
@@ -138,6 +139,6 @@ int fl2000_drm_init(struct usb_device *usb_dev);
 void fl2000_drm_cleanup(struct usb_device *usb_dev);
 /* ... and interface */
 void fl2000_drm_hotplug(struct usb_device *usb_dev);
-bool fl2000_drm_vblank(struct usb_device *usb_dev);
+void fl2000_drm_vblank(struct usb_device *usb_dev);
 
 #endif /* __FL2000_DRM_H__ */
