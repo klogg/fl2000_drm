@@ -458,6 +458,7 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 
 	dev_info(comp, "Binding IT66121 component to %s", dev_name(master));
 
+	drm_bridge_attach(&pipe->encoder, bridge, NULL, 0);
 	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
 	if (ret)
 		dev_err(comp, "Cannot attach IT66121 bridge (%d)", ret);
