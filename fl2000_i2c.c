@@ -115,6 +115,40 @@ static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 	i2c_del_adapter(adapter);
 }
 
+/**
+ * fl2000_i2c_verify_client - Verify I2C client
+ * 
+ * @usb_dev: USB device
+ * @client_dev: Device to verify
+ * @client_name: Expected I2C client name
+ * 
+ * @return: true if client is verified, false otherwise
+ */
+bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_dev,
+			      const char *client_name)
+{
+	struct i2c_adapter *adapter;
+	struct i2c_client *client;
+	struct device_driver *driver;
+
+	adapter = devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
+	if (!adapter)
+		return false;
+
+	client = i2c_verify_client(client_dev);
+	if (!client)
+		return false;
+
+	driver = client->driver;
+	if (strcmp(driver->name, client_name))
+		return false;
+
+	if (client->adapter != adapter)
+		return false;
+
+	return true;
+}
+
 int fl2000_i2c_init(struct usb_device *usb_dev)
 {
 	int ret;

@@ -118,6 +118,9 @@ int fl2000_disable_interrupt(struct usb_device *usb_dev);
 /* I2C adapter interface creation */
 int fl2000_i2c_init(struct usb_device *usb_dev);
 void fl2000_i2c_cleanup(struct usb_device *usb_dev);
+/* ... and interface*/
+bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_dev,
+			      const char *client_name);
 
 /* Register map creation */
 int fl2000_regmap_init(struct usb_device *usb_dev);
