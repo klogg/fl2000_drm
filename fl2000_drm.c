@@ -468,11 +468,6 @@ void fl2000_drm_vblank(struct usb_device *usb_dev)
 		dev_err(&usb_dev->dev, "Cannot handle vblank event (%d)", ret);
 }
 
-static int fl2000_drm_modeset_init(struct drm_device *drm)
-{
-	return 0;
-}
-
 /* Bind a DRM bridge device component
  *
  * Will only allocate structures on 'probe' function call. There is still no bridge at this moment,
@@ -489,6 +484,7 @@ static int fl2000_drm_bind(struct device *master)
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct drm_bridge *bridge;
+	struct drm_mode_config *mode_config;
 
 	/* We may extend it? */
 	static const uint64_t modifiers[] = {
@@ -563,7 +559,7 @@ static int fl2000_drm_bind(struct device *master)
 	bridge = drm->dev_private;
 	ret = drm_simple_display_pipe_attach_bridge(&drm_if->pipe, bridge);
 	if (ret) {
-		dev_err(comp, "Cannot attach IT66121 bridge (%d)", ret);
+		dev_err(&usb_dev->dev, "Cannot attach IT66121 bridge (%d)", ret);
 		component_unbind_all(master, drm);
 		dev_set_drvdata(&usb_dev->dev, NULL);
 		return ret;
@@ -622,7 +618,7 @@ static int fl2000_component_compare(struct device *client_dev, void *data)
 {
 	struct usb_device *usb_dev = (struct usb_device *)data;
 
-	for (int i = 0; i++; i < ARRAY_SIZE(fl2000_bridges))
+	for (int i = 0; i < ARRAY_SIZE(fl2000_bridges); i++)
 		if (fl2000_i2c_verify_client(usb_dev, client_dev, fl2000_bridges[i]))
 			return 1;
 
