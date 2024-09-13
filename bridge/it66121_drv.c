@@ -454,14 +454,14 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 {
 	int ret;
 	struct drm_bridge *bridge = dev_get_drvdata(comp);
-	struct drm_simple_display_pipe *pipe = master_data;
+	struct drm_device *drm = master_data;
 
 	dev_info(comp, "Binding IT66121 component to %s", dev_name(master));
 
-	drm_bridge_attach(&pipe->encoder, bridge, NULL, 0);
-	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
-	if (ret)
-		dev_err(comp, "Cannot attach IT66121 bridge (%d)", ret);
+	/* TODO: change to devm/devres from master
+	 * Or maybe use drv_data of some device other than usb_dev?
+	 */
+	drm->dev_private = bridge;
 
 	return ret;
 }
@@ -469,7 +469,7 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 static void it66121_unbind(struct device *comp, struct device *master, void *master_data)
 {
 	struct drm_bridge *bridge = dev_get_drvdata(comp);
-	struct drm_simple_display_pipe *pipe = master_data;
+	struct drm_device *drm = master_data;
 
 	dev_info(comp, "Unbinding IT66121 component from %s", dev_name(master));
 

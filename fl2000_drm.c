@@ -24,8 +24,10 @@ static const u32 fl2000_pixel_formats[] = {
 	DRM_FORMAT_XRGB8888,
 };
 
-/* TODO: This has to come from driver parameters */
-static char *bridge_name = "it66121";
+/* XXX: Shall this has to come from driver parameters? */
+static char *fl2000_bridges[] = {
+	"it66121",
+};
 
 /* Maximum pixel clock set to 500MHz. It is hard to get more or less precise PLL configuration for
  * higher clock
@@ -382,7 +384,7 @@ static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_displ
 	struct fl2000_pll pll;
 	unsigned int bytes_pix;
 
-	/* Get PLL configuration and cehc if mode adjustments needed */
+	/* Get PLL configuration and check if mode adjustments needed */
 	if (fl2000_mode_calc(mode, adjusted_mode, &pll))
 		return;
 
@@ -486,6 +488,13 @@ static int fl2000_drm_bind(struct device *master)
 	struct usb_device *usb_dev = to_usb_device(master);
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
+	struct drm_bridge *bridge;
+
+	/* We may extend it? */
+	static const uint64_t modifiers[] = {
+		DRM_FORMAT_MOD_LINEAR,
+		DRM_FORMAT_MOD_INVALID
+	};
 
 	dev_info(master, "Binding FL2000 master");
 
@@ -496,12 +505,13 @@ static int fl2000_drm_bind(struct device *master)
 	}
 	drm = &drm_if->drm;
 	drm_if->usb_dev = usb_dev;
+	dev_set_drvdata(&usb_dev->dev, drm_if);
 
 	/* Static mode configuration that won't change */
 	ret = drmm_mode_config_init(drm);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot initialize DRM mode (%d)", ret);
-		drm_dev_put(drm);
+		dev_set_drvdata(&usb_dev->dev, NULL);
 		return ret;
 	}
 	mode_config = &drm->mode_config;
@@ -514,22 +524,19 @@ static int fl2000_drm_bind(struct device *master)
 	/* Simple display pipe with bridge attached later on */
 	ret = drm_simple_display_pipe_init(drm, &drm_if->pipe, &fl2000_display_funcs,
 					   fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats),
-					   NULL, NULL);
+					   modifiers, NULL);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot configure simple display pipe (%d)", ret);
-		drm_mode_config_cleanup(drm);
-		drm_dev_put(drm);
+		dev_set_drvdata(&usb_dev->dev, NULL);
 		return ret;
 	}
-	dev_set_drvdata(&usb_dev->dev, drm_if);
 
 	/* We support vblanks */
 	ret = drm_vblank_init(drm, drm->mode_config.num_crtc);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Failed to initialize %d vblank(s) (%d)",
 			drm->mode_config.num_crtc, ret);
-		drm_mode_config_cleanup(drm);
-		drm_dev_put(drm);
+		dev_set_drvdata(&usb_dev->dev, NULL);
 		return ret;
 	}
 
@@ -543,8 +550,22 @@ static int fl2000_drm_bind(struct device *master)
 	ret = component_bind_all(master, drm);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot attach bridge (%d)", ret);
-		drm_mode_config_cleanup(drm);
-		drm_dev_put(drm);
+		dev_set_drvdata(&usb_dev->dev, NULL);
+		return ret;
+	}
+
+	/* XXX: We use deprecated drm->dev_private for now...
+	 *
+	 * Instead of using dev_private it is recommended that drivers use struct &drm_device, but
+	 * this is not good for us since we shall provide pointer to struct drm_device (see above)
+	 * and not to some private structure.
+	 */
+	bridge = drm->dev_private;
+	ret = drm_simple_display_pipe_attach_bridge(&drm_if->pipe, bridge);
+	if (ret) {
+		dev_err(comp, "Cannot attach IT66121 bridge (%d)", ret);
+		component_unbind_all(master, drm);
+		dev_set_drvdata(&usb_dev->dev, NULL);
 		return ret;
 	}
 
@@ -557,8 +578,7 @@ static int fl2000_drm_bind(struct device *master)
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot register DRM device (%d)", ret);
 		component_unbind_all(master, drm);
-		drm_mode_config_cleanup(drm);
-		drm_dev_put(drm);
+		dev_set_drvdata(&usb_dev->dev, NULL);
 		return ret;
 	}
 
@@ -585,17 +605,12 @@ static void fl2000_drm_unbind(struct device *master)
 
 	drm = &drm_if->drm;
 	drm_atomic_helper_shutdown(drm);
+	drm_dev_unplug(drm);
 
 	/* Detach bridge */
 	component_unbind_all(master, &drm_if->pipe);
 
-	drm_dev_unplug(drm);
-
-	drm_mode_config_cleanup(drm);
-
 	dev_set_drvdata(&usb_dev->dev, NULL);
-
-	drm_dev_put(drm);
 }
 
 static struct component_master_ops fl2000_master_ops = {
@@ -607,7 +622,11 @@ static int fl2000_component_compare(struct device *client_dev, void *data)
 {
 	struct usb_device *usb_dev = (struct usb_device *)data;
 
-	return fl2000_i2c_verify_client(usb_dev, client_dev, bridge_name);
+	for (int i = 0; i++; i < ARRAY_SIZE(fl2000_bridges))
+		if (fl2000_i2c_verify_client(usb_dev, client_dev, fl2000_bridges[i]))
+			return 1;
+
+	return 0;
 }
 
 /**
@@ -629,7 +648,7 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 	/* Register supported bridge as a component with match by name */
 	component_match_add(&usb_dev->dev, &match, fl2000_component_compare, usb_dev);
 	if (!match) {
-		dev_err(&usb_dev->dev, "Cannot find supported HDMI bridge!");
+		dev_err(&usb_dev->dev, "Cannot register supported bridge(s)!");
 		return -ENODEV;
 	}
 	/* Register component master - component bind/unbind functions will complete the
