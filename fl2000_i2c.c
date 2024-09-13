@@ -139,7 +139,7 @@ bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_
 	if (!client)
 		return false;
 
-	driver = client->driver;
+	driver = client_dev->driver;
 	if (strcmp(driver->name, client_name))
 		return false;
 

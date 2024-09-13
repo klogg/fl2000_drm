@@ -460,6 +460,7 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 
 	/* TODO: change to devm/devres from master
 	 * Or maybe use drv_data of some device other than usb_dev?
+	 * Also this hast o be linked to some specific encoder
 	 */
 	drm->dev_private = bridge;
 
