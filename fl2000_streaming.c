@@ -264,6 +264,11 @@ static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf, u32 pixels)
 {
 	unsigned int xx = 0;
 
+	/* XXX: This actually can be replaced with a single dword operation, if dbuf address is
+	 * properly aligned to 32-bit boundary
+	 * 
+	 * TODO: Replace this with userspace transformation of data using SIMD instructions
+	 */
 	for (unsigned int x = 0; x < pixels; x++) {
 		dbuf[xx++ ^ 4] = (sbuf[x] & 0x000000FF) >> 0;
 		dbuf[xx++ ^ 4] = (sbuf[x] & 0x0000FF00) >> 8;
@@ -273,6 +278,7 @@ static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf, u32 pixels)
 
 static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf, u32 pixels)
 {
+	/* TODO: Throw this away. Compression is useless */
 	for (unsigned int x = 0; x < pixels; x++) {
 		u16 val565 = ((sbuf[x] & 0x00F80000) >> 8) | ((sbuf[x] & 0x0000FC00) >> 5) |
 			     ((sbuf[x] & 0x000000F8) >> 3);

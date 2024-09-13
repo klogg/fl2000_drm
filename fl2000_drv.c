@@ -100,7 +100,7 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 		return -ENODEV;
 	}
 
-	if (api->create)
+	if (api && api->create)
 		return api->create(interface);
 
 	return 0;
