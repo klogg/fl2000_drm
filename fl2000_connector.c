@@ -27,12 +27,12 @@ static int fl2000_read_edid(void *data, u8 *buf, unsigned int block, size_t len)
 }
 static int fl2000_get_modes(struct drm_connector *connector)
 {
-	struct edid *edid;
+	const struct drm_edid *edid;
 	int ret;
 
-	edid = drm_do_get_edid(connector, fl2000_read_edid, connector->ddc);
-	drm_connector_update_edid_property(connector, edid);
-	ret = drm_add_edid_modes(connector, edid);
+	edid = drm_edid_read_custom(connector, fl2000_read_edid, connector->ddc);
+	drm_edid_connector_update(connector, edid);
+	ret = drm_edid_connector_add_modes(connector);
 	kfree(edid);
 
 	//ret = drm_add_modes_noedid(connector, 1920, 1200);
