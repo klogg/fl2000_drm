@@ -40,7 +40,7 @@ struct it66121_priv {
 
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
 
-	struct edid *edid;
+	const struct drm_edid *edid;
 	bool dvi_mode;
 };
 
@@ -311,7 +311,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 			it66121_is_hpd_detect(priv);
 			event = true;
 			if (priv->conn_status == connector_status_disconnected) {
-				kfree(priv->edid);
+				drm_edid_free(priv->edid);
 				priv->edid = NULL;
 			}
 		}
@@ -399,20 +399,20 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv, connector);
-	struct edid *edid = priv->edid;
+	const struct drm_edid *drm_edid = priv->edid;
 
-	if (!edid) {
-		edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
-		if (!edid)
+	if (!drm_edid) {
+		drm_edid = drm_edid_read_custom(connector, it66121_get_edid_block, priv);
+		if (!drm_edid)
 			return 0;
 
-		drm_connector_update_edid_property(connector, edid);
+		drm_edid_connector_update(connector, drm_edid);
 
-		priv->dvi_mode = !drm_detect_hdmi_monitor(edid);
-		priv->edid = edid;
+		priv->dvi_mode = !drm_detect_hdmi_monitor(drm_edid_raw(drm_edid));
+		priv->edid = drm_edid;
 	}
 
-	return drm_add_edid_modes(connector, edid);
+	return drm_edid_connector_add_modes(connector);
 }
 
 static enum drm_mode_status it66121_connector_mode_valid(struct drm_connector *connector,
@@ -842,7 +842,7 @@ static void __exit it66121_remove(void)
 
 	component_del(&priv->client->dev, &it66121_component_ops);
 
-	kfree(priv->edid);
+	drm_edid_free(priv->edid);
 
 	drm_bridge_remove(&priv->bridge);
 

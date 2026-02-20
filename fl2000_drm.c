@@ -8,7 +8,6 @@
 
 #define DRM_DRIVER_NAME "fl2000_drm"
 #define DRM_DRIVER_DESC "USB-HDMI"
-#define DRM_DRIVER_DATE "20181001"
 
 #define DRM_DRIVER_MAJOR      0
 #define DRM_DRIVER_MINOR      0
@@ -94,7 +93,7 @@ struct fl2000_drm_if {
 	struct fl2000_intr *intr;
 };
 
-DEFINE_DRM_GEM_DMA_FOPS(fl2000_drm_driver_fops);
+DEFINE_DRM_GEM_FOPS(fl2000_drm_driver_fops);
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
@@ -104,16 +103,14 @@ static void fl2000_drm_release(struct drm_device *drm)
 
 static struct drm_driver fl2000_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
-	.lastclose = drm_fb_helper_lastclose,
 	.ioctls = NULL,
 	.fops = &fl2000_drm_driver_fops,
 	.release = fl2000_drm_release,
 
-	DRM_GEM_DMA_DRIVER_OPS_VMAP,
+	DRM_GEM_SHMEM_DRIVER_OPS,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
-	.date = DRM_DRIVER_DATE,
 	.major = DRM_DRIVER_MAJOR,
 	.minor = DRM_DRIVER_MINOR,
 	.patchlevel = DRM_DRIVER_PATCHLEVEL,
@@ -300,7 +297,9 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 	int idx;
 	struct drm_device *drm = fb->dev;
 	struct fl2000_drm_if *drm_if = drm->dev_private;
-	struct drm_gem_dma_object *dma_obj = drm_fb_dma_get_gem_obj(fb, 0);
+	struct drm_gem_object *gem_obj = drm_gem_fb_get_obj(fb, 0);
+	struct drm_gem_shmem_object *shmem_obj = to_drm_gem_shmem_obj(gem_obj);
+	struct iosys_map map;
 
 	UNUSED(rect);
 
@@ -309,15 +308,16 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 		return;
 	}
 
-	ret = drm_gem_fb_begin_cpu_access(fb, DMA_FROM_DEVICE);
+	ret = drm_gem_shmem_vmap(shmem_obj, &map);
 	if (ret)
-		return;
+		goto exit;
 
-	fl2000_stream_compress(drm_if->stream, dma_obj->vaddr, fb->height, fb->width,
+	fl2000_stream_compress(drm_if->stream, map.vaddr, fb->height, fb->width,
 			       fb->pitches[0]);
 
-	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
+	drm_gem_shmem_vunmap(shmem_obj, &map);
 
+exit:
 	drm_dev_exit(idx);
 }
 
@@ -524,7 +524,7 @@ int fl2000_drm_bind(struct device *master)
 	fl2000_reset(usb_dev);
 	fl2000_usb_magic(usb_dev);
 
-	drm_fbdev_generic_setup(drm, FL2000_FB_BPP);
+	drm_fbdev_shmem_setup(drm, FL2000_FB_BPP);
 
 	return 0;
 }
