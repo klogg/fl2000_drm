@@ -104,16 +104,15 @@ static void fl2000_drm_release(struct drm_device *drm)
 
 static struct drm_driver fl2000_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
-	.lastclose = drm_fb_helper_lastclose,
 	.ioctls = NULL,
 	.fops = &fl2000_drm_driver_fops,
 	.release = fl2000_drm_release,
 
 	DRM_GEM_DMA_DRIVER_OPS_VMAP,
+	DRM_FBDEV_SHMEM_DRIVER_OPS,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
-	.date = DRM_DRIVER_DATE,
 	.major = DRM_DRIVER_MAJOR,
 	.minor = DRM_DRIVER_MINOR,
 	.patchlevel = DRM_DRIVER_PATCHLEVEL,
@@ -524,7 +523,7 @@ int fl2000_drm_bind(struct device *master)
 	fl2000_reset(usb_dev);
 	fl2000_usb_magic(usb_dev);
 
-	drm_fbdev_generic_setup(drm, FL2000_FB_BPP);
+	// fbdev setup removed - handled by DRM_FBDEV_SHMEM_DRIVER_OPS
 
 	return 0;
 }
