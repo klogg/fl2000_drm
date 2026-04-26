@@ -39,8 +39,8 @@ static const u32 fl2000_pixel_formats[] = {
 #define FL2000_VCOCLOCK_MIN 62500000 /* 62.5 MHz */
 #define FL2000_VCOCLOCK_MAX 1000000000 /* 1GHz */
 
-/* Maximum acceptable ppm error */
-#define FL2000_PPM_ERR_MAX 500
+/* Maximum acceptable ppm error - relaxed to allow more modes (1080p, etc.) */
+#define FL2000_PPM_ERR_MAX 3000
 
 /* Assume bulk transfers can use only 80% of USB bandwidth */
 #define FL2000_BULK_BW_PERCENT 80
@@ -94,7 +94,7 @@ struct fl2000_drm_if {
 	struct fl2000_intr *intr;
 };
 
-DEFINE_DRM_GEM_DMA_FOPS(fl2000_drm_driver_fops);
+DEFINE_DRM_GEM_FOPS(fl2000_drm_driver_fops);
 
 static void fl2000_drm_release(struct drm_device *drm)
 {
@@ -104,16 +104,15 @@ static void fl2000_drm_release(struct drm_device *drm)
 
 static struct drm_driver fl2000_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
-	.lastclose = drm_fb_helper_lastclose,
 	.ioctls = NULL,
 	.fops = &fl2000_drm_driver_fops,
 	.release = fl2000_drm_release,
 
-	DRM_GEM_DMA_DRIVER_OPS_VMAP,
+	DRM_GEM_SHMEM_DRIVER_OPS,
+	DRM_FBDEV_SHMEM_DRIVER_OPS,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
-	.date = DRM_DRIVER_DATE,
 	.major = DRM_DRIVER_MAJOR,
 	.minor = DRM_DRIVER_MINOR,
 	.patchlevel = DRM_DRIVER_PATCHLEVEL,
@@ -209,10 +208,15 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 			    struct drm_display_mode *adjusted_mode, struct fl2000_pll *pll)
 {
 	u64 ppm_err;
-	u32 clock_calculated;
 	u64 clock_mil_adjusted;
 	const u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
-	const int max_h_adjustment = 10;
+	const int max_h_adjustment = 20;
+
+	/* Best match tracking */
+	u64 best_ppm_err = FL2000_PPM_ERR_MAX;
+	int best_d = 0;
+	struct fl2000_pll best_pll = {};
+	u32 best_clock = 0;
 
 	if (mode->clock * 1000 > FL2000_MAX_PIXCLOCK)
 		return -1;
@@ -222,25 +226,32 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 	 * Here, 's' is used for sign, 'm' is used for modulo, and 'd' is the adjustment value
 	 */
 	for (int m = 0, s = 0, d = 0; m <= max_h_adjustment * 2; m++, s = -s, d += m * s) {
-		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get 10^15Hz. Assume
-		 * maximum htotal is 10000 pix (no way) we get 10^19 max value and using u64 which
-		 * is 1.8*10^19 no overflow can occur. Assume all this was checked before
-		 */
+		struct fl2000_pll candidate_pll = {};
+		u32 candidate_clock;
+
 		clock_mil_adjusted = clock_mil * (mode->htotal + d) / mode->htotal;
 
 		/* To keep precision use clock multiplied by 10^6 */
-		ppm_err = fl2000_pll_calc(clock_mil_adjusted, pll, &clock_calculated);
+		ppm_err = fl2000_pll_calc(clock_mil_adjusted, &candidate_pll, &candidate_clock);
 
-		/* Stop searching as soon as the first valid option found */
-		if (ppm_err < FL2000_PPM_ERR_MAX) {
-			if (adjusted_mode) {
-				drm_mode_copy(adjusted_mode, mode);
-				adjusted_mode->htotal += d;
-				adjusted_mode->clock = clock_calculated / 1000;
-			}
-
-			return 0;
+		/* Track the best match across all htotal adjustments */
+		if (ppm_err < best_ppm_err) {
+			best_ppm_err = ppm_err;
+			best_d = d;
+			best_pll = candidate_pll;
+			best_clock = candidate_clock;
 		}
+	}
+
+	/* Use the best match found */
+	if (best_ppm_err < FL2000_PPM_ERR_MAX) {
+		*pll = best_pll;
+		if (adjusted_mode) {
+			drm_mode_copy(adjusted_mode, mode);
+			adjusted_mode->htotal += best_d;
+			adjusted_mode->clock = best_clock / 1000;
+		}
+		return 0;
 	}
 
 	/* Cannot find PLL configuration that satisfy requirements */
@@ -300,7 +311,8 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 	int idx;
 	struct drm_device *drm = fb->dev;
 	struct fl2000_drm_if *drm_if = drm->dev_private;
-	struct drm_gem_dma_object *dma_obj = drm_fb_dma_get_gem_obj(fb, 0);
+	struct iosys_map map[DRM_FORMAT_MAX_PLANES];
+	struct iosys_map data[DRM_FORMAT_MAX_PLANES];
 
 	UNUSED(rect);
 
@@ -309,15 +321,18 @@ static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
 		return;
 	}
 
-	ret = drm_gem_fb_begin_cpu_access(fb, DMA_FROM_DEVICE);
-	if (ret)
-		return;
+	ret = drm_gem_fb_vmap(fb, map, data);
+	if (ret) {
+		dev_err(drm->dev, "Cannot vmap framebuffer (%d)", ret);
+		goto out_dev_exit;
+	}
 
-	fl2000_stream_compress(drm_if->stream, dma_obj->vaddr, fb->height, fb->width,
+	fl2000_stream_compress(drm_if->stream, data[0].vaddr, fb->height, fb->width,
 			       fb->pitches[0]);
 
-	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
+	drm_gem_fb_vunmap(fb, map);
 
+out_dev_exit:
 	drm_dev_exit(idx);
 }
 
@@ -524,7 +539,7 @@ int fl2000_drm_bind(struct device *master)
 	fl2000_reset(usb_dev);
 	fl2000_usb_magic(usb_dev);
 
-	drm_fbdev_generic_setup(drm, FL2000_FB_BPP);
+	drm_client_setup(drm, NULL);
 
 	return 0;
 }
