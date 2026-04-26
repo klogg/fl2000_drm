@@ -225,7 +225,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 	 * 0, -1, 1, -2, 2, -3, 3, -3, 4, -4, 5, -5, ...
 	 * Here, 's' is used for sign, 'm' is used for modulo, and 'd' is the adjustment value
 	 */
-	for (int m = 0, s = 0, d = 0; m <= max_h_adjustment * 2; m++, s = -s, d += m * s) {
+	for (int m = 0, s = 1, d = 0; m <= max_h_adjustment * 2; m++, s = -s, d += m * s) {
 		struct fl2000_pll candidate_pll = {};
 		u32 candidate_clock;
 

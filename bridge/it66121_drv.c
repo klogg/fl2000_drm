@@ -814,9 +814,9 @@ static int __init it66121_probe(void)
 
 	/* Find I2C client first — its device is needed for devm allocation */
 	client = it66121_i2c_init();
-	if (IS_ERR(client)) {
+	if (IS_ERR_OR_NULL(client)) {
 		pr_err("Cannot find IT66121 I2C client");
-		return (int)PTR_ERR(client);
+		return client ? (int)PTR_ERR(client) : -ENODEV;
 	}
 
 	/* K7.0 requires devm_drm_bridge_alloc — sets up kref, lists, funcs */
