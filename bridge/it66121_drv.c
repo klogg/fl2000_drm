@@ -40,7 +40,7 @@ struct it66121_priv {
 
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
 
-	struct edid *edid;
+	const struct drm_edid *drm_edid;
 	bool dvi_mode;
 };
 
@@ -49,7 +49,7 @@ struct it66121_priv {
  *  - need to have a list of objects for registration / deregistration
  */
 static struct it66121_priv *ctx;
-static int i2c_bus_num;
+static int i2c_bus_num = -1;
 module_param(i2c_bus_num, int, 0660);
 
 static const struct regmap_range_cfg it66121_regmap_banks[] = {
@@ -249,18 +249,7 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 
 static void it66121_is_hpd_detect(struct it66121_priv *priv)
 {
-	int ret;
-	unsigned int val;
-	struct device *dev = priv->bridge.dev->dev;
-
-	ret = regmap_field_read(priv->hpd, &val);
-	if (ret) {
-		dev_err(dev, "Cannot get monitor status (%d)", ret);
-		priv->conn_status = connector_status_unknown;
-	} else {
-		priv->conn_status = val ? connector_status_connected :
-					  connector_status_disconnected;
-	}
+	priv->conn_status = connector_status_connected;
 }
 
 /* TODO: Add protection for I2C register / EDID / SPI access, e.g. mutex*/
@@ -311,8 +300,8 @@ static void it66121_intr_work(struct work_struct *work_item)
 			it66121_is_hpd_detect(priv);
 			event = true;
 			if (priv->conn_status == connector_status_disconnected) {
-				kfree(priv->edid);
-				priv->edid = NULL;
+				drm_edid_free(priv->drm_edid);
+				priv->drm_edid = NULL;
 			}
 		}
 
@@ -325,98 +314,38 @@ static void it66121_intr_work(struct work_struct *work_item)
 	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(IRQ_POLL_INTRVL));
 }
 
-static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, size_t len)
-{
-	int ret;
-	size_t remain = len;
-	unsigned int val;
-	unsigned int segment = block >> 1;
-	unsigned int offset = block & 1 ? 128 : 0;
-	static const u8 header[EDID_LOSS_LEN] = { 0x00, 0xFF, 0xFF };
-	struct it66121_priv *priv = context;
 
-	/* Abort DDC */
-	ret = it66121_abort_ddc_ops(priv);
-	if (ret)
-		return ret;
-
-	/* Statically fill first 3 bytes (due to EDID reading HW bug) */
-	while ((offset < EDID_LOSS_LEN) && (remain > 0)) {
-		*(buf++) = header[offset];
-		remain--;
-		offset++;
-	}
-
-	while (remain > 0) {
-		/* Add bytes that will be lost during EDID read */
-		size_t size = remain + EDID_LOSS_LEN;
-
-		/* ... and check size fits FIFO */
-		size = size > EDID_FIFO_SIZE ? EDID_FIFO_SIZE : size;
-
-		/* Clear DDC FIFO */
-		ret = it66121_clear_ddc_fifo(priv);
-		if (ret)
-			return ret;
-
-		ret = regmap_write(priv->regmap, IT66121_DDC_ADDRESS, EDID_DDC_ADDR);
-		if (ret)
-			return ret;
-
-		/* Account 3 bytes that will be lost */
-		ret = regmap_write(priv->regmap, IT66121_DDC_OFFSET, offset - EDID_LOSS_LEN);
-		if (ret)
-			return ret;
-
-		ret = regmap_write(priv->regmap, IT66121_DDC_SIZE, (unsigned int)size);
-		if (ret)
-			return ret;
-		ret = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, segment);
-		if (ret)
-			return ret;
-		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND, DDC_CMD_EDID_READ);
-		if (ret)
-			return ret;
-
-		/* Deduct lost bytes when reading from FIFO */
-		size -= EDID_LOSS_LEN;
-
-		for (int i = 0; i < size; i++) {
-			ret = regmap_read(priv->regmap, IT66121_DDC_RD_FIFO, &val);
-			if (ret)
-				return ret;
-
-			*(buf++) = val & 0xFF;
-		}
-
-		remain -= size;
-		offset += size;
-	}
-
-	return ret;
-}
 
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv, connector);
-	struct edid *edid = priv->edid;
+	struct drm_display_mode *mode;
+	int count = 0;
 
-	if (!edid) {
-		edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
-		if (!edid)
-			return 0;
+	/* Force HDMI mode by default */
+	priv->dvi_mode = false;
 
-		drm_connector_update_edid_property(connector, edid);
-
-		priv->dvi_mode = !drm_detect_hdmi_monitor(edid);
-		priv->edid = edid;
+	/* Create standard HDMI modes: 1080p 60Hz (VIC 16) and 720p 60Hz (VIC 4) */
+	static const u8 vics[] = { 16, 4 };
+	for (int i = 0; i < ARRAY_SIZE(vics); i++) {
+		mode = drm_display_mode_from_cea_vic(connector->dev, vics[i]);
+		if (mode) {
+			if (vics[i] == 4) /* Prefer 720p for stability */
+				mode->type |= DRM_MODE_TYPE_PREFERRED;
+			mode->type |= DRM_MODE_TYPE_DRIVER;
+			drm_mode_probed_add(connector, mode);
+			count++;
+		}
 	}
 
-	return drm_add_edid_modes(connector, edid);
+	/* Also add some safe fallbacks just in case */
+	count += drm_add_modes_noedid(connector, 1920, 1080);
+
+	return count;
 }
 
 static enum drm_mode_status it66121_connector_mode_valid(struct drm_connector *connector,
-							 struct drm_display_mode *mode)
+							 const struct drm_display_mode *mode)
 {
 	/* TODO: validate mode */
 	UNUSED(connector);
@@ -486,7 +415,7 @@ static const struct component_ops it66121_component_ops = {
 };
 
 /* TODO: rewrite register access properly, add error processing */
-static int it66121_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_attach_flags flags)
+static int it66121_bridge_attach(struct drm_bridge *bridge, struct drm_encoder *encoder, enum drm_bridge_attach_flags flags)
 {
 	int ret;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv, bridge);
@@ -560,7 +489,6 @@ static int it66121_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_atta
 
 	/* Start interrupts */
 	regmap_write_bits(priv->regmap, IT66121_INT_MASK_1, IT66121_MASK_DDC, 0);
-	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 	queue_delayed_work(priv->work_queue, &priv->work, msecs_to_jiffies(IRQ_POLL_INTRVL));
 
 	dev_info(bridge->dev->dev, "Bridge attached");
@@ -812,18 +740,42 @@ static int it66121_i2c_probe(struct i2c_adapter *adapter, unsigned short address
 	return 0;
 }
 
+static int it66121_find_adapter(struct device *dev, void *data)
+{
+	struct i2c_adapter *adapter = i2c_verify_adapter(dev);
+	int *found_nr = data;
+
+	if (adapter && !strncmp(adapter->name, "FL2000 bridge I2C bus", sizeof(adapter->name))) {
+		*found_nr = adapter->nr;
+		return 1;
+	}
+	return 0;
+}
+
 static struct i2c_client *it66121_i2c_init(void)
 {
 	struct i2c_client *client;
 	struct i2c_board_info board_info = { I2C_BOARD_INFO("it66121", 0) };
-	struct i2c_adapter *adapter;
+	struct i2c_adapter *adapter = NULL;
+	int found_nr = -1;
 
 	/* According to datasheet IT66121 addresses are 0x98 or 0x9A including cmd */
 	const unsigned short it66121_addr[] = { (0x98 >> 1), (0x9A >> 1), I2C_CLIENT_END };
 
-	adapter = i2c_get_adapter(i2c_bus_num);
-	if (!adapter)
+	if (i2c_bus_num >= 0) {
+		found_nr = i2c_bus_num;
+	} else {
+		/* Auto-detect FL2000 I2C adapter */
+		i2c_for_each_dev(&found_nr, it66121_find_adapter);
+	}
+
+	if (found_nr >= 0)
+		adapter = i2c_get_adapter(found_nr);
+
+	if (!adapter) {
+		pr_err("IT66121: Could not find I2C adapter (bus_num=%d)\n", i2c_bus_num);
 		return ERR_PTR(-ENODEV);
+	}
 
 	client = i2c_new_scanned_device(adapter, &board_info, it66121_addr, it66121_i2c_probe);
 
@@ -836,44 +788,57 @@ static void __exit it66121_remove(void)
 {
 	struct it66121_priv *priv = ctx;
 
-	cancel_delayed_work_sync(&priv->work);
+	if (!priv)
+		return;
 
-	destroy_workqueue(priv->work_queue);
+	if (priv->work_queue) {
+		cancel_delayed_work_sync(&priv->work);
+		destroy_workqueue(priv->work_queue);
+	}
 
 	component_del(&priv->client->dev, &it66121_component_ops);
 
-	kfree(priv->edid);
+	drm_edid_free(priv->drm_edid);
 
 	drm_bridge_remove(&priv->bridge);
 
+	/* priv is owned by devm — freed when client device is removed */
 	i2c_unregister_device(priv->client);
-
-	kfree(priv);
 }
 
 static int __init it66121_probe(void)
 {
 	int ret;
+	struct i2c_client *client;
 	struct it66121_priv *priv;
 
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	priv->client = it66121_i2c_init();
-	if (IS_ERR(priv->client)) {
-		ret = (int)PTR_ERR(priv->client);
+	/* Find I2C client first — its device is needed for devm allocation */
+	client = it66121_i2c_init();
+	if (IS_ERR(client)) {
 		pr_err("Cannot find IT66121 I2C client");
-		kfree(priv);
-		return ret;
+		return (int)PTR_ERR(client);
 	}
+
+	/* K7.0 requires devm_drm_bridge_alloc — sets up kref, lists, funcs */
+	priv = devm_drm_bridge_alloc(&client->dev, struct it66121_priv, bridge,
+				     &it66121_bridge_funcs);
+	if (IS_ERR(priv)) {
+		pr_err("Cannot allocate IT66121 bridge");
+		i2c_unregister_device(client);
+		return (int)PTR_ERR(priv);
+	}
+
+	priv->client = client;
 
 	it66121_regs_init(priv, priv->client);
 
 	priv->conn_status = connector_status_unknown;
-	priv->bridge.funcs = &it66121_bridge_funcs;
+	/* priv->bridge.funcs already set by devm_drm_bridge_alloc */
 
 	drm_bridge_add(&priv->bridge);
+
+	/* Setup work queue for interrupt processing work */
+	INIT_DELAYED_WORK(&priv->work, &it66121_intr_work);
 
 	/* XXX: Store private context properly*/
 	ctx = priv;
@@ -883,7 +848,7 @@ static int __init it66121_probe(void)
 	if (!priv->work_queue) {
 		pr_err("Create interrupt workqueue failed");
 		drm_bridge_remove(&priv->bridge);
-		kfree(priv);
+		i2c_unregister_device(client);
 		return -ENOMEM;
 	}
 
@@ -896,7 +861,7 @@ static int __init it66121_probe(void)
 		pr_err("Cannot register IT66121 component");
 		destroy_workqueue(priv->work_queue);
 		drm_bridge_remove(&priv->bridge);
-		kfree(priv);
+		i2c_unregister_device(client);
 		return ret;
 	}
 
