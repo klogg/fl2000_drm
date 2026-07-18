@@ -13,18 +13,19 @@ Check out the code and type
 ```
 make
 ```
-Use
+Ensure that DRM components are loaded in your system (especially `drm_dma_helper`, which `fl2000` depends on). If not, please use:
+```
+modprobe drm
+modprobe drm_kms_helper
+modprobe drm_dma_helper
+```
+Then use
 ```
 insmod fl2000.ko && insmod it66121.ko
 ```
 with sudo or in root shell to start the driver. If you are running on a system with secure boot enabled, you may need to sign kernel modules. Try using provided script for this:
 ```
-./scritps/sign.sh
-```
-ensure that DRM components are loaded in your system, if not - please use
-```
-modprobe drm
-modprobe drm_kms_helper
+./scripts/sign.sh
 ```
 **NOTE:** proper kernel headers and build tools (e.g. "build-essential" package) must be installed on the system. Driver is developed and tested on Ubuntu 22.04 with **Linux kernel 6.5.0**, so better to test it this way. Please use gcc-8 or newer to build the driver
 
