@@ -238,54 +238,29 @@ static void fl2000_stream_work(struct work_struct *work)
 	}
 }
 
-static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf, u32 pixels)
-{
-	unsigned int xx = 0;
-
-	for (unsigned int x = 0; x < pixels; x++) {
-		dbuf[xx++ ^ 4] = (sbuf[x] & 0x000000FF) >> 0;
-		dbuf[xx++ ^ 4] = (sbuf[x] & 0x0000FF00) >> 8;
-		dbuf[xx++ ^ 4] = (sbuf[x] & 0x00FF0000) >> 16;
-	}
-}
-
-static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf, u32 pixels)
-{
-	for (unsigned int x = 0; x < pixels; x++) {
-		u16 val565 = ((sbuf[x] & 0x00F80000) >> 8) | ((sbuf[x] & 0x0000FC00) >> 5) |
-			     ((sbuf[x] & 0x000000F8) >> 3);
-		dbuf[x ^ 2] = val565;
-	}
-}
-
-void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch)
+void fl2000_stream_compress(struct fl2000_stream *stream, const struct iosys_map *src,
+			    struct drm_framebuffer *fb, const struct drm_rect *clip,
+			    struct drm_format_conv_state *fmtcnv_state)
 {
 	struct fl2000_stream_buf *cur_sb;
-	void *dst;
-	u32 dst_line_len;
+	struct iosys_map dst;
 
 	BUG_ON(list_empty(&stream->render_list));
 
 	spin_lock_irq(&stream->list_lock);
 
 	cur_sb = list_first_entry(&stream->render_list, struct fl2000_stream_buf, list);
-	dst = cur_sb->vaddr;
-	dst_line_len = width * stream->bytes_pix;
+	iosys_map_set_vaddr(&dst, cur_sb->vaddr);
 
-	for (unsigned int y = 0; y < height; y++) {
-		switch (stream->bytes_pix) {
-		case 2:
-			fl2000_xrgb888_to_rgb565_line(dst, src, width);
-			break;
-		case 3:
-			fl2000_xrgb888_to_rgb888_line(dst, src, width);
-			break;
-		default: /* Shouldn't happen */
-			break;
-		}
-		src += pitch;
-		dst += dst_line_len;
+	switch (stream->bytes_pix) {
+	case 2:
+		drm_fb_xrgb8888_to_rgb565(&dst, NULL, src, fb, clip, fmtcnv_state);
+		break;
+	case 3:
+		drm_fb_xrgb8888_to_rgb888(&dst, NULL, src, fb, clip, fmtcnv_state);
+		break;
+	default: /* Shouldn't happen */
+		break;
 	}
 
 	list_move_tail(&cur_sb->list, &stream->transmit_list);

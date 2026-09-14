@@ -32,8 +32,10 @@
 #include <drm/drm_fbdev_dma.h>
 #include <drm/drm_fbdev_shmem.h>
 #include <drm/drm_framebuffer.h>
+#include <drm/drm_format_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_gem_dma_helper.h>
+#include <drm/drm_gem_atomic_helper.h>
 #include <drm/drm_gem_shmem_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_simple_kms_helper.h>
@@ -149,8 +151,9 @@ void fl2000_stream_destroy(struct usb_device *usb_dev);
 
 /* Streaming interface */
 int fl2000_stream_mode_set(struct fl2000_stream *stream, int pixels, u32 bytes_pix);
-void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch);
+void fl2000_stream_compress(struct fl2000_stream *stream, const struct iosys_map *src,
+			    struct drm_framebuffer *fb, const struct drm_rect *clip,
+			    struct drm_format_conv_state *fmtcnv_state);
 int fl2000_stream_enable(struct fl2000_stream *stream);
 void fl2000_stream_disable(struct fl2000_stream *stream);
 

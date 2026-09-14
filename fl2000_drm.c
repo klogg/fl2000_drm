@@ -291,30 +291,32 @@ static void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 	drm_crtc_vblank_off(crtc);
 }
 
-static void fb2000_dirty(struct drm_framebuffer *fb, struct drm_rect *rect)
+static void fb2000_dirty(struct drm_plane_state *state)
 {
-	int ret;
-	int idx;
+	struct drm_shadow_plane_state *shadow_plane_state =
+		to_drm_shadow_plane_state(state);
+	struct drm_framebuffer *fb = state->fb;
 	struct drm_device *drm = fb->dev;
 	struct fl2000_drm_if *drm_if = drm->dev_private;
-	struct drm_gem_dma_object *dma_obj = drm_fb_dma_get_gem_obj(fb, 0);
+	struct drm_rect clip = DRM_RECT_INIT(0, 0, fb->width, fb->height);
+	int ret;
+	int idx;
 
-	UNUSED(rect);
-
-	if (!drm_dev_enter(fb->dev, &idx)) {
+	if (!drm_dev_enter(drm, &idx)) {
 		dev_err(drm->dev, "DRM enter failed!");
 		return;
 	}
 
 	ret = drm_gem_fb_begin_cpu_access(fb, DMA_FROM_DEVICE);
 	if (ret)
-		return;
+		goto exit;
 
-	fl2000_stream_compress(drm_if->stream, dma_obj->vaddr, fb->height, fb->width,
-			       fb->pitches[0]);
+	fl2000_stream_compress(drm_if->stream, &shadow_plane_state->data[0], fb, &clip,
+			       &shadow_plane_state->fmtcnv_state);
 
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
 
+exit:
 	drm_dev_exit(idx);
 }
 
@@ -328,7 +330,7 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	struct drm_rect rect;
 
 	if (drm_atomic_helper_damage_merged(old_state, state, &rect))
-		fb2000_dirty(state->fb, &rect);
+		fb2000_dirty(state);
 
 	if (event) {
 		crtc->state->event = NULL;
@@ -347,7 +349,8 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.mode_valid = fl2000_display_mode_valid,
 	.enable = fl2000_display_enable,
 	.disable = fl2000_display_disable,
-	.update = fl2000_display_update
+	.update = fl2000_display_update,
+	DRM_GEM_SIMPLE_DISPLAY_PIPE_SHADOW_PLANE_FUNCS,
 };
 
 static void fl2000_output_mode_set(struct drm_encoder *encoder, struct drm_display_mode *mode,
