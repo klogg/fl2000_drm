@@ -22,19 +22,24 @@
 #include <linux/dma-mapping.h>
 #include <linux/time.h>
 #include <linux/device.h>
+#include <drm/drm_atomic.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_prime.h>
+#include <drm/drm_vblank_helper.h>
 #include <drm/drm_vblank.h>
 #include <drm/drm_ioctl.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_fourcc.h>
-#include <drm/drm_fb_helper.h>
+#include <drm/clients/drm_client_setup.h>
+#include <drm/drm_fbdev_dma.h>
+#include <drm/drm_fbdev_shmem.h>
 #include <drm/drm_framebuffer.h>
-#include <drm/drm_fbdev_generic.h>
+#include <drm/drm_format_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_gem_dma_helper.h>
+#include <drm/drm_gem_atomic_helper.h>
+#include <drm/drm_gem_shmem_helper.h>
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_damage_helper.h>
@@ -110,6 +115,8 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, int status, int 
 	case -ESHUTDOWN:
 		/* Not an error */
 		break;
+	case 0:
+		break;
 	default:
 		dev_err(&usb_dev->dev, "Nonzero urb status, %d\n", status);
 		break;
@@ -147,8 +154,9 @@ void fl2000_stream_destroy(struct usb_device *usb_dev);
 
 /* Streaming interface */
 int fl2000_stream_mode_set(struct fl2000_stream *stream, int pixels, u32 bytes_pix);
-void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch);
+void fl2000_stream_compress(struct fl2000_stream *stream, const struct iosys_map *src,
+			    struct drm_framebuffer *fb, const struct drm_rect *clip,
+			    struct drm_format_conv_state *fmtcnv_state);
 int fl2000_stream_enable(struct fl2000_stream *stream);
 void fl2000_stream_disable(struct fl2000_stream *stream);
 
@@ -159,6 +167,10 @@ void fl2000_intr_destroy(struct usb_device *usb_dev);
 
 /* I2C adapter interface creation */
 struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev);
+
+/* VGA connector */
+int fl2000_connector_init(struct drm_device *drm, struct drm_connector *connector,
+			  struct i2c_adapter *adapter);
 
 /* Register map creation */
 struct regmap *fl2000_regmap_init(struct usb_device *usb_dev);
@@ -178,5 +190,7 @@ int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset,
 /* DRM device creation */
 int fl2000_drm_bind(struct device *master);
 void fl2000_drm_unbind(struct device *master);
+int fl2000_bridge_bind(struct device *master);
+void fl2000_bridge_unbind(struct device *master);
 
 #endif /* __FL2000_DRM_H__ */

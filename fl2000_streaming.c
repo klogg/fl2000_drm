@@ -26,8 +26,6 @@
 struct fl2000_stream_buf {
 	struct list_head list;
 	struct sg_table sgt;
-	struct page **pages;
-	unsigned int nr_pages;
 	void *vaddr;
 };
 
@@ -50,56 +48,48 @@ struct fl2000_stream {
 
 static void fl2000_free_sb(struct fl2000_stream_buf *sb)
 {
-	vunmap(sb->vaddr);
-
 	sg_free_table(&sb->sgt);
-
-	for (int i = 0; i < sb->nr_pages && sb->pages[i]; i++)
-		__free_page(sb->pages[i]);
-
-	kfree(sb->pages);
-
+	vfree(sb->vaddr);
 	kfree(sb);
 }
 
 static struct fl2000_stream_buf *fl2000_alloc_sb(unsigned int size)
 {
-	int ret;
 	struct fl2000_stream_buf *sb;
-	unsigned int nr_pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
+	struct page **pages;
+	unsigned int nr_pages;
+	u8 *ptr;
+	int ret;
+	int i;
 
 	sb = kzalloc(sizeof(*sb), GFP_KERNEL);
 	if (!sb)
 		return NULL;
 
-	sb->nr_pages = nr_pages;
-
-	sb->pages = kcalloc(nr_pages, sizeof(*sb->pages), GFP_KERNEL);
-	if (!sb->pages)
-		goto error;
-
-	for (int i = 0; i < nr_pages; i++) {
-		sb->pages[i] = alloc_page(GFP_KERNEL);
-		if (!sb->pages[i])
-			goto error;
-	}
-
-	ret = sg_alloc_table_from_pages(&sb->sgt, sb->pages, nr_pages, 0, size, GFP_KERNEL);
-	if (ret != 0)
-		goto error;
-
-	sb->vaddr = vmap(sb->pages, nr_pages, VM_MAP, PAGE_KERNEL);
+	sb->vaddr = vmalloc_32(size);
 	if (!sb->vaddr)
 		goto error;
 
+	nr_pages = DIV_ROUND_UP(size, PAGE_SIZE);
+	pages = kmalloc_array(nr_pages, sizeof(*pages), GFP_KERNEL);
+	if (!pages)
+		goto error;
+
+	for (i = 0, ptr = sb->vaddr; i < nr_pages; i++, ptr += PAGE_SIZE)
+		pages[i] = vmalloc_to_page(ptr);
+
+	ret = sg_alloc_table_from_pages(&sb->sgt, pages, nr_pages, 0, size, GFP_KERNEL);
+	kfree(pages);
+	if (ret)
+		goto error;
+
 	INIT_LIST_HEAD(&sb->list);
-	memset(sb->vaddr, 0, nr_pages << PAGE_SHIFT);
+	memset(sb->vaddr, 0, size);
 
 	return sb;
 
 error:
 	fl2000_free_sb(sb);
-
 	return NULL;
 }
 
@@ -144,8 +134,10 @@ static void fl2000_stream_release(struct device *dev, void *res)
 
 	UNUSED(dev);
 
-	fl2000_stream_disable(stream);
-	destroy_workqueue(stream->work_queue);
+	if (stream->work_queue) {
+		fl2000_stream_disable(stream);
+		destroy_workqueue(stream->work_queue);
+	}
 	fl2000_stream_put_buffers(stream);
 }
 
@@ -181,13 +173,15 @@ static void fl2000_stream_work(struct work_struct *work)
 	struct fl2000_stream_buf *last_sb;
 	struct urb *data_urb;
 
-	while (stream->enabled) {
+	while (READ_ONCE(stream->enabled)) {
 		ret = down_interruptible(&stream->work_sem);
 		if (ret) {
 			dev_err(&usb_dev->dev, "Work interrupt error %d", ret);
-			stream->enabled = false;
+			WRITE_ONCE(stream->enabled, false);
 			return;
 		}
+		if (!READ_ONCE(stream->enabled))
+			break;
 
 		spin_lock_irq(&stream->list_lock);
 
@@ -214,7 +208,7 @@ static void fl2000_stream_work(struct work_struct *work)
 		data_urb = usb_alloc_urb(0, GFP_KERNEL);
 		if (!data_urb) {
 			dev_err(&usb_dev->dev, "Data URB allocation error");
-			stream->enabled = false;
+			WRITE_ONCE(stream->enabled, false);
 			return;
 		}
 
@@ -232,60 +226,52 @@ static void fl2000_stream_work(struct work_struct *work)
 		ret = fl2000_submit_urb(data_urb);
 		if (ret) {
 			dev_err(&usb_dev->dev, "Data URB error %d", ret);
+			usb_unanchor_urb(data_urb);
 			usb_free_urb(data_urb);
-			stream->enabled = false;
+			WRITE_ONCE(stream->enabled, false);
 		}
 	}
 }
 
-static void fl2000_xrgb888_to_rgb888_line(u8 *dbuf, u32 *sbuf, u32 pixels)
+/* Weird fl2000 specific dword ordering */
+static void fl2000_swap_dword_pairs(void *buf, size_t len)
 {
-	unsigned int xx = 0;
+	u32 *words = buf;
+	size_t count = len / sizeof(*words);
+	size_t i;
 
-	for (unsigned int x = 0; x < pixels; x++) {
-		dbuf[xx++ ^ 4] = (sbuf[x] & 0x000000FF) >> 0;
-		dbuf[xx++ ^ 4] = (sbuf[x] & 0x0000FF00) >> 8;
-		dbuf[xx++ ^ 4] = (sbuf[x] & 0x00FF0000) >> 16;
-	}
+	if (WARN_ON_ONCE(len % (2 * sizeof(*words))))
+		return;
+
+	for (i = 0; i < count; i += 2)
+		swap(words[i], words[i + 1]);
 }
 
-static void fl2000_xrgb888_to_rgb565_line(u16 *dbuf, u32 *sbuf, u32 pixels)
-{
-	for (unsigned int x = 0; x < pixels; x++) {
-		u16 val565 = ((sbuf[x] & 0x00F80000) >> 8) | ((sbuf[x] & 0x0000FC00) >> 5) |
-			     ((sbuf[x] & 0x000000F8) >> 3);
-		dbuf[x ^ 2] = val565;
-	}
-}
-
-void fl2000_stream_compress(struct fl2000_stream *stream, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch)
+void fl2000_stream_compress(struct fl2000_stream *stream, const struct iosys_map *src,
+			    struct drm_framebuffer *fb, const struct drm_rect *clip,
+			    struct drm_format_conv_state *fmtcnv_state)
 {
 	struct fl2000_stream_buf *cur_sb;
-	void *dst;
-	u32 dst_line_len;
+	struct iosys_map dst;
 
 	BUG_ON(list_empty(&stream->render_list));
 
 	spin_lock_irq(&stream->list_lock);
 
 	cur_sb = list_first_entry(&stream->render_list, struct fl2000_stream_buf, list);
-	dst = cur_sb->vaddr;
-	dst_line_len = width * stream->bytes_pix;
+	iosys_map_set_vaddr(&dst, cur_sb->vaddr);
 
-	for (unsigned int y = 0; y < height; y++) {
-		switch (stream->bytes_pix) {
-		case 2:
-			fl2000_xrgb888_to_rgb565_line(dst, src, width);
-			break;
-		case 3:
-			fl2000_xrgb888_to_rgb888_line(dst, src, width);
-			break;
-		default: /* Shouldn't happen */
-			break;
-		}
-		src += pitch;
-		dst += dst_line_len;
+	switch (stream->bytes_pix) {
+	case 2:
+		drm_fb_xrgb8888_to_rgb565(&dst, NULL, src, fb, clip, fmtcnv_state);
+		fl2000_swap_dword_pairs(cur_sb->vaddr, stream->buf_size);
+		break;
+	case 3:
+		drm_fb_xrgb8888_to_rgb888(&dst, NULL, src, fb, clip, fmtcnv_state);
+		fl2000_swap_dword_pairs(cur_sb->vaddr, stream->buf_size);
+		break;
+	default: /* Shouldn't happen */
+		break;
 	}
 
 	list_move_tail(&cur_sb->list, &stream->transmit_list);
@@ -328,7 +314,8 @@ int fl2000_stream_enable(struct fl2000_stream *stream)
 	BUG_ON(list_empty(&stream->transmit_list));
 
 	sema_init(&stream->work_sem, 0);
-	stream->enabled = true;
+	usb_unpoison_anchored_urbs(&stream->anchor);
+	WRITE_ONCE(stream->enabled, true);
 	queue_work(stream->work_queue, &stream->work);
 
 	/* Kick transmit workqueue with minimum buffers submitted */
@@ -342,12 +329,11 @@ void fl2000_stream_disable(struct fl2000_stream *stream)
 {
 	struct fl2000_stream_buf *cur_sb;
 
-	stream->enabled = false;
+	WRITE_ONCE(stream->enabled, false);
+	up(&stream->work_sem);
 
-	drain_workqueue(stream->work_queue);
-
-	if (!usb_wait_anchor_empty_timeout(&stream->anchor, 1000))
-		usb_kill_anchored_urbs(&stream->anchor);
+	usb_poison_anchored_urbs(&stream->anchor);
+	cancel_work_sync(&stream->work);
 
 	spin_lock_irq(&stream->list_lock);
 	while (!list_empty(&stream->transmit_list)) {
@@ -358,7 +344,7 @@ void fl2000_stream_disable(struct fl2000_stream *stream)
 		cur_sb = list_first_entry(&stream->wait_list, struct fl2000_stream_buf, list);
 		list_move_tail(&cur_sb->list, &stream->render_list);
 	}
-	spin_unlock(&stream->list_lock);
+	spin_unlock_irq(&stream->list_lock);
 }
 
 /**

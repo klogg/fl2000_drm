@@ -1,5 +1,6 @@
 fl2000-y := \
 	fl2000_drv.o \
+	fl2000_connector.o \
 	fl2000_registers.o \
 	fl2000_interrupt.o \
 	fl2000_streaming.o \

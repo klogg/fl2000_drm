@@ -40,7 +40,7 @@ struct it66121_priv {
 
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
 
-	struct edid *edid;
+	const struct drm_edid *edid;
 	bool dvi_mode;
 };
 
@@ -311,7 +311,7 @@ static void it66121_intr_work(struct work_struct *work_item)
 			it66121_is_hpd_detect(priv);
 			event = true;
 			if (priv->conn_status == connector_status_disconnected) {
-				kfree(priv->edid);
+				drm_edid_free(priv->edid);
 				priv->edid = NULL;
 			}
 		}
@@ -399,24 +399,30 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 static int it66121_connector_get_modes(struct drm_connector *connector)
 {
 	struct it66121_priv *priv = container_of(connector, struct it66121_priv, connector);
-	struct edid *edid = priv->edid;
+	const struct drm_edid *edid = priv->edid;
+	int ret;
 
 	if (!edid) {
-		edid = drm_do_get_edid(connector, it66121_get_edid_block, priv);
+		edid = drm_edid_read_custom(connector, it66121_get_edid_block, priv);
 		if (!edid)
 			return 0;
 
-		drm_connector_update_edid_property(connector, edid);
+		ret = drm_edid_connector_update(connector, edid);
+		if (ret) {
+			drm_err(connector->dev, "Cannot update EDID (%d)\n", ret);
+			drm_edid_free(edid);
+			return 0;
+		}
 
-		priv->dvi_mode = !drm_detect_hdmi_monitor(edid);
+		priv->dvi_mode = !drm_detect_hdmi_monitor(drm_edid_raw(edid));
 		priv->edid = edid;
 	}
 
-	return drm_add_edid_modes(connector, edid);
+	return drm_edid_connector_add_modes(connector);
 }
 
 static enum drm_mode_status it66121_connector_mode_valid(struct drm_connector *connector,
-							 struct drm_display_mode *mode)
+							 const struct drm_display_mode *mode)
 {
 	/* TODO: validate mode */
 	UNUSED(connector);
@@ -454,7 +460,7 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 {
 	int ret;
 	struct drm_bridge *bridge = dev_get_drvdata(comp);
-	struct drm_simple_display_pipe *pipe = master_data;
+	struct drm_encoder *encoder = master_data;
 	struct i2c_adapter *adapter = i2c_verify_adapter(master);
 
 	if (!adapter)
@@ -464,7 +470,7 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 
 	/* XXX: check adapter, check bridge */
 
-	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
+	ret = drm_bridge_attach(encoder, bridge, NULL, 0);
 	if (ret)
 		dev_err(comp, "Cannot attach IT66121 bridge (%d)", ret);
 
@@ -486,7 +492,8 @@ static const struct component_ops it66121_component_ops = {
 };
 
 /* TODO: rewrite register access properly, add error processing */
-static int it66121_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_attach_flags flags)
+static int it66121_bridge_attach(struct drm_bridge *bridge, struct drm_encoder *encoder,
+				 enum drm_bridge_attach_flags flags)
 {
 	int ret;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv, bridge);
@@ -496,7 +503,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_atta
 		return -ENODEV;
 	}
 
-	if (!bridge->encoder) {
+	if (!encoder) {
 		DRM_ERROR("Parent encoder object not found");
 		return -ENODEV;
 	}
@@ -550,7 +557,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_atta
 
 	drm_connector_helper_add(&priv->connector, &it66121_connector_helper_funcs);
 
-	ret = drm_connector_attach_encoder(&priv->connector, bridge->encoder);
+	ret = drm_connector_attach_encoder(&priv->connector, encoder);
 	if (ret) {
 		DRM_ERROR("Cannot attach bridge");
 		return ret;
@@ -574,10 +581,12 @@ static void it66121_bridge_detach(struct drm_bridge *bridge)
 	dev_info(bridge->dev->dev, "it66121_bridge_detach");
 }
 
-static void it66121_bridge_enable(struct drm_bridge *bridge)
+static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_commit *state)
 {
 	int ret;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv, bridge);
+
+	UNUSED(state);
 
 	dev_info(bridge->dev->dev, "it66121_bridge_enable");
 
@@ -587,10 +596,12 @@ static void it66121_bridge_enable(struct drm_bridge *bridge)
 		return;
 }
 
-static void it66121_bridge_disable(struct drm_bridge *bridge)
+static void it66121_bridge_disable(struct drm_bridge *bridge, struct drm_atomic_commit *state)
 {
 	int ret;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv, bridge);
+
+	UNUSED(state);
 
 	dev_info(bridge->dev->dev, "it66121_bridge_disable");
 
@@ -725,10 +736,17 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 }
 
 static const struct drm_bridge_funcs it66121_bridge_funcs = {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(7, 3, 0)
+	.atomic_create_state = drm_atomic_helper_bridge_create_state,
+#else
+	.atomic_reset = drm_atomic_helper_bridge_reset,
+#endif
+	.atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
+	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
 	.attach = it66121_bridge_attach,
 	.detach = it66121_bridge_detach,
-	.enable = it66121_bridge_enable,
-	.disable = it66121_bridge_disable,
+	.atomic_enable = it66121_bridge_enable,
+	.atomic_disable = it66121_bridge_disable,
 	.mode_set = it66121_bridge_mode_set,
 };
 
@@ -842,36 +860,39 @@ static void __exit it66121_remove(void)
 
 	component_del(&priv->client->dev, &it66121_component_ops);
 
-	kfree(priv->edid);
+	drm_edid_free(priv->edid);
 
 	drm_bridge_remove(&priv->bridge);
 
 	i2c_unregister_device(priv->client);
-
-	kfree(priv);
 }
 
 static int __init it66121_probe(void)
 {
 	int ret;
+	struct i2c_client *client;
 	struct it66121_priv *priv;
 
-	priv = kzalloc(sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	priv->client = it66121_i2c_init();
-	if (IS_ERR(priv->client)) {
-		ret = (int)PTR_ERR(priv->client);
-		pr_err("Cannot find IT66121 I2C client");
-		kfree(priv);
+	client = it66121_i2c_init();
+	if (IS_ERR(client)) {
+		ret = (int)PTR_ERR(client);
+		pr_warn("Cannot find IT66121 I2C client");
 		return ret;
 	}
+
+	priv = devm_drm_bridge_alloc(&client->dev, struct it66121_priv, bridge,
+				     &it66121_bridge_funcs);
+	if (IS_ERR(priv)) {
+		ret = PTR_ERR(priv);
+		i2c_unregister_device(client);
+		return ret;
+	}
+
+	priv->client = client;
 
 	it66121_regs_init(priv, priv->client);
 
 	priv->conn_status = connector_status_unknown;
-	priv->bridge.funcs = &it66121_bridge_funcs;
 
 	drm_bridge_add(&priv->bridge);
 
@@ -883,7 +904,7 @@ static int __init it66121_probe(void)
 	if (!priv->work_queue) {
 		pr_err("Create interrupt workqueue failed");
 		drm_bridge_remove(&priv->bridge);
-		kfree(priv);
+		i2c_unregister_device(priv->client);
 		return -ENOMEM;
 	}
 
@@ -896,7 +917,7 @@ static int __init it66121_probe(void)
 		pr_err("Cannot register IT66121 component");
 		destroy_workqueue(priv->work_queue);
 		drm_bridge_remove(&priv->bridge);
-		kfree(priv);
+		i2c_unregister_device(priv->client);
 		return ret;
 	}
 
