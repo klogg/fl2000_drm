@@ -44,14 +44,13 @@ static struct component_master_ops fl2000_master_ops = {
 
 static int fl2000_compare(struct device *dev, void *data)
 {
+	struct i2c_adapter *adapter = data;
 	struct i2c_client *client = i2c_verify_client(dev);
 	static const char *const fl2000_supported_bridges[] = {
 		"it66121", /* IT66121 driver name*/
 	};
 
-	UNUSED(data);
-
-	if (!client)
+	if (!client || client->adapter != adapter)
 		return 0;
 
 	/* Check this is a supported DRM bridge */
@@ -78,7 +77,8 @@ static struct fl2000_devs *fl2000_get_devices(struct usb_device *usb_dev)
 	if (IS_ERR(devs->adapter))
 		return ERR_CAST(devs->adapter);
 
-	component_match_add(&devs->adapter->dev, &devs->match, fl2000_compare, NULL);
+	component_match_add(&devs->adapter->dev, &devs->match, fl2000_compare,
+			    devs->adapter);
 
 	dev_set_drvdata(&usb_dev->dev, devs);
 
