@@ -75,19 +75,13 @@ static struct fl2000_devs *fl2000_get_devices(struct usb_device *usb_dev)
 		return ERR_CAST(devs->regmap);
 
 	devs->adapter = fl2000_i2c_init(usb_dev);
-	if (IS_ERR(devs->adapter))  {
-		devs = ERR_CAST(devs->adapter);
-		goto err_regmap;
-	}
+	if (IS_ERR(devs->adapter))
+		return ERR_CAST(devs->adapter);
 
 	component_match_add(&devs->adapter->dev, &devs->match, fl2000_compare, NULL);
 
 	dev_set_drvdata(&usb_dev->dev, devs);
 
-	return devs;
-
-err_regmap:
-	regmap_exit(devs->regmap);
 	return devs;
 }
 
@@ -170,7 +164,6 @@ static void fl2000_disconnect(struct usb_interface *interface)
 
 	fl2000_unclaim(devs, interface);
 
-	regmap_exit(devs->regmap);
 }
 
 static int fl2000_suspend(struct usb_interface *interface, pm_message_t message)

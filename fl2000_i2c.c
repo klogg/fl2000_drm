@@ -111,7 +111,7 @@ static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 {
 	struct i2c_adapter *adapter = res;
 
-	dev_info(dev, "Releasing I2C adapter");
+	dev_dbg(dev, "Releasing I2C adapter");
 	i2c_del_adapter(adapter);
 }
 
@@ -125,7 +125,6 @@ struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev)
 	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter), GFP_KERNEL);
 	if (!adapter)
 		return ERR_PTR(-ENOMEM);
-	devres_add(&usb_dev->dev, adapter);
 
 	adapter->owner = THIS_MODULE;
 	adapter->class = I2C_CLASS_DEPRECATED;
@@ -140,6 +139,8 @@ struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev)
 		devres_free(adapter);
 		return ERR_PTR(ret);
 	}
+
+	devres_add(&usb_dev->dev, adapter);
 
 	usb_make_path(usb_dev, usb_path, sizeof(usb_path));
 	dev_dbg(&usb_dev->dev, "Created FL2000 bridge I2C bus %d at interface %s",
