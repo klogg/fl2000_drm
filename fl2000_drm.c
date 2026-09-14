@@ -98,18 +98,12 @@ struct fl2000_drm_if {
 
 DEFINE_DRM_GEM_DMA_FOPS(fl2000_drm_driver_fops);
 
-static void fl2000_drm_release(struct drm_device *drm)
-{
-	drm_atomic_helper_shutdown(drm);
-}
-
 static struct drm_driver fl2000_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
 
 	.fops = &fl2000_drm_driver_fops,
 	DRM_GEM_SHMEM_DRIVER_OPS,
 	DRM_FBDEV_SHMEM_DRIVER_OPS,
-	.release = fl2000_drm_release,
 
 	.name = DRM_DRIVER_NAME,
 	.desc = DRM_DRIVER_DESC,
@@ -470,19 +464,46 @@ static void fl2000_drm_if_release(struct device *dev, void *res)
 
 	dev_info(dev, "Unbinding FL2000 master");
 
-	/* Detach bridge */
-	component_unbind_all(dev, &drm_if->encoder);
-
-	/* Start streaming interface */
-	fl2000_stream_destroy(usb_dev);
-
-	/* Start interrupts interface */
-	fl2000_intr_destroy(usb_dev);
 
 	/* Prepare to DRM device shutdown */
 	drm_kms_helper_poll_fini(drm);
 	drm_dev_unplug(drm);
-	drm_dev_put(drm);
+	drm_atomic_helper_shutdown(drm);
+
+	/* Stop interrupts interface */
+	fl2000_intr_destroy(usb_dev);
+
+	/* Stop streaming interface */
+	fl2000_stream_destroy(usb_dev);
+}
+
+int fl2000_bridge_bind(struct device *master)
+{
+	struct fl2000_drm_if *drm_if = dev_get_drvdata(master);
+	int ret;
+
+	if (!drm_if)
+		return -ENODEV;
+
+	ret = component_bind_all(master, &drm_if->encoder);
+	if (ret) {
+		dev_err(master, "Cannot attach IT66121 bridge (%d)", ret);
+		return ret;
+	}
+
+	drm_kms_helper_hotplug_event(&drm_if->drm);
+
+	return 0;
+}
+
+void fl2000_bridge_unbind(struct device *master)
+{
+	struct fl2000_drm_if *drm_if = dev_get_drvdata(master);
+
+	if (!drm_if)
+		return;
+
+	component_unbind_all(master, &drm_if->encoder);
 }
 
 /* TODO: release on errors! */
@@ -563,13 +584,6 @@ int fl2000_drm_bind(struct device *master)
 	/* Start interrupts interface */
 	drm_if->intr = fl2000_intr_create(usb_dev, drm);
 
-	/* Attach bridge */
-	ret = component_bind_all(master, &drm_if->encoder);
-	if (ret) {
-		dev_err(drm->dev, "Cannot attach bridge (%d)", ret);
-		return ret;
-	}
-
 	drm_mode_config_reset(drm);
 
 	ret = drm_vblank_init(drm, drm->mode_config.num_crtc);
@@ -593,13 +607,18 @@ int fl2000_drm_bind(struct device *master)
 	fl2000_usb_magic(usb_dev);
 
 	drm_client_setup(drm, NULL);
+	dev_set_drvdata(master, drm_if);
 
 	return 0;
 }
 
 void fl2000_drm_unbind(struct device *master)
 {
-	struct usb_device *usb_dev = to_usb_device(master->parent);
+	struct fl2000_drm_if *drm_if = dev_get_drvdata(master);
 
-	devres_release(&usb_dev->dev, fl2000_drm_if_release, NULL, NULL);
+	if (!drm_if)
+		return;
+
+	dev_set_drvdata(master, NULL);
+	fl2000_drm_if_release(master, drm_if);
 }

@@ -876,7 +876,7 @@ static int __init it66121_probe(void)
 	client = it66121_i2c_init();
 	if (IS_ERR(client)) {
 		ret = (int)PTR_ERR(client);
-		pr_err("Cannot find IT66121 I2C client");
+		pr_warn("Cannot find IT66121 I2C client");
 		return ret;
 	}
 

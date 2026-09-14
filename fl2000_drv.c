@@ -38,8 +38,8 @@ struct fl2000_devs {
 static struct usb_driver fl2000_driver;
 
 static struct component_master_ops fl2000_master_ops = {
-	.bind = fl2000_drm_bind,
-	.unbind = fl2000_drm_unbind,
+	.bind = fl2000_bridge_bind,
+	.unbind = fl2000_bridge_unbind,
 };
 
 static int fl2000_compare(struct device *dev, void *data)
@@ -139,15 +139,23 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 		devs->interfaces[i] = sibling;
 	}
 
+	ret = fl2000_drm_bind(&devs->adapter->dev);
+	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot register DRM device (%d)", ret);
+		goto err_cleanup;
+	}
+
 	ret = component_master_add_with_match(&devs->adapter->dev, &fl2000_master_ops,
 					      devs->match);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot register component master (%d)", ret);
-		goto err_cleanup;
+		goto err_drm;
 	}
 
 	return 0;
 
+err_drm:
+	fl2000_drm_unbind(&devs->adapter->dev);
 err_cleanup:
 	fl2000_unclaim(devs, interface);
 	return ret;
@@ -161,6 +169,7 @@ static void fl2000_disconnect(struct usb_interface *interface)
 		return;
 
 	component_master_del(&devs->adapter->dev, &fl2000_master_ops);
+	fl2000_drm_unbind(&devs->adapter->dev);
 
 	fl2000_unclaim(devs, interface);
 

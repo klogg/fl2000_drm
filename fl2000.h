@@ -184,5 +184,7 @@ int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset,
 /* DRM device creation */
 int fl2000_drm_bind(struct device *master);
 void fl2000_drm_unbind(struct device *master);
+int fl2000_bridge_bind(struct device *master);
+void fl2000_bridge_unbind(struct device *master);
 
 #endif /* __FL2000_DRM_H__ */
