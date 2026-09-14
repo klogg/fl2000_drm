@@ -166,6 +166,10 @@ void fl2000_intr_destroy(struct usb_device *usb_dev);
 /* I2C adapter interface creation */
 struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev);
 
+/* VGA connector */
+int fl2000_connector_init(struct drm_device *drm, struct drm_connector *connector,
+			  struct i2c_adapter *adapter);
+
 /* Register map creation */
 struct regmap *fl2000_regmap_init(struct usb_device *usb_dev);
 

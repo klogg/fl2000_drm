@@ -7,7 +7,7 @@
 #include "fl2000.h"
 
 #define DRM_DRIVER_NAME "fl2000_drm"
-#define DRM_DRIVER_DESC "USB-HDMI"
+#define DRM_DRIVER_DESC "USB-VGA/HDMI"
 #define DRM_DRIVER_DATE "20181001"
 
 #define DRM_DRIVER_MAJOR      0
@@ -92,6 +92,7 @@ struct fl2000_drm_if {
 	struct drm_plane plane;
 	struct drm_crtc crtc;
 	struct drm_encoder encoder;
+	struct drm_connector connector;
 	struct fl2000_stream *stream;
 	struct fl2000_intr *intr;
 };
@@ -511,12 +512,15 @@ int fl2000_drm_bind(struct device *master)
 {
 	int ret = 0;
 	struct usb_device *usb_dev = to_usb_device(master->parent);
+	struct i2c_adapter *adapter = i2c_verify_adapter(master);
 	struct fl2000_drm_if *drm_if;
 	struct drm_device *drm;
 	struct drm_mode_config *mode_config;
 	u64 dma_mask;
 
 	dev_info(master, "Binding FL2000 master");
+	if (!adapter)
+		return -ENODEV;
 
 	drm_if = devm_drm_dev_alloc(master, &fl2000_drm_driver, struct fl2000_drm_if, drm);
 	if (IS_ERR(drm_if)) {
@@ -577,6 +581,19 @@ int fl2000_drm_bind(struct device *master)
 
 	drm_if->encoder.possible_crtcs = drm_crtc_mask(&drm_if->crtc);
 	drm_encoder_helper_add(&drm_if->encoder, &fl2000_encoder_funcs);
+
+	ret = fl2000_connector_init(drm, &drm_if->connector, adapter);
+	if (ret) {
+		dev_err(drm->dev, "Cannot initialize VGA connector (%d)", ret);
+		return ret;
+	}
+
+	ret = drm_connector_attach_encoder(&drm_if->connector, &drm_if->encoder);
+	if (ret) {
+		dev_err(drm->dev, "Cannot attach VGA connector (%d)", ret);
+		drm_connector_cleanup(&drm_if->connector);
+		return ret;
+	}
 
 	/* Start streaming interface */
 	drm_if->stream = fl2000_stream_create(usb_dev, &drm_if->crtc);
