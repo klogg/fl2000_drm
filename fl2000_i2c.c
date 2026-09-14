@@ -107,22 +107,13 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_comb_2nd_msg_len = I2C_REG_DATA_SIZE,
 };
 
-static void fl2000_i2c_adapter_release(struct device *dev, void *res)
-{
-	struct i2c_adapter *adapter = res;
-
-	dev_dbg(dev, "Releasing I2C adapter");
-	i2c_del_adapter(adapter);
-}
-
 struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev)
 {
 	int ret;
 	struct i2c_adapter *adapter;
 	u8 usb_path[32];
 
-	/* Adapter must be allocated before anything else */
-	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter), GFP_KERNEL);
+	adapter = devm_kzalloc(&usb_dev->dev, sizeof(*adapter), GFP_KERNEL);
 	if (!adapter)
 		return ERR_PTR(-ENOMEM);
 
@@ -134,13 +125,9 @@ struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev)
 	adapter->dev.parent = &usb_dev->dev;
 	strscpy(adapter->name, "FL2000 bridge I2C bus", sizeof(adapter->name));
 
-	ret = i2c_add_adapter(adapter);
-	if (ret) {
-		devres_free(adapter);
+	ret = devm_i2c_add_adapter(&usb_dev->dev, adapter);
+	if (ret)
 		return ERR_PTR(ret);
-	}
-
-	devres_add(&usb_dev->dev, adapter);
 
 	usb_make_path(usb_dev, usb_path, sizeof(usb_path));
 	dev_dbg(&usb_dev->dev, "Created FL2000 bridge I2C bus %d at interface %s",
