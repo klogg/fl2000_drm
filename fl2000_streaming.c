@@ -238,6 +238,20 @@ static void fl2000_stream_work(struct work_struct *work)
 	}
 }
 
+/* Weird fl2000 specific dword ordering */
+static void fl2000_swap_dword_pairs(void *buf, size_t len)
+{
+	u32 *words = buf;
+	size_t count = len / sizeof(*words);
+	size_t i;
+
+	if (WARN_ON_ONCE(len % (2 * sizeof(*words))))
+		return;
+
+	for (i = 0; i < count; i += 2)
+		swap(words[i], words[i + 1]);
+}
+
 void fl2000_stream_compress(struct fl2000_stream *stream, const struct iosys_map *src,
 			    struct drm_framebuffer *fb, const struct drm_rect *clip,
 			    struct drm_format_conv_state *fmtcnv_state)
@@ -255,9 +269,11 @@ void fl2000_stream_compress(struct fl2000_stream *stream, const struct iosys_map
 	switch (stream->bytes_pix) {
 	case 2:
 		drm_fb_xrgb8888_to_rgb565(&dst, NULL, src, fb, clip, fmtcnv_state);
+		fl2000_swap_dword_pairs(cur_sb->vaddr, stream->buf_size);
 		break;
 	case 3:
 		drm_fb_xrgb8888_to_rgb888(&dst, NULL, src, fb, clip, fmtcnv_state);
+		fl2000_swap_dword_pairs(cur_sb->vaddr, stream->buf_size);
 		break;
 	default: /* Shouldn't happen */
 		break;
