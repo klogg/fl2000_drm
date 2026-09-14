@@ -454,7 +454,7 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 {
 	int ret;
 	struct drm_bridge *bridge = dev_get_drvdata(comp);
-	struct drm_simple_display_pipe *pipe = master_data;
+	struct drm_encoder *encoder = master_data;
 	struct i2c_adapter *adapter = i2c_verify_adapter(master);
 
 	if (!adapter)
@@ -464,7 +464,7 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 
 	/* XXX: check adapter, check bridge */
 
-	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
+	ret = drm_bridge_attach(encoder, bridge, NULL, 0);
 	if (ret)
 		dev_err(comp, "Cannot attach IT66121 bridge (%d)", ret);
 
