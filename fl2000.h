@@ -115,6 +115,8 @@ static inline int fl2000_urb_status(struct usb_device *usb_dev, int status, int 
 	case -ESHUTDOWN:
 		/* Not an error */
 		break;
+	case 0:
+		break;
 	default:
 		dev_err(&usb_dev->dev, "Nonzero urb status, %d\n", status);
 		break;

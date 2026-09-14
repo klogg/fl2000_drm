@@ -26,8 +26,6 @@
 struct fl2000_stream_buf {
 	struct list_head list;
 	struct sg_table sgt;
-	struct page **pages;
-	unsigned int nr_pages;
 	void *vaddr;
 };
 
@@ -50,56 +48,48 @@ struct fl2000_stream {
 
 static void fl2000_free_sb(struct fl2000_stream_buf *sb)
 {
-	vunmap(sb->vaddr);
-
 	sg_free_table(&sb->sgt);
-
-	for (int i = 0; i < sb->nr_pages && sb->pages[i]; i++)
-		__free_page(sb->pages[i]);
-
-	kfree(sb->pages);
-
+	vfree(sb->vaddr);
 	kfree(sb);
 }
 
 static struct fl2000_stream_buf *fl2000_alloc_sb(unsigned int size)
 {
-	int ret;
 	struct fl2000_stream_buf *sb;
-	unsigned int nr_pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
+	struct page **pages;
+	unsigned int nr_pages;
+	u8 *ptr;
+	int ret;
+	int i;
 
 	sb = kzalloc(sizeof(*sb), GFP_KERNEL);
 	if (!sb)
 		return NULL;
 
-	sb->nr_pages = nr_pages;
-
-	sb->pages = kcalloc(nr_pages, sizeof(*sb->pages), GFP_KERNEL);
-	if (!sb->pages)
-		goto error;
-
-	for (int i = 0; i < nr_pages; i++) {
-		sb->pages[i] = alloc_page(GFP_KERNEL);
-		if (!sb->pages[i])
-			goto error;
-	}
-
-	ret = sg_alloc_table_from_pages(&sb->sgt, sb->pages, nr_pages, 0, size, GFP_KERNEL);
-	if (ret != 0)
-		goto error;
-
-	sb->vaddr = vmap(sb->pages, nr_pages, VM_MAP, PAGE_KERNEL);
+	sb->vaddr = vmalloc_32(size);
 	if (!sb->vaddr)
 		goto error;
 
+	nr_pages = DIV_ROUND_UP(size, PAGE_SIZE);
+	pages = kmalloc_array(nr_pages, sizeof(*pages), GFP_KERNEL);
+	if (!pages)
+		goto error;
+
+	for (i = 0, ptr = sb->vaddr; i < nr_pages; i++, ptr += PAGE_SIZE)
+		pages[i] = vmalloc_to_page(ptr);
+
+	ret = sg_alloc_table_from_pages(&sb->sgt, pages, nr_pages, 0, size, GFP_KERNEL);
+	kfree(pages);
+	if (ret)
+		goto error;
+
 	INIT_LIST_HEAD(&sb->list);
-	memset(sb->vaddr, 0, nr_pages << PAGE_SHIFT);
+	memset(sb->vaddr, 0, size);
 
 	return sb;
 
 error:
 	fl2000_free_sb(sb);
-
 	return NULL;
 }
 
