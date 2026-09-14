@@ -7,7 +7,23 @@
 
 Clean re-implementation of FrescoLogic FL2000DX DRM driver and ITE Tech IT66121F driver, allowing to enable full display controller capabilities for [USB-to-HDMI dongles](https://www.aliexpress.com/item/32821739801.html?spm=a2g0o.productlist.0.0.14ee52fb8rFfu5) based on such chips in Linux
 
-### Building driver
+### Installing driver automatically with DKMS
+
+[Install DKMS](https://github.com/dell/dkms?tab=readme-ov-file) (your distribution will likely have a package for it), then check out the code and type:
+```
+dkms install .
+```
+with sudo or in a root shell. DKMS will automatically install the driver into your kernel and reinstall it on kernel updates.
+
+To update the version used by DKMS (when this driver is updated), check out the updated code and run the above command again.
+
+If DKMS reports that the DKMS tree already contains fl2000\_drm, run:
+```
+dkms install . --force
+```
+with sudo or in a root shell.
+
+### Building driver manually
 
 Check out the code and type
 ```
