@@ -193,7 +193,8 @@ static int it66121_configure_afe(struct it66121_priv *priv, int clock_khz)
 
 static int it66121_wait_ddc_ready(struct it66121_priv *priv)
 {
-	int ret, val;
+	int ret;
+	unsigned int val;
 
 	ret = regmap_field_read_poll_timeout(priv->ddc_done, val, true, EDID_SLEEP, EDID_TIMEOUT);
 	if (ret)
@@ -221,7 +222,7 @@ static int it66121_clear_ddc_fifo(struct it66121_priv *priv)
 
 static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 {
-	int i, ret;
+	int ret;
 
 	/* Prior to DDC abort command there was also a reset of HDCP:
 	 *  1. HDCP_DESIRE clear bit CP DESIRE
@@ -233,7 +234,7 @@ static int it66121_abort_ddc_ops(struct it66121_priv *priv)
 	/* From original driver: According to 2009/01/15 modification by Jau-Chih.Tseng@ite.com.tw
 	 * do abort DDC twice
 	 */
-	for (i = 0; i < 2; i++) {
+	for (int i = 0; i < 2; i++) {
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND, DDC_CMD_ABORT);
 		if (ret)
 			return ret;
@@ -326,9 +327,11 @@ static void it66121_intr_work(struct work_struct *work_item)
 
 static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, size_t len)
 {
-	int i, ret, offset = block & 1 ? 128 : 0;
+	int ret;
 	size_t remain = len;
-	unsigned int rd_fifo_val, segment = block >> 1;
+	unsigned int val;
+	unsigned int segment = block >> 1;
+	unsigned int offset = block & 1 ? 128 : 0;
 	static const u8 header[EDID_LOSS_LEN] = { 0x00, 0xFF, 0xFF };
 	struct it66121_priv *priv = context;
 
@@ -354,35 +357,36 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 		/* Clear DDC FIFO */
 		ret = it66121_clear_ddc_fifo(priv);
 		if (ret)
-			break;
+			return ret;
 
 		ret = regmap_write(priv->regmap, IT66121_DDC_ADDRESS, EDID_DDC_ADDR);
 		if (ret)
-			break;
+			return ret;
 
 		/* Account 3 bytes that will be lost */
 		ret = regmap_write(priv->regmap, IT66121_DDC_OFFSET, offset - EDID_LOSS_LEN);
 		if (ret)
-			break;
+			return ret;
+
 		ret = regmap_write(priv->regmap, IT66121_DDC_SIZE, (unsigned int)size);
 		if (ret)
-			break;
+			return ret;
 		ret = regmap_write(priv->regmap, IT66121_DDC_SEGMENT, segment);
 		if (ret)
-			break;
+			return ret;
 		ret = regmap_write(priv->regmap, IT66121_DDC_COMMAND, DDC_CMD_EDID_READ);
 		if (ret)
-			break;
+			return ret;
 
 		/* Deduct lost bytes when reading from FIFO */
 		size -= EDID_LOSS_LEN;
 
-		for (i = 0; i < size; i++) {
-			ret = regmap_read(priv->regmap, IT66121_DDC_RD_FIFO, &rd_fifo_val);
+		for (int i = 0; i < size; i++) {
+			ret = regmap_read(priv->regmap, IT66121_DDC_RD_FIFO, &val);
 			if (ret)
 				return ret;
 
-			*(buf++) = rd_fifo_val & 0xFF;
+			*(buf++) = val & 0xFF;
 		}
 
 		remain -= size;
@@ -601,7 +605,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 				    const struct drm_display_mode *adjusted_mode)
 
 {
-	int i, ret;
+	int ret;
 	ssize_t frame_size;
 	struct it66121_priv *priv = container_of(bridge, struct it66121_priv, bridge);
 	u8 buf[HDMI_INFOFRAME_SIZE(AVI)];
@@ -658,7 +662,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 	}
 
 	/* Write new AVI infoframe packet */
-	for (i = 0; i < HDMI_AVI_INFOFRAME_SIZE; i++) {
+	for (int i = 0; i < HDMI_AVI_INFOFRAME_SIZE; i++) {
 		ret = regmap_write(priv->regmap, aviinfo_reg[i],
 				   buf[i + HDMI_INFOFRAME_HEADER_SIZE]);
 		if (ret) {
@@ -764,7 +768,7 @@ static int it66121_regs_init(struct it66121_priv *priv, struct i2c_client *clien
 
 static int it66121_i2c_probe(struct i2c_adapter *adapter, unsigned short address)
 {
-	int i, ret;
+	int ret;
 	u8 id_regs[] = { IT66121_VENDOR_ID_1, IT66121_VENDOR_ID_2, IT66121_DEVICE_ID_1,
 			 IT66121_DEVICE_ID_2 };
 	union {
@@ -784,7 +788,7 @@ static int it66121_i2c_probe(struct i2c_adapter *adapter, unsigned short address
 		return -ENODEV;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(id_regs); i++) {
+	for (int i = 0; i < ARRAY_SIZE(id_regs); i++) {
 		struct i2c_msg msgs[] = {
 			{ .addr = address, .flags = 0, .len = 1, .buf = &id_regs[i] },
 			{ .addr = address, .flags = I2C_M_RD, .len = 1, .buf = &id.b[i] }

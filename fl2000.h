@@ -42,7 +42,7 @@
 
 #include "fl2000_registers.h"
 
-#define UNUSED(x) (void)(x)
+#define UNUSED(x) ((void)(x))
 
 /* Known USB interfaces of FL2000 */
 enum fl2000_interface {

@@ -30,7 +30,8 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 	int ret;
 	bool read;
 	u16 addr;
-	u8 idx, offset;
+	u8 idx;
+	u8 offset;
 	union {
 		u32 w;
 		u8 b[4];

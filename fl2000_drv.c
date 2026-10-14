@@ -40,7 +40,6 @@ static struct component_master_ops fl2000_master_ops = {
 
 static int fl2000_compare(struct device *dev, void *data)
 {
-	int i;
 	struct i2c_client *client = i2c_verify_client(dev);
 	static const char *const fl2000_supported_bridges[] = {
 		"it66121", /* IT66121 driver name*/
@@ -52,7 +51,7 @@ static int fl2000_compare(struct device *dev, void *data)
 		return 0;
 
 	/* Check this is a supported DRM bridge */
-	for (i = 0; i < ARRAY_SIZE(fl2000_supported_bridges); i++)
+	for (int i = 0; i < ARRAY_SIZE(fl2000_supported_bridges); i++)
 		if (!strncmp(fl2000_supported_bridges[i], client->name, sizeof(client->name)))
 			return 1; /* Must be not 0 for success */
 
