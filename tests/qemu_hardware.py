@@ -12,6 +12,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--kernel', default=os.uname().release)
 parser.add_argument('--qemu', default='qemu-system-x86_64', help='QEMU executable, including a local patched build')
 parser.add_argument('--cpu', default='host', help='Guest CPU model; host exposes SIMD capabilities under KVM')
+parser.add_argument('--bios-path', type=Path, help='Firmware directory for a relocated QEMU build')
 parser.add_argument('--modules', type=Path, default=ROOT)
 parser.add_argument('--base', type=Path, default=ROOT / 'base-initramfs.cpio.gz')
 parser.add_argument('--hostbus', type=int, default=2)
@@ -23,6 +24,8 @@ args.output.mkdir(parents=True, exist_ok=True)
 run = Path(tempfile.mkdtemp(prefix='hardware-', dir=args.output))
 entries = [(name, (args.modules / name).read_bytes(), 0o100644)
            for name in ('fl2000.ko', 'it66121.ko')]
+entries += [('fl2000-test-guest', b'FL2000 QEMU test guest\n', 0o100644),
+            ('fl2000-startup', (ROOT / 'scripts/startup.sh').read_bytes(), 0o100755)]
 for name in ('fl2000.ko', 'it66121.ko'):
     version = subprocess.check_output(['modinfo', '-F', 'vermagic', str(args.modules / name)], text=True)
     if version.split()[0] != args.kernel:
@@ -46,7 +49,7 @@ with (run / 'boot.cpio').open('wb') as output:
     output.write(b'\0' * (-output.tell() % 4))
     output.write(archive)
 print(f'Guest log: {run / "guest.log"}', flush=True)
-print('Inside the guest: insmod /it66121.ko; insmod /fl2000.ko', flush=True)
+print('Inside the guest: /fl2000-startup', flush=True)
 if args.kms_test:
     print('Then: mount -t debugfs none /sys/kernel/debug; /kms-smoke', flush=True)
 command = [
@@ -59,4 +62,8 @@ command = [
     '-chardev', f'stdio,id=console,mux=on,logfile={run / "guest.log"}',
     '-serial', 'chardev:console', '-mon', 'chardev=console,mode=readline', '-display', 'none',
 ]
+if args.bios_path:
+    if not args.bios_path.is_dir():
+        parser.error(f'Firmware directory does not exist: {args.bios_path}')
+    command[1:1] = ['-L', str(args.bios_path)]
 subprocess.run(command, check=True)
