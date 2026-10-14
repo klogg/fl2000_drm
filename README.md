@@ -13,20 +13,59 @@ Check out the code and type
 ```
 make
 ```
-Use
+For isolated hardware testing, supply a bootable base initramfs for the target
+kernel with a shell, module-loading tools, and DRM dependencies. This image is
+not included in the repository. Set `BASE_INITRAMFS` to its path (the default is
+`base-initramfs.cpio.gz` in the repository root), then use physical USB port
+passthrough:
+
+```sh
+./scripts/emulate.sh --hostbus 2 --hostport 2
 ```
-sudo insmod it66121.ko
-sudo insmod fl2000.ko
+
+Inside the guest, run `/fl2000-startup`. The launcher appends the modules and this
+helper to the supplied base initramfs. Startup loads IT66121 before FL2000, is
+idempotent, and refuses loading outside the marked test guest. No host USB controller is unbound. A local patched QEMU build is
+selected when available, with an explicit firmware path so moving it does not
+break BIOS lookup. Override `QEMU`, `KVER`, `MODULE_DIR`, `BASE_INITRAMFS`, or
+`QEMU_OUTPUT_DIR`, or pass the launcher's command-line options. Logs default to
+`.qemu-build/fl2000-tests` and survive a reboot.
+
+If signing is required for the target kernel, `./scripts/sign.sh` signs both
+modules and propagates failures. It supports `KVER`, `KSRC`, `MODULE_DIR`,
+`KEY_DIR`, `SIGN_KEY`, `SIGN_CERT`, and `SIGN_CMD` overrides; run it with access to
+your signing key. It resolves module paths from the repository rather than the
+calling directory.
+
+The style scripts include the new `frame/` sources and skip generated module
+files. They prefer installed kernel tools; missing resources are cached from the
+pinned `v7.0` tag (override `KERNEL_TOOLS_TAG`). `clang-format.sh --dry-run` checks
+without editing and fails on formatting errors. The USB Lua dissector handles
+one-byte interrupts and incomplete captures, and registers its menu only in GUI
+Wireshark.
+
+To validate the dissector without a GUI, record a USB capture inside the QEMU
+guest using usbmon. Start recording before attaching the physical port so the
+capture includes enumeration; then load the driver. Replay the capture with:
+
+```sh
+tshark -X lua_script:scripts/fl2k.lua -r capture.pcapng -Y fl2k
 ```
-with sudo or in root shell to start the driver. If you are running on a system with secure boot enabled, you may need to sign kernel modules. Try using provided script for this:
+
+The headless callback regression also exercises the analysis output, both
+statistics buttons, repeated redraw, and capture reset:
+
+```sh
+tshark -X lua_script:tests/fl2k_headless.lua \
+  -X lua_script1:scripts/fl2k.lua -r capture.pcapng -q
 ```
-./scripts/sign.sh
-```
-ensure that DRM components are loaded in your system, if not - please use
-```
-modprobe drm
-modprobe drm_kms_helper
-```
+
+Require `HEADLESS_GUI_CALLBACKS_PASS` in its output; TShark can return success
+while reporting a Lua callback error. The capture must contain FL2000 register
+traffic. Run these commands as a regular user with read access to the capture
+and scripts, using a Lua-enabled TShark build. The regression replaces window
+widgets with test objects; visual layout still needs GUI testing.
+
 **NOTE:** This revision targets Linux 7.0. Build tools and headers matching the
 kernel are required. Both modules have been compile-tested on x86_64 against
 Ubuntu kernels 7.0.0-34 and 7.0.0-38. Older kernels require a separate API port.
@@ -330,7 +369,8 @@ With QEMU/KVM and the matching kernel in `/boot`, run the hardware-free smoke te
 python3 tests/qemu_smoke.py 7.0.0-38-generic .
 ```
 
-It appends an aligned cpio overlay to `base-initramfs.cpio.gz`, boots a disposable
+It requires a separately supplied base initramfs at `base-initramfs.cpio.gz`
+in the repository root, appends an aligned cpio overlay, boots a disposable
 guest and checks 100 load/unload cycles for both modules, alternating order.
 Logs and guest images go to `/tmp/fl2000-qemu`. This checks module registration
 and removal; USB probe, streaming, EDID and disconnect need the physical device.
