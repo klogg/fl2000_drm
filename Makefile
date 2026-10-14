@@ -4,6 +4,7 @@ fl2000-y := \
 	fl2000_interrupt.o \
 	fl2000_streaming.o \
 	fl2000_i2c.o \
+	fl2000_connector.o \
 	fl2000_drm.o
 
 it66121-y := \
@@ -19,8 +20,8 @@ EXTRA_CFLAGS := -Wall
 all:	modules
 
 modules:
-	make CHECK="/usr/bin/sparse" -C $(KSRC) M=$(PWD) modules
+	$(MAKE) CHECK="/usr/bin/sparse" -C $(KSRC) M=$(CURDIR) modules
 
 clean:
-	make -C $(KSRC) M=$(PWD) clean
+	make -C $(KSRC) M=$(CURDIR) clean
 	rm -f $(PWD)/Module.symvers $(PWD)/*.ur-safe

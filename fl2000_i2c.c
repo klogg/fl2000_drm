@@ -6,9 +6,8 @@
 
 #include "fl2000.h"
 
-/* I2C controller require mandatory 8-bit (1 bite) sub-address provided for any read/write
- * operation. Each read or write operate with 8-bit (1-byte) data. Every exchange shall consist of 2
- * messages (sub-address + data) combined. USB xfer always bounds address to 4-byte boundary
+/* The controller transfers aligned four-byte register groups. Byte writes
+ * require read-modify-write; full groups avoid destructive side-effect reads.
  */
 #define I2C_CMESSAGES_NUM  2
 #define I2C_REG_ADDR_SIZE  (sizeof(u8))
@@ -37,45 +36,43 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 		u8 b[4];
 	} data;
 
+	if (!msgs || (num != 1 && num != 2) || !msgs[0].buf ||
+	    msgs[0].flags || msgs[0].addr > 0x7f)
+		return -EOPNOTSUPP;
+	read = num == 2;
+	if (read) {
+		if (msgs[0].len != 1 || !msgs[1].buf || (msgs[1].len != 1 && msgs[1].len != 4) ||
+		    msgs[1].flags != I2C_M_RD || msgs[1].addr != msgs[0].addr)
+			return -EOPNOTSUPP;
+	} else if ((msgs[0].len != 2 && msgs[0].len != 5)) {
+		return -EOPNOTSUPP;
+	}
 	addr = msgs[0].addr;
 	offset = msgs[0].buf[0] & I2C_XFER_ADDR_MASK;
 	idx = msgs[0].buf[0] - offset;
 
-	/* We expect following:
-	 * - 2 messages, each 1 byte, first write than read
-	 * - 1 message, 2 bytes, write
-	 */
-	if (num == 2) {
-		read = true;
-	} else if (num == 1) {
-		if (msgs[0].len == 2 && !(msgs[0].flags & I2C_M_RD))
-			read = false;
-		else
-			return -ENOTSUPP;
-	} else {
-		return -ENOTSUPP;
-	}
+	if ((read ? msgs[1].len == 4 : msgs[0].len == 5) && idx)
+		return -EOPNOTSUPP;
 
-	/* Somehow the original FL2000 driver forces offset to be bound to 4-byte margin. This is
-	 * really strange because i2c operation shall not depend on i2c margin, unless the HW design
-	 * is completely crippled. Oh, yes, it is crippled :(
-	 */
 	if (read) {
 		ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data.w);
 		if (ret)
 			return ret;
 
-		msgs[1].buf[0] = data.b[idx];
+		for (unsigned int i = 0; i < msgs[1].len; i++)
+			msgs[1].buf[i] = (data.w >> ((idx + i) * 8)) & 0xff;
 	} else {
-		/* Since FL2000 i2c bus implementation always operates with 4-byte messages, we need
-		 * to read before write in order not to corrupt unrelated registers in case if we do
-		 * not write whole dword
-		 */
-		ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data.w);
-		if (ret)
-			return ret;
-
-		data.b[idx] = msgs[0].buf[1];
+		if (msgs[0].len == 5) {
+			data.w = 0;
+			for (unsigned int i = 0; i < 4; i++)
+				data.w |= (u32)msgs[0].buf[i + 1] << (i * 8);
+		} else {
+			ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data.w);
+			if (ret)
+				return ret;
+			data.w = (data.w & ~(0xffU << (idx * 8))) |
+				 ((u32)msgs[0].buf[1] << (idx * 8));
+		}
 
 		ret = fl2000_i2c_write_dword(adapter->algo_data, addr, offset, &data.w);
 		if (ret)
@@ -88,7 +85,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 static u32 fl2000_i2c_func(struct i2c_adapter *adap)
 {
 	UNUSED(adap);
-	return I2C_FUNC_I2C | I2C_FUNC_NOSTART;
+	return I2C_FUNC_I2C;
 }
 
 static const struct i2c_algorithm fl2000_i2c_algorithm = {
@@ -101,10 +98,10 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 		 I2C_AQ_COMB_WRITE_FIRST | /* address write goes first */
 		 I2C_AQ_COMB_SAME_ADDR, /* both are on the same address */
 	.max_num_msgs = I2C_CMESSAGES_NUM,
-	.max_write_len = 2 * I2C_REG_DATA_SIZE,
-	.max_read_len = I2C_REG_DATA_SIZE,
+	.max_write_len = 5,
+	.max_read_len = 4,
 	.max_comb_1st_msg_len = I2C_REG_ADDR_SIZE,
-	.max_comb_2nd_msg_len = I2C_REG_DATA_SIZE,
+	.max_comb_2nd_msg_len = 4,
 };
 
 static void fl2000_i2c_adapter_release(struct device *dev, void *res)
@@ -140,7 +137,7 @@ bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_
 		return false;
 
 	driver = client_dev->driver;
-	if (strcmp(driver->name, client_name))
+	if (!driver || strcmp(driver->name, client_name))
 		return false;
 
 	if (client->adapter != adapter)
@@ -149,8 +146,33 @@ bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_
 	return true;
 }
 
+static int fl2000_bridge_detect(struct i2c_adapter *adapter, unsigned short addr)
+{
+	/* i2c_new_scanned_device expects 1 for a match, 0 otherwise. */
+	u8 bytes[4];
+	unsigned int i;
+	int ret;
+
+	for (i = 0; i < sizeof(bytes); i++) {
+		u8 reg = i;
+		struct i2c_msg msgs[] = {
+			{ .addr = addr, .len = 1, .buf = &reg },
+			{ .addr = addr, .flags = I2C_M_RD, .len = 1, .buf = &bytes[i] },
+		};
+
+		ret = i2c_transfer(adapter, msgs, ARRAY_SIZE(msgs));
+		if (ret != ARRAY_SIZE(msgs))
+			return 0;
+	}
+	return bytes[0] == 0x54 && bytes[1] == 0x49 && bytes[2] == 0x12 &&
+	       (bytes[3] & 0x0f) == 0x06;
+}
+
 int fl2000_i2c_init(struct usb_device *usb_dev)
 {
+	static const unsigned short addresses[] = { 0x4c, 0x4d, I2C_CLIENT_END };
+	struct i2c_board_info info = { I2C_BOARD_INFO("it66121", 0) };
+	struct i2c_client *client;
 	int ret;
 	struct i2c_adapter *adapter;
 
@@ -177,6 +199,12 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	}
 
 	devres_add(&usb_dev->dev, adapter);
+	client = i2c_new_scanned_device(adapter, &info, addresses, fl2000_bridge_detect);
+	if (IS_ERR(client)) {
+		ret = PTR_ERR(client);
+		devres_release(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
+		return ret;
+	}
 	return 0;
 }
 

@@ -14,6 +14,7 @@
 #include <linux/component.h>
 #include <linux/regmap.h>
 #include <drm/drm_atomic.h>
+#include <drm/drm_drv.h>
 #include <drm/drm_bridge.h>
 #include <drm/drm_print.h>
 #include <drm/drm_edid.h>
@@ -26,7 +27,11 @@
 
 #define UNUSED(x) ((void)(x))
 
-/* HW defect leading to losing 3 first bytes during EDID read operation */
-#define EDID_LOSS_LEN 3
+/* Component handoff from the USB-attached bridge to the FL2000 DRM master. */
+struct fl2000_bridge {
+	struct drm_bridge *bridge;
+	struct drm_connector **connector;
+	void (*interrupt)(struct drm_bridge *bridge);
+};
 
 #endif /* __IT66121_H__ */

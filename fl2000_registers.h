@@ -360,7 +360,7 @@ union fl2000_vga_ctrl2_reg_axclk {
 	u32 val;
 	struct {
 		u32 pll_powerdown_detect_en : 1;
-		u32 mstor_blksize_ptr_width : 3;
+		u32 mstor_blksize_ptr_width : 4;
 		u32 mstor_blk_count	    : 12;
 		u32 spi_wr_en		    : 1;
 		u32 detect_pins_debounce_en : 1;

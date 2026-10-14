@@ -3,136 +3,234 @@
  * (C) Copyright 2017, Fresco Logic, Incorporated.
  * (C) Copyright 2018-2020, Artem Mygaiev
  */
-
 #include "fl2000.h"
 
+#define FL2000_INTR_STALL_RETRIES 3
+
 struct fl2000_interrupt {
-	struct usb_interface *interface;
+	struct usb_device *usb_dev;
+	struct urb *urb;
+	u8 *buf;
 	struct work_struct work;
-	struct workqueue_struct *work_queue;
-	u8 buf;
+	struct mutex mutex;
+	spinlock_t lock; /* Serializes submission against stop. */
+	unsigned int stalls;
+	bool stalled;
+	bool rearm;
+	bool fallback;
+	bool enabled;
 };
 
 static void fl2000_intr_work(struct work_struct *work)
 {
 	struct fl2000_interrupt *intr = container_of(work, struct fl2000_interrupt, work);
-	struct usb_interface *interface = intr->interface;
-	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	unsigned long flags;
 	int ret;
 
-	/* Receive interrupt message */
-	ret = usb_interrupt_msg(usb_dev, usb_rcvintpipe(usb_dev, INTERRUPT_EP), &intr->buf,
-				sizeof(intr->buf), NULL, 0);
+	if (!READ_ONCE(intr->enabled)) {
+		if (READ_ONCE(intr->fallback)) {
+			WRITE_ONCE(intr->fallback, false);
+			fl2000_drm_set_polling(intr->usb_dev, true);
+		}
+		return;
+	}
+	if (READ_ONCE(intr->stalled)) {
+		/* Recover a halted endpoint outside completion context. */
+		msleep(20);
+		if (!READ_ONCE(intr->enabled))
+			return;
+		ret = usb_clear_halt(intr->usb_dev, intr->urb->pipe);
+		spin_lock_irqsave(&intr->lock, flags);
+		if (intr->enabled) {
+			if (!ret) {
+				intr->stalled = false;
+				ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
+			}
+			if (ret)
+				intr->enabled = false;
+		}
+		spin_unlock_irqrestore(&intr->lock, flags);
+		if (ret) {
+			fl2000_drm_set_polling(intr->usb_dev, true);
+			dev_err_ratelimited(&intr->usb_dev->dev,
+					    "Interrupt stall recovery failed: %d\n", ret);
+		}
+		return;
+	}
+	ret = fl2000_check_interrupt(intr->usb_dev);
+	if (ret > 0)
+		fl2000_drm_hotplug(intr->usb_dev);
+	else if (ret < 0)
+		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt status read failed: %d\n", ret);
+
+	/* Acknowledge the device and bridge before requesting another packet. */
+	ret = 0;
+	spin_lock_irqsave(&intr->lock, flags);
+	if (intr->enabled && intr->rearm) {
+		intr->rearm = false;
+		ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
+		if (ret)
+			intr->enabled = false;
+	}
+	spin_unlock_irqrestore(&intr->lock, flags);
 	if (ret) {
-		dev_err(&interface->dev, "Sending interrupt message failed (%d)", ret);
-		/* TODO: Signal fault to system and start shutdown of usb_dev */
-		return;
+		fl2000_drm_set_polling(intr->usb_dev, true);
+		dev_err_ratelimited(&intr->usb_dev->dev,
+				    "Interrupt submission failed: %d\n", ret);
 	}
+}
 
-	ret = fl2000_check_interrupt(usb_dev);
-	if (ret < 0) {
-		dev_err(&interface->dev, "Checking interrupt message failed (%d)", ret);
-		/* TODO: Signal fault to system and start shutdown of usb_dev */
-		return;
-	} else if (ret > 0) {
-		fl2000_drm_hotplug(usb_dev);
+static void fl2000_intr_completion(struct urb *urb)
+{
+	struct fl2000_interrupt *intr = urb->context;
+	unsigned long flags;
+	int status = urb->status;
+	bool exhausted = false;
+
+	spin_lock_irqsave(&intr->lock, flags);
+	if (!intr->enabled)
+		goto unlock;
+	if (status == -EPIPE) {
+		if (++intr->stalls > FL2000_INTR_STALL_RETRIES) {
+			intr->enabled = false;
+			intr->fallback = true;
+			schedule_work(&intr->work);
+			exhausted = true;
+		} else {
+			intr->stalled = true;
+			schedule_work(&intr->work);
+		}
+	} else if (status) {
+		intr->enabled = false;
+		intr->fallback = true;
+		schedule_work(&intr->work);
+	} else {
+		intr->stalls = 0;
+		intr->rearm = true;
+		schedule_work(&intr->work);
 	}
+unlock:
+	spin_unlock_irqrestore(&intr->lock, flags);
+	if (exhausted)
+		dev_warn_ratelimited(&intr->usb_dev->dev,
+				     "Interrupt endpoint repeatedly stalled; using connector polling\n");
+	if (status && status != -EPIPE && status != -ENOENT &&
+	    status != -ECONNRESET && status != -ESHUTDOWN)
+		dev_err_ratelimited(&intr->usb_dev->dev,
+				    "Interrupt transfer failed: %d\n", status);
+}
 
-	queue_work(intr->work_queue, &intr->work);
+static void fl2000_intr_stop(struct fl2000_interrupt *intr)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&intr->lock, flags);
+	intr->enabled = false;
+	intr->stalled = false;
+	intr->rearm = false;
+	intr->fallback = false;
+	intr->stalls = 0;
+	spin_unlock_irqrestore(&intr->lock, flags);
+	usb_kill_urb(intr->urb);
+	cancel_work_sync(&intr->work);
 }
 
 static void fl2000_intr_release(struct device *dev, void *res)
 {
 	struct fl2000_interrupt *intr = res;
 
-	UNUSED(dev);
-
-	cancel_work_sync(&intr->work);
-	destroy_workqueue(intr->work_queue);
+	mutex_lock(&intr->mutex);
+	fl2000_intr_stop(intr);
+	usb_free_urb(intr->urb);
+	kfree(intr->buf);
+	mutex_unlock(&intr->mutex);
 }
 
-/**
- * fl2000_enable_interrupt() - interrupt processing start
- *
- * @usb_dev: USB device
- *
- * @returns: Operation result
- */
 int fl2000_enable_interrupt(struct usb_device *usb_dev)
 {
 	struct fl2000_interrupt *intr;
+	unsigned long flags;
+	int ret = 0;
 
 	intr = devres_find(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
-	if (!intr) {
-		dev_err(&usb_dev->dev, "Cannot find interrupt context");
+	if (!intr)
 		return -ENODEV;
+	mutex_lock(&intr->mutex);
+	if (!READ_ONCE(intr->enabled)) {
+		usb_kill_urb(intr->urb);
+		cancel_work_sync(&intr->work);
+		if (intr->urb->status == -EPIPE) {
+			ret = usb_clear_halt(usb_dev, intr->urb->pipe);
+			if (ret)
+				goto out;
+		}
+		/* Restore HPD-only mode before a new completion can request fallback. */
+		fl2000_drm_set_polling(usb_dev, false);
+		spin_lock_irqsave(&intr->lock, flags);
+		intr->stalled = false;
+		intr->rearm = false;
+		intr->fallback = false;
+		intr->stalls = 0;
+		intr->enabled = true;
+		ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
+		if (ret)
+			intr->enabled = false;
+		else
+			/* A stale pending event may suppress further notifications. */
+			schedule_work(&intr->work);
+		spin_unlock_irqrestore(&intr->lock, flags);
 	}
-
-	return queue_work(intr->work_queue, &intr->work);
+out:
+	mutex_unlock(&intr->mutex);
+	if (ret)
+		fl2000_drm_set_polling(usb_dev, true);
+	return ret;
 }
 
-/**
- * fl2000_disable_interrupt() - interrupt processing stop
- *
- * @usb_dev: USB device
- *
- * @returns: Operation result
- */
 int fl2000_disable_interrupt(struct usb_device *usb_dev)
 {
 	struct fl2000_interrupt *intr;
 
 	intr = devres_find(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
-	if (!intr) {
-		dev_err(&usb_dev->dev, "Cannot find interrupt context");
-		return -ENODEV;
-	}
-
-	return cancel_work_sync(&intr->work);
-}
-
-/**
- * fl2000_interrupt_create() - interrupt processing context creation
- *
- * @interface: USB interrupt transfers interface
- *
- * @returns: Operation result
- */
-int fl2000_interrupt_create(struct usb_interface *interface)
-{
-	struct fl2000_interrupt *intr;
-	struct usb_device *usb_dev = interface_to_usbdev(interface);
-
-	intr = devres_alloc(&fl2000_intr_release, sizeof(*intr), GFP_KERNEL);
-	if (!intr) {
-		dev_err(&interface->dev, "Cannot allocate interrupt private structure");
-		return -ENOMEM;
-	}
-
-	intr->interface = interface;
-
-	/* This possibly involves reading I2C registers, etc. so better to schedule a work queue */
-	INIT_WORK(&intr->work, &fl2000_intr_work);
-	intr->work_queue = create_workqueue("fl2000_interrupt");
-	if (!intr->work_queue) {
-		dev_err(&interface->dev, "Create interrupt workqueue failed");
-		devres_free(intr);
-		return -ENOMEM;
-	}
-
-	devres_add(&usb_dev->dev, intr);
-
+	if (!intr)
+		return 0;
+	mutex_lock(&intr->mutex);
+	fl2000_intr_stop(intr);
+	mutex_unlock(&intr->mutex);
 	return 0;
 }
 
-/**
- * fl2000_interrupt_destroy() - interrupt processing context destruction
- *
- * @interface: USB interrupt transfers interface
- */
-void fl2000_interrupt_destroy(struct usb_interface *interface)
+int fl2000_interrupt_create(struct usb_interface *interface)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	struct usb_endpoint_descriptor *ep;
+	struct fl2000_interrupt *intr;
+	int ret;
 
-	devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
+	ret = usb_find_int_in_endpoint(interface->cur_altsetting, &ep);
+	if (ret || usb_endpoint_num(ep) != INTERRUPT_EP)
+		return -ENODEV;
+	intr = devres_alloc(fl2000_intr_release, sizeof(*intr), GFP_KERNEL);
+	if (!intr)
+		return -ENOMEM;
+	intr->usb_dev = usb_dev;
+	mutex_init(&intr->mutex);
+	spin_lock_init(&intr->lock);
+	INIT_WORK(&intr->work, fl2000_intr_work);
+	intr->urb = usb_alloc_urb(0, GFP_KERNEL);
+	intr->buf = kmalloc(1, GFP_KERNEL);
+	if (!intr->urb || !intr->buf) {
+		fl2000_intr_release(&usb_dev->dev, intr);
+		devres_free(intr);
+		return -ENOMEM;
+	}
+	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, INTERRUPT_EP),
+			 intr->buf, 1, fl2000_intr_completion, intr, ep->bInterval);
+	devres_add(&usb_dev->dev, intr);
+	return 0;
+}
+
+void fl2000_interrupt_destroy(struct usb_interface *interface)
+{
+	devres_release(&interface_to_usbdev(interface)->dev, fl2000_intr_release, NULL, NULL);
 }

@@ -10,6 +10,7 @@
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
+#include <linux/math64.h>
 #include <linux/kernel.h>
 #include <linux/printk.h>
 #include <linux/init.h>
@@ -30,20 +31,27 @@
 #include <drm/drm_fourcc.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_framebuffer.h>
-#include <drm/drm_fbdev_generic.h>
+#include <drm/drm_fbdev_shmem.h>
+#include <drm/clients/drm_client_setup.h>
+#include <drm/drm_managed.h>
+#include <drm/drm_modeset_helper.h>
+#include <drm/drm_gem_atomic_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
-#include <drm/drm_gem_dma_helper.h>
+#include <drm/drm_gem_shmem_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_simple_kms_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_damage_helper.h>
-#include <drm/drm_fb_dma_helper.h>
-#include <drm/drm_fbdev_dma.h>
+
 
 #include "fl2000_registers.h"
 
 #define UNUSED(x) ((void)(x))
+
+struct drm_connector *fl2000_bridge_connector_init(struct drm_device *drm,
+						 struct drm_encoder *encoder,
+						 struct drm_bridge *bridge);
 
 /* Known USB interfaces of FL2000 */
 enum fl2000_interface {
@@ -67,7 +75,7 @@ enum fl2000_interface {
 		union {                             \
 			__type __umask;             \
 			typeof(__mask) __val;       \
-		} __aligned(4) __data;              \
+		} __aligned(4) __data = { .__val = 0 };              \
 		__data.__umask.__field = ~0;        \
 		(__mask) |= __data.__val;           \
 	})
@@ -81,6 +89,8 @@ struct fl2000_timings {
 	u32 vtotal;
 	u32 vsync_width;
 	u32 vstart;
+	bool hsync_positive;
+	bool vsync_positive;
 };
 
 struct fl2000_pll {
@@ -103,8 +113,11 @@ int fl2000_streaming_create(struct usb_interface *interface);
 void fl2000_streaming_destroy(struct usb_interface *interface);
 /* ... and interface */
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix);
-void fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned int height,
-			       unsigned int width, unsigned int pitch);
+int fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned int height,
+			       unsigned int width, unsigned int pitch, u32 format);
+int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int height,
+			    unsigned int width, unsigned int pitch, u32 format,
+			    const struct drm_rect *damage);
 int fl2000_streaming_enable(struct usb_device *usb_dev);
 void fl2000_streaming_disable(struct usb_device *usb_dev);
 
@@ -128,6 +141,7 @@ void fl2000_regmap_cleanup(struct usb_device *usb_dev);
 /* ... and interface */
 int fl2000_reset(struct usb_device *usb_dev);
 int fl2000_usb_magic(struct usb_device *usb_dev);
+int fl2000_init_clock(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 int fl2000_set_transfers(struct usb_device *usb_dev);
 int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix);
@@ -142,6 +156,15 @@ int fl2000_drm_init(struct usb_device *usb_dev);
 void fl2000_drm_cleanup(struct usb_device *usb_dev);
 /* ... and interface */
 void fl2000_drm_hotplug(struct usb_device *usb_dev);
-void fl2000_drm_vblank(struct usb_device *usb_dev);
+void fl2000_drm_set_polling(struct usb_device *usb_dev, bool polling);
+int fl2000_drm_suspend(struct usb_device *usb_dev);
+int fl2000_drm_resume(struct usb_device *usb_dev);
+
+struct fl2000_device {
+	unsigned long active_interfaces;
+	bool master_registered;
+	bool suspended;
+	struct drm_device *drm;
+};
 
 #endif /* __FL2000_DRM_H__ */
