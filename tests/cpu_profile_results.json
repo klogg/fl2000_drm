@@ -1,0 +1,830 @@
+{
+  "kernel": "7.0.0-38-generic",
+  "qemu": "11.1.2 with FL2000 duplicate-endpoint patch",
+  "mode": "800x480, approximately 66 Hz scanout",
+  "updates_per_second": 60,
+  "frames_per_measurement": 600,
+  "small_damage": "64x64",
+  "module_sha256": {
+    "fl2000.ko": "425f6751013a806ad8c86a168ae1f8ea77645d78e55866e37726d87453a4492f",
+    "it66121.ko": "b8b26c2e023da8a4551de9ca46f38bf5e59c5f1a13e95fbb353e9ed7706da02f"
+  },
+  "measurements": [
+    {
+      "run": 1,
+      "format": "NO_DRIVER",
+      "phase": "idle",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.000147,
+      "process_cpu_percent_one_core": 0.00147,
+      "guest_proc_stat_busy_percent": 0.1,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.0,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 1,
+      "format": "XRGB8888",
+      "phase": "static",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.000107,
+      "process_cpu_percent_one_core": 0.00107,
+      "guest_proc_stat_busy_percent": 0.3,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.2,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 1,
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.400163,
+      "process_cpu_percent_one_core": 4.0016300000000005,
+      "guest_proc_stat_busy_percent": 3.7,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.5,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 1,
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.402005,
+      "process_cpu_percent_one_core": 4.0200499999999995,
+      "guest_proc_stat_busy_percent": 5.1,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.6,
+      "steal_percent": 0.2
+    },
+    {
+      "run": 1,
+      "format": "XRGB8888",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.402359,
+      "process_cpu_percent_one_core": 4.02359,
+      "guest_proc_stat_busy_percent": 3.7,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.5,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 1,
+      "format": "RGB888",
+      "phase": "static",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.000127,
+      "process_cpu_percent_one_core": 0.0012699999999999999,
+      "guest_proc_stat_busy_percent": 0.3,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.2,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 1,
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.199474,
+      "process_cpu_percent_one_core": 1.9947400000000002,
+      "guest_proc_stat_busy_percent": 2.1,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.4,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 1,
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.198875,
+      "process_cpu_percent_one_core": 1.98875,
+      "guest_proc_stat_busy_percent": 1.4,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.4,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 1,
+      "format": "RGB888",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.197611,
+      "process_cpu_percent_one_core": 1.9761100000000003,
+      "guest_proc_stat_busy_percent": 2.6,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.5,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 1,
+      "format": "RGB565",
+      "phase": "static",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.000137,
+      "process_cpu_percent_one_core": 0.0013700000000000001,
+      "guest_proc_stat_busy_percent": 0.1,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.1,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 1,
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.1461,
+      "process_cpu_percent_one_core": 1.461,
+      "guest_proc_stat_busy_percent": 0.5,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.4,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 1,
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.13968,
+      "process_cpu_percent_one_core": 1.3968,
+      "guest_proc_stat_busy_percent": 0.7,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.3,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 1,
+      "format": "RGB565",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.150797,
+      "process_cpu_percent_one_core": 1.5079699999999998,
+      "guest_proc_stat_busy_percent": 1.4,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.4,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 2,
+      "format": "XRGB8888",
+      "phase": "static",
+      "wall_seconds": 10.001,
+      "process_cpu_seconds": 0.000213,
+      "process_cpu_percent_one_core": 0.0021297870212978703,
+      "guest_proc_stat_busy_percent": 3.8,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.3,
+      "steal_percent": 0.1,
+      "exclude_reason": "Trace-filter setup and console commands occurred inside this static window."
+    },
+    {
+      "run": 2,
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.406222,
+      "process_cpu_percent_one_core": 4.06222,
+      "guest_proc_stat_busy_percent": 3.8,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.5,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 2,
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.376344,
+      "process_cpu_percent_one_core": 3.76344,
+      "guest_proc_stat_busy_percent": 3.7,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.5,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 2,
+      "format": "XRGB8888",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.396591,
+      "process_cpu_percent_one_core": 3.96591,
+      "guest_proc_stat_busy_percent": 3.9,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.5,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 2,
+      "format": "RGB888",
+      "phase": "static",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.000138,
+      "process_cpu_percent_one_core": 0.00138,
+      "guest_proc_stat_busy_percent": 0.1,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.1,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 2,
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.201578,
+      "process_cpu_percent_one_core": 2.0157800000000003,
+      "guest_proc_stat_busy_percent": 2.4,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.4,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 2,
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.199877,
+      "process_cpu_percent_one_core": 1.99877,
+      "guest_proc_stat_busy_percent": 2.2,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.5,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 2,
+      "format": "RGB888",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.001,
+      "process_cpu_seconds": 0.200403,
+      "process_cpu_percent_one_core": 2.003829617038296,
+      "guest_proc_stat_busy_percent": 2.5,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.5,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 2,
+      "format": "RGB565",
+      "phase": "static",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 8.5e-05,
+      "process_cpu_percent_one_core": 0.0008500000000000001,
+      "guest_proc_stat_busy_percent": 0.2,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.2,
+      "steal_percent": 0.1
+    },
+    {
+      "run": 2,
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.147011,
+      "process_cpu_percent_one_core": 1.47011,
+      "guest_proc_stat_busy_percent": 2.3,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.3,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 2,
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.145779,
+      "process_cpu_percent_one_core": 1.45779,
+      "guest_proc_stat_busy_percent": 0.8,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.4,
+      "steal_percent": 0.0
+    },
+    {
+      "run": 2,
+      "format": "RGB565",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.152228,
+      "process_cpu_percent_one_core": 1.5222799999999999,
+      "guest_proc_stat_busy_percent": 0.7,
+      "irq_percent": 0.0,
+      "softirq_percent": 0.3,
+      "steal_percent": 0.1
+    }
+  ],
+  "function_profiles_confirmation": [
+    {
+      "format": "XRGB8888",
+      "function": "xhci_irq",
+      "calls": 1368,
+      "inclusive_elapsed_us": 418601.0,
+      "average_elapsed_us": 305.994
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_display_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 338244.1,
+      "average_elapsed_us": 563.74
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_copy_frame.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 336793.0,
+      "average_elapsed_us": 561.321
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_streaming_compress",
+      "calls": 600,
+      "inclusive_elapsed_us": 335904.8,
+      "average_elapsed_us": 559.841
+    },
+    {
+      "format": "XRGB8888",
+      "function": "usb_submit_urb",
+      "calls": 712,
+      "inclusive_elapsed_us": 44136.2,
+      "average_elapsed_us": 61.989
+    },
+    {
+      "format": "XRGB8888",
+      "function": "xhci_urb_enqueue",
+      "calls": 712,
+      "inclusive_elapsed_us": 42938.03,
+      "average_elapsed_us": 60.306
+    },
+    {
+      "format": "XRGB8888",
+      "function": "__usb_hcd_giveback_urb",
+      "calls": 712,
+      "inclusive_elapsed_us": 42809.04,
+      "average_elapsed_us": 60.125
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_data_completion",
+      "calls": 657,
+      "inclusive_elapsed_us": 40992.37,
+      "average_elapsed_us": 62.393
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_submit_transfer",
+      "calls": 657,
+      "inclusive_elapsed_us": 40377.31,
+      "average_elapsed_us": 61.457
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_connector_detect",
+      "calls": 1,
+      "inclusive_elapsed_us": 22535.22,
+      "average_elapsed_us": 22535.22
+    },
+    {
+      "format": "XRGB8888",
+      "function": "it66121_bridge_detect",
+      "calls": 1,
+      "inclusive_elapsed_us": 22534.26,
+      "average_elapsed_us": 22534.26
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_i2c_xfer",
+      "calls": 2,
+      "inclusive_elapsed_us": 22526.02,
+      "average_elapsed_us": 11263.01
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_i2c_dword",
+      "calls": 2,
+      "inclusive_elapsed_us": 22524.73,
+      "average_elapsed_us": 11262.36
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_reg_read",
+      "calls": 53,
+      "inclusive_elapsed_us": 11835.8,
+      "average_elapsed_us": 223.317
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_atomic_check",
+      "calls": 648,
+      "inclusive_elapsed_us": 2832.682,
+      "average_elapsed_us": 4.371
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_prepare_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 971.83,
+      "average_elapsed_us": 1.619
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_display_check",
+      "calls": 600,
+      "inclusive_elapsed_us": 534.628,
+      "average_elapsed_us": 0.891
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_cleanup_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 473.451,
+      "average_elapsed_us": 0.789
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_streaming_enable",
+      "calls": 600,
+      "inclusive_elapsed_us": 425.71,
+      "average_elapsed_us": 0.709
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_reg_write",
+      "calls": 2,
+      "inclusive_elapsed_us": 402.84,
+      "average_elapsed_us": 201.42
+    },
+    {
+      "format": "XRGB8888",
+      "function": "usb_hcd_unmap_urb_for_dma",
+      "calls": 712,
+      "inclusive_elapsed_us": 259.293,
+      "average_elapsed_us": 0.364
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_frame_bytes_pix.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 180.532,
+      "average_elapsed_us": 0.3
+    },
+    {
+      "format": "XRGB8888",
+      "function": "usb_hcd_map_urb_for_dma",
+      "calls": 710,
+      "inclusive_elapsed_us": 91.455,
+      "average_elapsed_us": 0.128
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_reg_volatile",
+      "calls": 110,
+      "inclusive_elapsed_us": 9.997,
+      "average_elapsed_us": 0.09
+    },
+    {
+      "format": "RGB888",
+      "function": "xhci_irq",
+      "calls": 1366,
+      "inclusive_elapsed_us": 423606.7,
+      "average_elapsed_us": 310.107
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_display_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 145629.8,
+      "average_elapsed_us": 242.716
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_copy_frame.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 144301.3,
+      "average_elapsed_us": 240.502
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_streaming_compress",
+      "calls": 600,
+      "inclusive_elapsed_us": 143493.1,
+      "average_elapsed_us": 239.155
+    },
+    {
+      "format": "RGB888",
+      "function": "usb_submit_urb",
+      "calls": 710,
+      "inclusive_elapsed_us": 43802.53,
+      "average_elapsed_us": 61.693
+    },
+    {
+      "format": "RGB888",
+      "function": "xhci_urb_enqueue",
+      "calls": 710,
+      "inclusive_elapsed_us": 42597.28,
+      "average_elapsed_us": 59.996
+    },
+    {
+      "format": "RGB888",
+      "function": "__usb_hcd_giveback_urb",
+      "calls": 710,
+      "inclusive_elapsed_us": 42126.29,
+      "average_elapsed_us": 59.332
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_data_completion",
+      "calls": 657,
+      "inclusive_elapsed_us": 40373.63,
+      "average_elapsed_us": 61.451
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_submit_transfer",
+      "calls": 657,
+      "inclusive_elapsed_us": 39824.51,
+      "average_elapsed_us": 60.615
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_connector_detect",
+      "calls": 1,
+      "inclusive_elapsed_us": 22186.88,
+      "average_elapsed_us": 22186.88
+    },
+    {
+      "format": "RGB888",
+      "function": "it66121_bridge_detect",
+      "calls": 1,
+      "inclusive_elapsed_us": 22186.17,
+      "average_elapsed_us": 22186.17
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_i2c_xfer",
+      "calls": 2,
+      "inclusive_elapsed_us": 22176.69,
+      "average_elapsed_us": 11088.34
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_i2c_dword",
+      "calls": 2,
+      "inclusive_elapsed_us": 22175.53,
+      "average_elapsed_us": 11087.76
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_reg_read",
+      "calls": 51,
+      "inclusive_elapsed_us": 12046.61,
+      "average_elapsed_us": 236.208
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_atomic_check",
+      "calls": 649,
+      "inclusive_elapsed_us": 4245.855,
+      "average_elapsed_us": 6.542
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_prepare_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 958.425,
+      "average_elapsed_us": 1.597
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_display_check",
+      "calls": 600,
+      "inclusive_elapsed_us": 562.82,
+      "average_elapsed_us": 0.938
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_cleanup_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 465.255,
+      "average_elapsed_us": 0.775
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_reg_write",
+      "calls": 2,
+      "inclusive_elapsed_us": 386.282,
+      "average_elapsed_us": 193.141
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_streaming_enable",
+      "calls": 600,
+      "inclusive_elapsed_us": 321.794,
+      "average_elapsed_us": 0.536
+    },
+    {
+      "format": "RGB888",
+      "function": "usb_hcd_unmap_urb_for_dma",
+      "calls": 710,
+      "inclusive_elapsed_us": 260.544,
+      "average_elapsed_us": 0.366
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_frame_bytes_pix.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 187.014,
+      "average_elapsed_us": 0.311
+    },
+    {
+      "format": "RGB888",
+      "function": "usb_hcd_map_urb_for_dma",
+      "calls": 708,
+      "inclusive_elapsed_us": 92.514,
+      "average_elapsed_us": 0.13
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_reg_volatile",
+      "calls": 106,
+      "inclusive_elapsed_us": 10.357,
+      "average_elapsed_us": 0.097
+    },
+    {
+      "format": "RGB565",
+      "function": "xhci_irq",
+      "calls": 1369,
+      "inclusive_elapsed_us": 317575.1,
+      "average_elapsed_us": 231.975
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_display_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 98510.98,
+      "average_elapsed_us": 164.184
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_copy_frame.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 97157.04,
+      "average_elapsed_us": 161.928
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_streaming_compress",
+      "calls": 600,
+      "inclusive_elapsed_us": 96442.87,
+      "average_elapsed_us": 160.738
+    },
+    {
+      "format": "RGB565",
+      "function": "usb_submit_urb",
+      "calls": 711,
+      "inclusive_elapsed_us": 41011.36,
+      "average_elapsed_us": 57.681
+    },
+    {
+      "format": "RGB565",
+      "function": "__usb_hcd_giveback_urb",
+      "calls": 711,
+      "inclusive_elapsed_us": 40126.64,
+      "average_elapsed_us": 56.436
+    },
+    {
+      "format": "RGB565",
+      "function": "xhci_urb_enqueue",
+      "calls": 711,
+      "inclusive_elapsed_us": 39794.45,
+      "average_elapsed_us": 55.969
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_data_completion",
+      "calls": 658,
+      "inclusive_elapsed_us": 38334.08,
+      "average_elapsed_us": 58.258
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_submit_transfer",
+      "calls": 658,
+      "inclusive_elapsed_us": 37799.77,
+      "average_elapsed_us": 57.446
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_connector_detect",
+      "calls": 1,
+      "inclusive_elapsed_us": 22474.56,
+      "average_elapsed_us": 22474.56
+    },
+    {
+      "format": "RGB565",
+      "function": "it66121_bridge_detect",
+      "calls": 1,
+      "inclusive_elapsed_us": 22473.71,
+      "average_elapsed_us": 22473.71
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_i2c_xfer",
+      "calls": 2,
+      "inclusive_elapsed_us": 22464.49,
+      "average_elapsed_us": 11232.24
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_i2c_dword",
+      "calls": 2,
+      "inclusive_elapsed_us": 22462.98,
+      "average_elapsed_us": 11231.49
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_reg_read",
+      "calls": 51,
+      "inclusive_elapsed_us": 12223.26,
+      "average_elapsed_us": 239.671
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_atomic_check",
+      "calls": 648,
+      "inclusive_elapsed_us": 2827.058,
+      "average_elapsed_us": 4.362
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_prepare_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 943.928,
+      "average_elapsed_us": 1.573
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_display_check",
+      "calls": 600,
+      "inclusive_elapsed_us": 562.519,
+      "average_elapsed_us": 0.937
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_cleanup_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 450.269,
+      "average_elapsed_us": 0.75
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_reg_write",
+      "calls": 2,
+      "inclusive_elapsed_us": 431.127,
+      "average_elapsed_us": 215.563
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_streaming_enable",
+      "calls": 600,
+      "inclusive_elapsed_us": 335.47,
+      "average_elapsed_us": 0.559
+    },
+    {
+      "format": "RGB565",
+      "function": "usb_hcd_unmap_urb_for_dma",
+      "calls": 711,
+      "inclusive_elapsed_us": 265.87,
+      "average_elapsed_us": 0.373
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_frame_bytes_pix.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 186.311,
+      "average_elapsed_us": 0.31
+    },
+    {
+      "format": "RGB565",
+      "function": "usb_hcd_map_urb_for_dma",
+      "calls": 709,
+      "inclusive_elapsed_us": 96.073,
+      "average_elapsed_us": 0.135
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_reg_volatile",
+      "calls": 106,
+      "inclusive_elapsed_us": 10.947,
+      "average_elapsed_us": 0.103
+    }
+  ],
+  "notes": [
+    "Process CPU includes benchmark userspace and synchronous DRM ioctl execution; it excludes independently scheduled driver work.",
+    "Guest /proc/stat measurements are noisy in this VM; do not treat them as exact total driver CPU.",
+    "Function timings are inclusive elapsed time, can include waits and virtualization, and must not be summed across nested functions.",
+    "The first profiler run accepted only the FL2000 filter; confirmation added bridge, USB core, and xHCI functions.",
+    "QEMU process/thread CPU includes virtualization and USB passthrough overhead; it is not native driver CPU."
+  ],
+  "raw_guest_log": "/tmp/fl2000-bridge-ab/cpu-profile-guest.log",
+  "host_thread_log": "/tmp/fl2000-bridge-ab/host-phase-cpu.jsonl"
+}

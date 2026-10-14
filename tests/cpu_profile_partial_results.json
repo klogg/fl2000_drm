@@ -1,0 +1,563 @@
+{
+  "kernel": "7.0.0-38-generic",
+  "mode": "800x480, approximately 66 Hz scanout",
+  "update_rate_hz": 60,
+  "damage_size": "64x64",
+  "frames_per_window": 600,
+  "comparison": "Same VM and host state; baseline uses the same code with damage forced to full-frame. Both variants have polling reduction enabled.",
+  "measurements": [
+    {
+      "variant": "fullframe_baseline",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 1.00249,
+      "process_cpu_percent_one_core": 10.0249,
+      "guest_busy_percent": 9.4
+    },
+    {
+      "variant": "fullframe_baseline",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.983322,
+      "process_cpu_percent_one_core": 9.83322,
+      "guest_busy_percent": 9.3
+    },
+    {
+      "variant": "fullframe_baseline",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.405454,
+      "process_cpu_percent_one_core": 4.05454,
+      "guest_busy_percent": 2.9
+    },
+    {
+      "variant": "fullframe_baseline",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.406935,
+      "process_cpu_percent_one_core": 4.06935,
+      "guest_busy_percent": 3.6
+    },
+    {
+      "variant": "fullframe_baseline",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.301585,
+      "process_cpu_percent_one_core": 3.01585,
+      "guest_busy_percent": 2.7
+    },
+    {
+      "variant": "fullframe_baseline",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.292942,
+      "process_cpu_percent_one_core": 2.9294199999999995,
+      "guest_busy_percent": 2.6
+    },
+    {
+      "variant": "partial_damage",
+      "format": "XRGB8888",
+      "phase": "static",
+      "wall_seconds": 10.002,
+      "process_cpu_seconds": 0.000731,
+      "process_cpu_percent_one_core": 0.007308538292341531,
+      "guest_busy_percent": 0.1
+    },
+    {
+      "variant": "partial_damage",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.998369,
+      "process_cpu_percent_one_core": 9.98369,
+      "guest_busy_percent": 9.6
+    },
+    {
+      "variant": "partial_damage",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.148733,
+      "process_cpu_percent_one_core": 1.48733,
+      "guest_busy_percent": 2.3
+    },
+    {
+      "variant": "partial_damage",
+      "format": "XRGB8888",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 1.176028,
+      "process_cpu_percent_one_core": 11.76028,
+      "guest_busy_percent": 11.4
+    },
+    {
+      "variant": "partial_damage",
+      "format": "RGB888",
+      "phase": "static",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.000335,
+      "process_cpu_percent_one_core": 0.00335,
+      "guest_busy_percent": 0.2
+    },
+    {
+      "variant": "partial_damage",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.39432,
+      "process_cpu_percent_one_core": 3.9432,
+      "guest_busy_percent": 3.2
+    },
+    {
+      "variant": "partial_damage",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.133248,
+      "process_cpu_percent_one_core": 1.3324799999999999,
+      "guest_busy_percent": 0.5
+    },
+    {
+      "variant": "partial_damage",
+      "format": "RGB888",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.40848,
+      "process_cpu_percent_one_core": 4.0847999999999995,
+      "guest_busy_percent": 3.8
+    },
+    {
+      "variant": "partial_damage",
+      "format": "RGB565",
+      "phase": "static",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.000213,
+      "process_cpu_percent_one_core": 0.00213,
+      "guest_busy_percent": 0.2
+    },
+    {
+      "variant": "partial_damage",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.300572,
+      "process_cpu_percent_one_core": 3.00572,
+      "guest_busy_percent": 2.6
+    },
+    {
+      "variant": "partial_damage",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "wall_seconds": 10.001,
+      "process_cpu_seconds": 0.124266,
+      "process_cpu_percent_one_core": 1.2425357464253577,
+      "guest_busy_percent": 1.6
+    },
+    {
+      "variant": "partial_damage",
+      "format": "RGB565",
+      "phase": "profile_full_60hz",
+      "wall_seconds": 10.0,
+      "process_cpu_seconds": 0.312028,
+      "process_cpu_percent_one_core": 3.12028,
+      "guest_busy_percent": 3.1
+    }
+  ],
+  "optimized_function_profiles": [
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_display_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 1045530.0,
+      "average_elapsed_us": 1742.55
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_copy_frame.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 1042736.0,
+      "average_elapsed_us": 1737.894
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_streaming_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 1041313.0,
+      "average_elapsed_us": 1735.523
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_convert_line",
+      "calls": 288000,
+      "inclusive_elapsed_us": 934277.8,
+      "average_elapsed_us": 3.244
+    },
+    {
+      "format": "XRGB8888",
+      "function": "xhci_irq",
+      "calls": 1316,
+      "inclusive_elapsed_us": 903045.9,
+      "average_elapsed_us": 686.205
+    },
+    {
+      "format": "XRGB8888",
+      "function": "__usb_hcd_giveback_urb",
+      "calls": 659,
+      "inclusive_elapsed_us": 112171.4,
+      "average_elapsed_us": 170.214
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_data_completion",
+      "calls": 659,
+      "inclusive_elapsed_us": 108905.3,
+      "average_elapsed_us": 165.258
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_submit_transfer",
+      "calls": 659,
+      "inclusive_elapsed_us": 107187.5,
+      "average_elapsed_us": 162.651
+    },
+    {
+      "format": "XRGB8888",
+      "function": "usb_submit_urb",
+      "calls": 659,
+      "inclusive_elapsed_us": 106568.7,
+      "average_elapsed_us": 161.712
+    },
+    {
+      "format": "XRGB8888",
+      "function": "xhci_urb_enqueue",
+      "calls": 659,
+      "inclusive_elapsed_us": 104064.3,
+      "average_elapsed_us": 157.912
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_atomic_check",
+      "calls": 648,
+      "inclusive_elapsed_us": 9466.493,
+      "average_elapsed_us": 14.608
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_prepare_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 3459.972,
+      "average_elapsed_us": 5.766
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_display_check",
+      "calls": 600,
+      "inclusive_elapsed_us": 1253.777,
+      "average_elapsed_us": 2.089
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_cleanup_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 877.05,
+      "average_elapsed_us": 1.461
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_streaming_enable",
+      "calls": 600,
+      "inclusive_elapsed_us": 758.672,
+      "average_elapsed_us": 1.264
+    },
+    {
+      "format": "XRGB8888",
+      "function": "fl2000_frame_bytes_pix.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 570.551,
+      "average_elapsed_us": 0.95
+    },
+    {
+      "format": "XRGB8888",
+      "function": "usb_hcd_unmap_urb_for_dma",
+      "calls": 659,
+      "inclusive_elapsed_us": 452.544,
+      "average_elapsed_us": 0.686
+    },
+    {
+      "format": "XRGB8888",
+      "function": "usb_hcd_map_urb_for_dma",
+      "calls": 659,
+      "inclusive_elapsed_us": 202.099,
+      "average_elapsed_us": 0.306
+    },
+    {
+      "format": "RGB888",
+      "function": "xhci_irq",
+      "calls": 1316,
+      "inclusive_elapsed_us": 902186.8,
+      "average_elapsed_us": 685.552
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_display_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 278285.1,
+      "average_elapsed_us": 463.808
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_copy_frame.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 275475.9,
+      "average_elapsed_us": 459.126
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_streaming_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 274353.7,
+      "average_elapsed_us": 457.256
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_reorder_line",
+      "calls": 600,
+      "inclusive_elapsed_us": 272131.2,
+      "average_elapsed_us": 453.552
+    },
+    {
+      "format": "RGB888",
+      "function": "__usb_hcd_giveback_urb",
+      "calls": 659,
+      "inclusive_elapsed_us": 112885.1,
+      "average_elapsed_us": 171.297
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_data_completion",
+      "calls": 659,
+      "inclusive_elapsed_us": 109583.9,
+      "average_elapsed_us": 166.288
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_submit_transfer",
+      "calls": 659,
+      "inclusive_elapsed_us": 107860.0,
+      "average_elapsed_us": 163.672
+    },
+    {
+      "format": "RGB888",
+      "function": "usb_submit_urb",
+      "calls": 659,
+      "inclusive_elapsed_us": 107263.7,
+      "average_elapsed_us": 162.767
+    },
+    {
+      "format": "RGB888",
+      "function": "xhci_urb_enqueue",
+      "calls": 659,
+      "inclusive_elapsed_us": 104644.0,
+      "average_elapsed_us": 158.792
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_atomic_check",
+      "calls": 648,
+      "inclusive_elapsed_us": 7647.387,
+      "average_elapsed_us": 11.801
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_prepare_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 1843.502,
+      "average_elapsed_us": 3.072
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_display_check",
+      "calls": 600,
+      "inclusive_elapsed_us": 1118.322,
+      "average_elapsed_us": 1.863
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_cleanup_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 802.973,
+      "average_elapsed_us": 1.338
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_streaming_enable",
+      "calls": 600,
+      "inclusive_elapsed_us": 633.423,
+      "average_elapsed_us": 1.055
+    },
+    {
+      "format": "RGB888",
+      "function": "usb_hcd_unmap_urb_for_dma",
+      "calls": 659,
+      "inclusive_elapsed_us": 544.131,
+      "average_elapsed_us": 0.825
+    },
+    {
+      "format": "RGB888",
+      "function": "fl2000_frame_bytes_pix.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 460.034,
+      "average_elapsed_us": 0.766
+    },
+    {
+      "format": "RGB888",
+      "function": "usb_hcd_map_urb_for_dma",
+      "calls": 659,
+      "inclusive_elapsed_us": 210.784,
+      "average_elapsed_us": 0.319
+    },
+    {
+      "format": "RGB565",
+      "function": "xhci_irq",
+      "calls": 1316,
+      "inclusive_elapsed_us": 701726.6,
+      "average_elapsed_us": 533.226
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_display_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 186222.2,
+      "average_elapsed_us": 310.37
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_copy_frame.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 181869.2,
+      "average_elapsed_us": 303.115
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_streaming_update",
+      "calls": 600,
+      "inclusive_elapsed_us": 180726.4,
+      "average_elapsed_us": 301.21
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_reorder_line",
+      "calls": 600,
+      "inclusive_elapsed_us": 178323.0,
+      "average_elapsed_us": 297.205
+    },
+    {
+      "format": "RGB565",
+      "function": "__usb_hcd_giveback_urb",
+      "calls": 659,
+      "inclusive_elapsed_us": 110362.6,
+      "average_elapsed_us": 167.469
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_data_completion",
+      "calls": 659,
+      "inclusive_elapsed_us": 107036.6,
+      "average_elapsed_us": 162.422
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_submit_transfer",
+      "calls": 659,
+      "inclusive_elapsed_us": 105510.1,
+      "average_elapsed_us": 160.106
+    },
+    {
+      "format": "RGB565",
+      "function": "usb_submit_urb",
+      "calls": 659,
+      "inclusive_elapsed_us": 104902.5,
+      "average_elapsed_us": 159.184
+    },
+    {
+      "format": "RGB565",
+      "function": "xhci_urb_enqueue",
+      "calls": 659,
+      "inclusive_elapsed_us": 102444.2,
+      "average_elapsed_us": 155.454
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_atomic_check",
+      "calls": 648,
+      "inclusive_elapsed_us": 7723.59,
+      "average_elapsed_us": 11.919
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_prepare_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 2279.076,
+      "average_elapsed_us": 3.798
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_display_check",
+      "calls": 600,
+      "inclusive_elapsed_us": 1383.489,
+      "average_elapsed_us": 2.305
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_cleanup_fb",
+      "calls": 600,
+      "inclusive_elapsed_us": 804.488,
+      "average_elapsed_us": 1.34
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_frame_bytes_pix.isra.0",
+      "calls": 600,
+      "inclusive_elapsed_us": 591.161,
+      "average_elapsed_us": 0.985
+    },
+    {
+      "format": "RGB565",
+      "function": "fl2000_streaming_enable",
+      "calls": 600,
+      "inclusive_elapsed_us": 590.21,
+      "average_elapsed_us": 0.983
+    },
+    {
+      "format": "RGB565",
+      "function": "usb_hcd_unmap_urb_for_dma",
+      "calls": 659,
+      "inclusive_elapsed_us": 488.401,
+      "average_elapsed_us": 0.741
+    },
+    {
+      "format": "RGB565",
+      "function": "usb_hcd_map_urb_for_dma",
+      "calls": 659,
+      "inclusive_elapsed_us": 197.832,
+      "average_elapsed_us": 0.3
+    }
+  ],
+  "periodic_bridge_reads_seen_in_profile": false,
+  "sha256": {
+    "fl2000.ko": "42e6d24a4990652cc365af58ccb592450eb9fc25120051f1c646eef533485100",
+    "it66121.ko": "b8b26c2e023da8a4551de9ca46f38bf5e59c5f1a13e95fbb353e9ed7706da02f"
+  },
+  "raw_log": "/workspace/.qemu-build/fl2000-tests/paired-profile.log",
+  "notes": [
+    "Process CPU includes userspace benchmark and synchronous DRM ioctl work; it excludes independent asynchronous work.",
+    "Function timing is inclusive elapsed time; nested times must not be summed or equated to CPU time.",
+    "Absolute values differ from the earlier pre-restart run; this matched comparison is the relevant optimization measurement."
+  ]
+}

@@ -1,0 +1,4565 @@
+{
+  "cpu": "Intel Core i3-6100T",
+  "kernel": "7.0.0-38-generic",
+  "workload": "800x480, 60 framebuffer damage updates/s, two 10-second trials per format/backend in one KVM guest; reverse order in second trial",
+  "full_frame_process_cpu": {
+    "generic-row": {
+      "XRGB8888": {
+        "process_cpu_percent_trials": [
+          11.015889999999999,
+          10.66521
+        ],
+        "median": 10.84055
+      },
+      "RGB888": {
+        "process_cpu_percent_trials": [
+          4.00646,
+          4.02842
+        ],
+        "median": 4.01744
+      },
+      "RGB565": {
+        "process_cpu_percent_trials": [
+          2.96192,
+          2.9189700000000003
+        ],
+        "median": 2.9404450000000004
+      }
+    },
+    "ssse3": {
+      "XRGB8888": {
+        "process_cpu_percent_trials": [
+          5.30254,
+          5.30974
+        ],
+        "median": 5.306139999999999
+      },
+      "RGB888": {
+        "process_cpu_percent_trials": [
+          4.00328,
+          4.02844
+        ],
+        "median": 4.01586
+      },
+      "RGB565": {
+        "process_cpu_percent_trials": [
+          2.93532,
+          2.9803
+        ],
+        "median": 2.9578100000000003
+      }
+    },
+    "bmi2": {
+      "XRGB8888": {
+        "process_cpu_percent_trials": [
+          5.47472,
+          5.61429
+        ],
+        "median": 5.544504999999999
+      },
+      "RGB888": {
+        "process_cpu_percent_trials": [
+          3.9622800000000007,
+          4.07409
+        ],
+        "median": 4.018185000000001
+      },
+      "RGB565": {
+        "process_cpu_percent_trials": [
+          2.96357,
+          2.8700599999999996
+        ],
+        "median": 2.9168149999999997
+      }
+    }
+  },
+  "kernel_samples": [
+    {
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "preparation": 840,
+      "fl2000_usb": 3,
+      "usb_xhci": 0,
+      "fl2000_control": 34,
+      "other_kernel": 126,
+      "unknown": 0,
+      "lost": 0
+    },
+    {
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "preparation": 577,
+      "fl2000_usb": 1,
+      "usb_xhci": 0,
+      "fl2000_control": 37,
+      "other_kernel": 131,
+      "unknown": 0,
+      "lost": 0
+    },
+    {
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "preparation": 325,
+      "fl2000_usb": 2,
+      "usb_xhci": 5,
+      "fl2000_control": 27,
+      "other_kernel": 108,
+      "unknown": 0,
+      "lost": 0
+    }
+  ],
+  "kernel_computation_trials": [
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 21526,
+      "cpu_ns": 99932955,
+      "ns_per_frame": 4642
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 21517,
+      "cpu_ns": 99819589,
+      "ns_per_frame": 4639
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 21502,
+      "cpu_ns": 99798115,
+      "ns_per_frame": 4641
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 61745,
+      "cpu_ns": 99780812,
+      "ns_per_frame": 1616
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 61411,
+      "cpu_ns": 99745370,
+      "ns_per_frame": 1624
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 61417,
+      "cpu_ns": 99734592,
+      "ns_per_frame": 1623
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 91088,
+      "cpu_ns": 99697404,
+      "ns_per_frame": 1094
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 91197,
+      "cpu_ns": 99685785,
+      "ns_per_frame": 1093
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 91217,
+      "cpu_ns": 99662040,
+      "ns_per_frame": 1092
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 93444,
+      "cpu_ns": 99605896,
+      "ns_per_frame": 1065
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 93526,
+      "cpu_ns": 99573736,
+      "ns_per_frame": 1064
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 93533,
+      "cpu_ns": 99553564,
+      "ns_per_frame": 1064
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 271435,
+      "cpu_ns": 99534381,
+      "ns_per_frame": 366
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 273369,
+      "cpu_ns": 99510609,
+      "ns_per_frame": 364
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 278455,
+      "cpu_ns": 99486098,
+      "ns_per_frame": 357
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 94840,
+      "cpu_ns": 99478982,
+      "ns_per_frame": 1048
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 94929,
+      "cpu_ns": 99392215,
+      "ns_per_frame": 1047
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 94934,
+      "cpu_ns": 99435127,
+      "ns_per_frame": 1047
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 79621,
+      "cpu_ns": 99412180,
+      "ns_per_frame": 1248
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 79552,
+      "cpu_ns": 99326882,
+      "ns_per_frame": 1248
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 79615,
+      "cpu_ns": 99301504,
+      "ns_per_frame": 1247
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 33822,
+      "cpu_ns": 99297806,
+      "ns_per_frame": 2935
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 33498,
+      "cpu_ns": 99261027,
+      "ns_per_frame": 2963
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 33654,
+      "cpu_ns": 99240930,
+      "ns_per_frame": 2948
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 78650,
+      "cpu_ns": 99215870,
+      "ns_per_frame": 1261
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 78441,
+      "cpu_ns": 99193828,
+      "ns_per_frame": 1264
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 79409,
+      "cpu_ns": 99122679,
+      "ns_per_frame": 1248
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 27778,
+      "cpu_ns": 99159003,
+      "ns_per_frame": 3569
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 27763,
+      "cpu_ns": 99036000,
+      "ns_per_frame": 3567
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 27727,
+      "cpu_ns": 98994178,
+      "ns_per_frame": 3570
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 87427,
+      "cpu_ns": 99965163,
+      "ns_per_frame": 1143
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 87419,
+      "cpu_ns": 99953259,
+      "ns_per_frame": 1143
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 87480,
+      "cpu_ns": 99935218,
+      "ns_per_frame": 1142
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 78536,
+      "cpu_ns": 99917640,
+      "ns_per_frame": 1272
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 78016,
+      "cpu_ns": 99883779,
+      "ns_per_frame": 1280
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 78234,
+      "cpu_ns": 99874359,
+      "ns_per_frame": 1276
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 64414,
+      "cpu_ns": 99801534,
+      "ns_per_frame": 1549
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 64734,
+      "cpu_ns": 99767164,
+      "ns_per_frame": 1541
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 64058,
+      "cpu_ns": 99750405,
+      "ns_per_frame": 1557
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 203519,
+      "cpu_ns": 99735759,
+      "ns_per_frame": 490
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 204012,
+      "cpu_ns": 99709689,
+      "ns_per_frame": 488
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 203986,
+      "cpu_ns": 99692490,
+      "ns_per_frame": 488
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 63804,
+      "cpu_ns": 99675148,
+      "ns_per_frame": 1562
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 63831,
+      "cpu_ns": 99635394,
+      "ns_per_frame": 1560
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 63833,
+      "cpu_ns": 99615555,
+      "ns_per_frame": 1560
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 55887,
+      "cpu_ns": 99582719,
+      "ns_per_frame": 1781
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 55742,
+      "cpu_ns": 99441727,
+      "ns_per_frame": 1783
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 55849,
+      "cpu_ns": 99477304,
+      "ns_per_frame": 1781
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 32265,
+      "cpu_ns": 99450143,
+      "ns_per_frame": 3082
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 32313,
+      "cpu_ns": 99418517,
+      "ns_per_frame": 3076
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 32181,
+      "cpu_ns": 99366240,
+      "ns_per_frame": 3087
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 56163,
+      "cpu_ns": 99371973,
+      "ns_per_frame": 1769
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 55827,
+      "cpu_ns": 99339112,
+      "ns_per_frame": 1779
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 64,
+      "height": 64,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 55852,
+      "cpu_ns": 99318484,
+      "ns_per_frame": 1778
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 225,
+      "cpu_ns": 100997717,
+      "ns_per_frame": 448878
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 225,
+      "cpu_ns": 99777895,
+      "ns_per_frame": 443457
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 225,
+      "cpu_ns": 99281289,
+      "ns_per_frame": 441250
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 653,
+      "cpu_ns": 99993083,
+      "ns_per_frame": 153128
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 654,
+      "cpu_ns": 99676258,
+      "ns_per_frame": 152410
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 654,
+      "cpu_ns": 99588050,
+      "ns_per_frame": 152275
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 909,
+      "cpu_ns": 99988883,
+      "ns_per_frame": 109998
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 912,
+      "cpu_ns": 99336320,
+      "ns_per_frame": 108921
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 901,
+      "cpu_ns": 99275482,
+      "ns_per_frame": 110183
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 1047,
+      "cpu_ns": 100002983,
+      "ns_per_frame": 95513
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 1050,
+      "cpu_ns": 99179176,
+      "ns_per_frame": 94456
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 1046,
+      "cpu_ns": 99065567,
+      "ns_per_frame": 94708
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 1999,
+      "cpu_ns": 99990210,
+      "ns_per_frame": 50020
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 2018,
+      "cpu_ns": 99241775,
+      "ns_per_frame": 49178
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 2012,
+      "cpu_ns": 99190687,
+      "ns_per_frame": 49299
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 1046,
+      "cpu_ns": 99979023,
+      "ns_per_frame": 95582
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 1066,
+      "cpu_ns": 99186763,
+      "ns_per_frame": 93045
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 1064,
+      "cpu_ns": 99123880,
+      "ns_per_frame": 93161
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 1001,
+      "cpu_ns": 99998474,
+      "ns_per_frame": 99898
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 1003,
+      "cpu_ns": 99136257,
+      "ns_per_frame": 98839
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 987,
+      "cpu_ns": 100043846,
+      "ns_per_frame": 101361
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 1644,
+      "cpu_ns": 99964119,
+      "ns_per_frame": 60805
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 1652,
+      "cpu_ns": 99173115,
+      "ns_per_frame": 60032
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 1629,
+      "cpu_ns": 99131167,
+      "ns_per_frame": 60854
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 971,
+      "cpu_ns": 99988432,
+      "ns_per_frame": 102974
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 977,
+      "cpu_ns": 100021319,
+      "ns_per_frame": 102375
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 986,
+      "cpu_ns": 99927875,
+      "ns_per_frame": 101346
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 289,
+      "cpu_ns": 100000000,
+      "ns_per_frame": 346020
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 288,
+      "cpu_ns": 99260372,
+      "ns_per_frame": 344654
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 296,
+      "cpu_ns": 100068711,
+      "ns_per_frame": 338069
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 698,
+      "cpu_ns": 100977369,
+      "ns_per_frame": 144666
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 703,
+      "cpu_ns": 99950637,
+      "ns_per_frame": 142177
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 703,
+      "cpu_ns": 99873376,
+      "ns_per_frame": 142067
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 729,
+      "cpu_ns": 99986684,
+      "ns_per_frame": 137155
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 724,
+      "cpu_ns": 99252081,
+      "ns_per_frame": 137088
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 727,
+      "cpu_ns": 99204725,
+      "ns_per_frame": 136457
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 704,
+      "cpu_ns": 99999286,
+      "ns_per_frame": 142044
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 704,
+      "cpu_ns": 99313606,
+      "ns_per_frame": 141070
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 705,
+      "cpu_ns": 99289800,
+      "ns_per_frame": 140836
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 1123,
+      "cpu_ns": 100990492,
+      "ns_per_frame": 89929
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 1121,
+      "cpu_ns": 99941385,
+      "ns_per_frame": 89153
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 1127,
+      "cpu_ns": 99881516,
+      "ns_per_frame": 88626
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 697,
+      "cpu_ns": 99983358,
+      "ns_per_frame": 143448
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 705,
+      "cpu_ns": 99272111,
+      "ns_per_frame": 140811
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 704,
+      "cpu_ns": 99160536,
+      "ns_per_frame": 140853
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 673,
+      "cpu_ns": 99993109,
+      "ns_per_frame": 148578
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 672,
+      "cpu_ns": 99272797,
+      "ns_per_frame": 147727
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 678,
+      "cpu_ns": 99259228,
+      "ns_per_frame": 146400
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 1056,
+      "cpu_ns": 100991929,
+      "ns_per_frame": 95636
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 1059,
+      "cpu_ns": 99936932,
+      "ns_per_frame": 94369
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 1055,
+      "cpu_ns": 99830763,
+      "ns_per_frame": 94626
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 678,
+      "cpu_ns": 99960174,
+      "ns_per_frame": 147433
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 678,
+      "cpu_ns": 99242492,
+      "ns_per_frame": 146375
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 800,
+      "height": 480,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 669,
+      "cpu_ns": 100099172,
+      "ns_per_frame": 149625
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 40,
+      "cpu_ns": 100983740,
+      "ns_per_frame": 2524593
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 40,
+      "cpu_ns": 101000836,
+      "ns_per_frame": 2525020
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 40,
+      "cpu_ns": 100662520,
+      "ns_per_frame": 2516563
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 97,
+      "cpu_ns": 100993991,
+      "ns_per_frame": 1041175
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 96,
+      "cpu_ns": 99630896,
+      "ns_per_frame": 1037821
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 96,
+      "cpu_ns": 99607242,
+      "ns_per_frame": 1037575
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 118,
+      "cpu_ns": 99993494,
+      "ns_per_frame": 847402
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 118,
+      "cpu_ns": 99424243,
+      "ns_per_frame": 842578
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 120,
+      "cpu_ns": 100348149,
+      "ns_per_frame": 836234
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 171,
+      "cpu_ns": 99999720,
+      "ns_per_frame": 584793
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 172,
+      "cpu_ns": 100427220,
+      "ns_per_frame": 583879
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 170,
+      "cpu_ns": 99909441,
+      "ns_per_frame": 587702
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 206,
+      "cpu_ns": 100002747,
+      "ns_per_frame": 485450
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 206,
+      "cpu_ns": 99633984,
+      "ns_per_frame": 483660
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 206,
+      "cpu_ns": 100144343,
+      "ns_per_frame": 486137
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 167,
+      "cpu_ns": 100998992,
+      "ns_per_frame": 604784
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 169,
+      "cpu_ns": 99868125,
+      "ns_per_frame": 590935
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 169,
+      "cpu_ns": 99847882,
+      "ns_per_frame": 590815
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 171,
+      "cpu_ns": 99998029,
+      "ns_per_frame": 584783
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 170,
+      "cpu_ns": 99451314,
+      "ns_per_frame": 585007
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 169,
+      "cpu_ns": 100265027,
+      "ns_per_frame": 593284
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 206,
+      "cpu_ns": 100000249,
+      "ns_per_frame": 485438
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 203,
+      "cpu_ns": 99478426,
+      "ns_per_frame": 490041
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 204,
+      "cpu_ns": 100054484,
+      "ns_per_frame": 490463
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 0,
+      "frames": 166,
+      "cpu_ns": 99999324,
+      "ns_per_frame": 602405
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 1,
+      "frames": 169,
+      "cpu_ns": 100280648,
+      "ns_per_frame": 593376
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 2,
+      "trial": 2,
+      "frames": 169,
+      "cpu_ns": 99936624,
+      "ns_per_frame": 591340
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 51,
+      "cpu_ns": 100999667,
+      "ns_per_frame": 1980385
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 51,
+      "cpu_ns": 100420527,
+      "ns_per_frame": 1969029
+    },
+    {
+      "backend": "generic",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 51,
+      "cpu_ns": 100664281,
+      "ns_per_frame": 1973809
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 103,
+      "cpu_ns": 99993611,
+      "ns_per_frame": 970811
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 104,
+      "cpu_ns": 100181066,
+      "ns_per_frame": 963279
+    },
+    {
+      "backend": "ssse3",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 104,
+      "cpu_ns": 99406113,
+      "ns_per_frame": 955828
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 102,
+      "cpu_ns": 100998681,
+      "ns_per_frame": 990183
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 101,
+      "cpu_ns": 99905718,
+      "ns_per_frame": 989165
+    },
+    {
+      "backend": "bmi2",
+      "path": 0,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 101,
+      "cpu_ns": 99813772,
+      "ns_per_frame": 988255
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 112,
+      "cpu_ns": 99987975,
+      "ns_per_frame": 892749
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 111,
+      "cpu_ns": 100171636,
+      "ns_per_frame": 902447
+    },
+    {
+      "backend": "generic",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 111,
+      "cpu_ns": 99758114,
+      "ns_per_frame": 898721
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 133,
+      "cpu_ns": 100993002,
+      "ns_per_frame": 759345
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 131,
+      "cpu_ns": 100524352,
+      "ns_per_frame": 767361
+    },
+    {
+      "backend": "ssse3",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 132,
+      "cpu_ns": 99855320,
+      "ns_per_frame": 756479
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 110,
+      "cpu_ns": 100993064,
+      "ns_per_frame": 918118
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 111,
+      "cpu_ns": 99701137,
+      "ns_per_frame": 898208
+    },
+    {
+      "backend": "bmi2",
+      "path": 1,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 111,
+      "cpu_ns": 100385945,
+      "ns_per_frame": 904377
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 112,
+      "cpu_ns": 100983230,
+      "ns_per_frame": 901635
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 113,
+      "cpu_ns": 99485584,
+      "ns_per_frame": 880403
+    },
+    {
+      "backend": "generic",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 112,
+      "cpu_ns": 100190665,
+      "ns_per_frame": 894559
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 138,
+      "cpu_ns": 101002497,
+      "ns_per_frame": 731902
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 137,
+      "cpu_ns": 99810801,
+      "ns_per_frame": 728545
+    },
+    {
+      "backend": "ssse3",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 135,
+      "cpu_ns": 100119238,
+      "ns_per_frame": 741623
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 0,
+      "frames": 111,
+      "cpu_ns": 100005662,
+      "ns_per_frame": 900951
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 1,
+      "frames": 113,
+      "cpu_ns": 100079103,
+      "ns_per_frame": 885655
+    },
+    {
+      "backend": "bmi2",
+      "path": 2,
+      "width": 1920,
+      "height": 1080,
+      "bpp": 3,
+      "trial": 2,
+      "frames": 112,
+      "cpu_ns": 99851543,
+      "ns_per_frame": 891531
+    }
+  ],
+  "fpu_loop": [
+    "CLOCK_BENCH calls=3001619 cpu_ns=99951808 ns_per_iteration=33",
+    "FPU_BENCH calls=1690822 cpu_ns=99927751 ns_per_pair=59"
+  ],
+  "fpu_register_checks": [
+    "FPU_STATE_PASS XRGB8888 SSE+AVX",
+    "FPU_STATE_PASS RGB888 SSE+AVX",
+    "FPU_STATE_PASS RGB565 SSE+AVX"
+  ],
+  "module_sha256": {
+    "generic-row": "a4a6403ce354dc5fb4c55f3cf5b63618657a0aea17b7cff2c0bf2e1e686682eb",
+    "ssse3": "e7d68190eb28f0825553116c454317cf65f4f032978d108bf61310b261e3301f",
+    "bmi2": "51d0c8c071c2f6d79ed248f965fb7df5abd3af7b35228b4619e5b1871beda503"
+  },
+  "qemu_windows": [
+    {
+      "backend": "NO_DRIVER",
+      "run": "idle",
+      "format": "NO_DRIVER",
+      "phase": "idle",
+      "guest": "CPU NO_DRIVER idle wall=10.001 guest_busy=0.000% irq=0.000% softirq=0.000% steal=0.000% process=0.000346s",
+      "host_wall_seconds": 10.014654577999863,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.06,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.06
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.03,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.03
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-1",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=10.000 guest_busy=10.600% irq=0.000% softirq=1.300% steal=0.000% process=1.101589s",
+      "host_wall_seconds": 10.016968513999927,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.63,
+          "guest_cpu_seconds": 1.15,
+          "host_cpu_seconds": 0.48
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-1",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "guest": "CPU XRGB8888 small_60hz wall=10.002 guest_busy=1.900% irq=0.000% softirq=0.500% steal=0.100% process=0.141886s",
+      "host_wall_seconds": 10.022259716999542,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.78,
+          "guest_cpu_seconds": 0.23,
+          "host_cpu_seconds": 0.55
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-1",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=10.000 guest_busy=3.200% irq=0.000% softirq=0.700% steal=0.000% process=0.400646s",
+      "host_wall_seconds": 10.01664846499989,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.01,
+          "guest_cpu_seconds": 0.5,
+          "host_cpu_seconds": 0.51
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-1",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "guest": "CPU RGB888 small_60hz wall=10.000 guest_busy=2.200% irq=0.000% softirq=0.600% steal=0.100% process=0.133524s",
+      "host_wall_seconds": 10.017024621000019,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.77,
+          "guest_cpu_seconds": 0.44,
+          "host_cpu_seconds": 0.33
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-1",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=10.000 guest_busy=2.700% irq=0.000% softirq=0.600% steal=0.100% process=0.296192s",
+      "host_wall_seconds": 10.0183373079999,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.61,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.61
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.92,
+          "guest_cpu_seconds": 0.5,
+          "host_cpu_seconds": 0.42000000000000004
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-1",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "guest": "CPU RGB565 small_60hz wall=10.000 guest_busy=0.600% irq=0.000% softirq=0.500% steal=0.000% process=0.111743s",
+      "host_wall_seconds": 10.016666624000209,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.62,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.62
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.76,
+          "guest_cpu_seconds": 0.16,
+          "host_cpu_seconds": 0.6
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-1",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=10.000 guest_busy=5.600% irq=0.000% softirq=0.600% steal=0.100% process=0.530254s",
+      "host_wall_seconds": 10.017605266999453,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.76,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.76
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.12,
+          "guest_cpu_seconds": 0.58,
+          "host_cpu_seconds": 0.5400000000000001
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-1",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "guest": "CPU XRGB8888 small_60hz wall=10.000 guest_busy=0.600% irq=0.000% softirq=0.500% steal=0.000% process=0.134261s",
+      "host_wall_seconds": 10.016884815000594,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.77,
+          "guest_cpu_seconds": 0.17,
+          "host_cpu_seconds": 0.6
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-1",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=10.000 guest_busy=3.300% irq=0.000% softirq=0.700% steal=0.100% process=0.400328s",
+      "host_wall_seconds": 10.016405782999755,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.02,
+          "guest_cpu_seconds": 0.53,
+          "host_cpu_seconds": 0.49
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-1",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "guest": "CPU RGB888 small_60hz wall=10.000 guest_busy=2.100% irq=0.000% softirq=0.600% steal=0.000% process=0.123241s",
+      "host_wall_seconds": 10.016693818000022,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.73,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.73
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.74,
+          "guest_cpu_seconds": 0.17,
+          "host_cpu_seconds": 0.57
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-1",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=10.000 guest_busy=2.700% irq=0.000% softirq=0.700% steal=0.100% process=0.293532s",
+      "host_wall_seconds": 10.016991487000269,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.62,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.62
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.92,
+          "guest_cpu_seconds": 0.54,
+          "host_cpu_seconds": 0.38
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-1",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "guest": "CPU RGB565 small_60hz wall=10.000 guest_busy=0.500% irq=0.000% softirq=0.400% steal=0.000% process=0.117710s",
+      "host_wall_seconds": 10.016937299999881,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.6,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.6
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.78,
+          "guest_cpu_seconds": 0.6,
+          "host_cpu_seconds": 0.18000000000000005
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-1",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=10.000 guest_busy=5.400% irq=0.000% softirq=0.700% steal=0.000% process=0.547472s",
+      "host_wall_seconds": 10.016992286000459,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.76,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.76
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.14,
+          "guest_cpu_seconds": 0.68,
+          "host_cpu_seconds": 0.45999999999999985
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-1",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "guest": "CPU XRGB8888 small_60hz wall=10.001 guest_busy=0.500% irq=0.000% softirq=0.400% steal=0.100% process=0.135381s",
+      "host_wall_seconds": 10.016812832000141,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.77,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.77
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.77,
+          "guest_cpu_seconds": 0.3,
+          "host_cpu_seconds": 0.47000000000000003
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-1",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=10.000 guest_busy=3.400% irq=0.000% softirq=0.800% steal=0.000% process=0.396228s",
+      "host_wall_seconds": 10.018109995000486,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.01,
+          "guest_cpu_seconds": 0.45,
+          "host_cpu_seconds": 0.56
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-1",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "guest": "CPU RGB888 small_60hz wall=10.000 guest_busy=1.700% irq=0.000% softirq=0.500% steal=0.100% process=0.135341s",
+      "host_wall_seconds": 10.018386693000139,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.77,
+          "guest_cpu_seconds": 0.33,
+          "host_cpu_seconds": 0.44
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-1",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=10.000 guest_busy=2.600% irq=0.000% softirq=0.600% steal=0.000% process=0.296357s",
+      "host_wall_seconds": 10.016675445000146,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.61,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.61
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.93,
+          "guest_cpu_seconds": 0.49,
+          "host_cpu_seconds": 0.44000000000000006
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-1",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "guest": "CPU RGB565 small_60hz wall=10.000 guest_busy=2.300% irq=0.000% softirq=0.500% steal=0.100% process=0.127618s",
+      "host_wall_seconds": 10.01871370599929,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.62,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.62
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.76,
+          "guest_cpu_seconds": 0.35,
+          "host_cpu_seconds": 0.41000000000000003
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-2",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=10.000 guest_busy=5.400% irq=0.000% softirq=0.900% steal=0.000% process=0.561429s",
+      "host_wall_seconds": 10.018146035999962,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.16,
+          "guest_cpu_seconds": 0.68,
+          "host_cpu_seconds": 0.47999999999999987
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-2",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "guest": "CPU XRGB8888 small_60hz wall=10.000 guest_busy=2.300% irq=0.000% softirq=0.500% steal=0.100% process=0.139974s",
+      "host_wall_seconds": 10.017700184000205,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.8,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.8
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.8,
+          "guest_cpu_seconds": 0.3,
+          "host_cpu_seconds": 0.5
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-2",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=10.000 guest_busy=4.200% irq=0.000% softirq=0.700% steal=0.100% process=0.407409s",
+      "host_wall_seconds": 10.017868802000521,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.79,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.79
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.03,
+          "guest_cpu_seconds": 0.53,
+          "host_cpu_seconds": 0.5
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-2",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "guest": "CPU RGB888 small_60hz wall=10.000 guest_busy=2.400% irq=0.000% softirq=0.600% steal=0.000% process=0.126155s",
+      "host_wall_seconds": 10.017094812999858,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.77,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.77
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.77,
+          "guest_cpu_seconds": 0.18,
+          "host_cpu_seconds": 0.5900000000000001
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-2",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=10.000 guest_busy=2.600% irq=0.000% softirq=0.600% steal=0.100% process=0.287006s",
+      "host_wall_seconds": 10.015409376000207,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.61,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.61
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.9,
+          "guest_cpu_seconds": 0.4,
+          "host_cpu_seconds": 0.5
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "bmi2",
+      "run": "trial-2",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "guest": "CPU RGB565 small_60hz wall=10.000 guest_busy=0.700% irq=0.000% softirq=0.600% steal=0.000% process=0.111931s",
+      "host_wall_seconds": 10.016546369000025,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.6,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.6
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.74,
+          "guest_cpu_seconds": 0.17,
+          "host_cpu_seconds": 0.57
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-2",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=10.000 guest_busy=5.000% irq=0.000% softirq=0.600% steal=0.200% process=0.530974s",
+      "host_wall_seconds": 10.01756050899985,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.14,
+          "guest_cpu_seconds": 0.65,
+          "host_cpu_seconds": 0.4899999999999999
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-2",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "guest": "CPU XRGB8888 small_60hz wall=10.000 guest_busy=0.500% irq=0.000% softirq=0.400% steal=0.100% process=0.140988s",
+      "host_wall_seconds": 10.017451931999858,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.75,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.75
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.78,
+          "guest_cpu_seconds": 0.67,
+          "host_cpu_seconds": 0.10999999999999999
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-2",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=10.000 guest_busy=3.000% irq=0.000% softirq=0.700% steal=0.000% process=0.402844s",
+      "host_wall_seconds": 10.016395894000198,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.8,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.8
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.02,
+          "guest_cpu_seconds": 0.55,
+          "host_cpu_seconds": 0.47
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-2",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "guest": "CPU RGB888 small_60hz wall=10.000 guest_busy=2.400% irq=0.000% softirq=0.600% steal=0.100% process=0.133885s",
+      "host_wall_seconds": 10.017475012999967,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.8,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.8
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.8,
+          "guest_cpu_seconds": 0.33,
+          "host_cpu_seconds": 0.47000000000000003
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-2",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=10.000 guest_busy=2.600% irq=0.000% softirq=0.600% steal=0.000% process=0.298030s",
+      "host_wall_seconds": 10.016788511000414,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.62,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.62
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.92,
+          "guest_cpu_seconds": 0.44,
+          "host_cpu_seconds": 0.48000000000000004
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "trial-2",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "guest": "CPU RGB565 small_60hz wall=10.000 guest_busy=0.500% irq=0.000% softirq=0.400% steal=0.100% process=0.115006s",
+      "host_wall_seconds": 10.018251520999911,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.59,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.59
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.75,
+          "guest_cpu_seconds": 0.24,
+          "host_cpu_seconds": 0.51
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-2",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=10.000 guest_busy=9.800% irq=0.000% softirq=1.200% steal=0.000% process=1.066521s",
+      "host_wall_seconds": 10.015071891999469,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.74,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.74
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.59,
+          "guest_cpu_seconds": 1.14,
+          "host_cpu_seconds": 0.4500000000000002
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-2",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "guest": "CPU XRGB8888 small_60hz wall=10.000 guest_busy=0.900% irq=0.000% softirq=0.500% steal=0.000% process=0.144749s",
+      "host_wall_seconds": 10.018878870000663,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.76,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.76
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.77,
+          "guest_cpu_seconds": 0.36,
+          "host_cpu_seconds": 0.41000000000000003
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-2",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=10.000 guest_busy=4.600% irq=0.000% softirq=0.700% steal=0.000% process=0.402842s",
+      "host_wall_seconds": 10.020666082000389,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.79,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.79
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 1.03,
+          "guest_cpu_seconds": 0.81,
+          "host_cpu_seconds": 0.21999999999999997
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-2",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "guest": "CPU RGB888 small_60hz wall=10.000 guest_busy=0.500% irq=0.000% softirq=0.400% steal=0.100% process=0.130296s",
+      "host_wall_seconds": 10.01637043700066,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.78,
+          "guest_cpu_seconds": 0.44,
+          "host_cpu_seconds": 0.34
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-2",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=10.000 guest_busy=2.700% irq=0.000% softirq=0.700% steal=0.000% process=0.291897s",
+      "host_wall_seconds": 10.015939525999784,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.63,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.63
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.92,
+          "guest_cpu_seconds": 0.36,
+          "host_cpu_seconds": 0.56
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "generic-row",
+      "run": "trial-2",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "guest": "CPU RGB565 small_60hz wall=10.000 guest_busy=2.400% irq=0.000% softirq=0.500% steal=0.100% process=0.119336s",
+      "host_wall_seconds": 10.018065721999847,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.61,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.61
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.76,
+          "guest_cpu_seconds": 0.28,
+          "host_cpu_seconds": 0.48
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "static",
+      "format": "XRGB8888",
+      "phase": "static",
+      "guest": "CPU XRGB8888 static wall=10.000 guest_busy=0.100% irq=0.000% softirq=0.100% steal=0.000% process=0.000272s",
+      "host_wall_seconds": 10.01668088400038,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.77,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.77
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.57,
+          "guest_cpu_seconds": 0.16,
+          "host_cpu_seconds": 0.4099999999999999
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "static",
+      "format": "RGB888",
+      "phase": "static",
+      "guest": "CPU RGB888 static wall=10.000 guest_busy=0.200% irq=0.000% softirq=0.200% steal=0.000% process=0.000350s",
+      "host_wall_seconds": 10.016112911000164,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.78,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.78
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.58,
+          "guest_cpu_seconds": 0.15,
+          "host_cpu_seconds": 0.42999999999999994
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "static",
+      "format": "RGB565",
+      "phase": "static",
+      "guest": "CPU RGB565 static wall=10.000 guest_busy=0.100% irq=0.000% softirq=0.100% steal=0.100% process=0.000246s",
+      "host_wall_seconds": 10.016049016999204,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.61,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.61
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.55,
+          "guest_cpu_seconds": 0.15,
+          "host_cpu_seconds": 0.4
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "fpu-check",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=1.000 guest_busy=3.998% irq=0.000% softirq=1.000% steal=0.000% process=0.049380s",
+      "host_wall_seconds": 1.017867266000394,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.18,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.18
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.12,
+          "guest_cpu_seconds": 0.08,
+          "host_cpu_seconds": 0.039999999999999994
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "fpu-check",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=1.001 guest_busy=2.997% irq=0.000% softirq=0.999% steal=0.000% process=0.041183s",
+      "host_wall_seconds": 1.017459492000853,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.18,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.18
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.12,
+          "guest_cpu_seconds": 0.08,
+          "host_cpu_seconds": 0.039999999999999994
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "fpu-check",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=1.000 guest_busy=2.999% irq=0.000% softirq=1.000% steal=0.000% process=0.028093s",
+      "host_wall_seconds": 1.0165756449987384,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.15,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.15
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.11,
+          "guest_cpu_seconds": 0.04,
+          "host_cpu_seconds": 0.07
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "sampled",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=10.002 guest_busy=5.599% irq=0.000% softirq=0.600% steal=0.300% process=0.589649s",
+      "host_wall_seconds": 10.024363828999412,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.83,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.83
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 2.45,
+          "guest_cpu_seconds": 1.35,
+          "host_cpu_seconds": 1.1
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "sampled",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=10.001 guest_busy=3.900% irq=0.000% softirq=0.700% steal=0.400% process=0.437748s",
+      "host_wall_seconds": 10.015340466001362,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.81,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.81
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 2.34,
+          "guest_cpu_seconds": 1.18,
+          "host_cpu_seconds": 1.16
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "sampled",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=10.000 guest_busy=3.400% irq=0.000% softirq=0.800% steal=0.300% process=0.320866s",
+      "host_wall_seconds": 10.014883943000314,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 1.64,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 1.64
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 2.27,
+          "guest_cpu_seconds": 1.12,
+          "host_cpu_seconds": 1.15
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "XRGB8888",
+      "phase": "static",
+      "guest": "CPU XRGB8888 static wall=5.000 guest_busy=0.200% irq=0.000% softirq=0.200% steal=0.000% process=0.000287s",
+      "host_wall_seconds": 5.01752471600048,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.89,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.89
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.3,
+          "guest_cpu_seconds": 0.08,
+          "host_cpu_seconds": 0.21999999999999997
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "guest": "CPU XRGB8888 full_60hz wall=5.000 guest_busy=4.600% irq=0.000% softirq=0.400% steal=0.000% process=0.264400s",
+      "host_wall_seconds": 5.01858593399993,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.89,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.89
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.57,
+          "guest_cpu_seconds": 0.36,
+          "host_cpu_seconds": 0.20999999999999996
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "XRGB8888",
+      "phase": "small_60hz",
+      "guest": "CPU XRGB8888 small_60hz wall=5.000 guest_busy=2.200% irq=0.000% softirq=0.400% steal=0.200% process=0.072885s",
+      "host_wall_seconds": 5.017589363998923,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.89,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.89
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.4,
+          "guest_cpu_seconds": 0.16,
+          "host_cpu_seconds": 0.24000000000000002
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "XRGB8888",
+      "phase": "profile_full_60hz",
+      "guest": "CPU XRGB8888 profile_full_60hz wall=5.000 guest_busy=6.800% irq=0.000% softirq=0.600% steal=0.000% process=0.343437s",
+      "host_wall_seconds": 5.0174393729994335,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.87,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.87
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.64,
+          "guest_cpu_seconds": 0.41,
+          "host_cpu_seconds": 0.23000000000000004
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "RGB888",
+      "phase": "static",
+      "guest": "CPU RGB888 static wall=5.001 guest_busy=0.200% irq=0.000% softirq=0.200% steal=0.000% process=0.000393s",
+      "host_wall_seconds": 5.0164222690000315,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.88,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.88
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.3,
+          "guest_cpu_seconds": 0.05,
+          "host_cpu_seconds": 0.25
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "guest": "CPU RGB888 full_60hz wall=5.000 guest_busy=2.600% irq=0.000% softirq=0.600% steal=0.200% process=0.198614s",
+      "host_wall_seconds": 5.0178412229997775,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.88,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.88
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.52,
+          "guest_cpu_seconds": 0.35,
+          "host_cpu_seconds": 0.17000000000000004
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "RGB888",
+      "phase": "small_60hz",
+      "guest": "CPU RGB888 small_60hz wall=5.000 guest_busy=0.600% irq=0.000% softirq=0.600% steal=0.000% process=0.059494s",
+      "host_wall_seconds": 5.016360245999749,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.86,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.86
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.39,
+          "guest_cpu_seconds": 0.27,
+          "host_cpu_seconds": 0.12
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "RGB888",
+      "phase": "profile_full_60hz",
+      "guest": "CPU RGB888 profile_full_60hz wall=5.000 guest_busy=4.400% irq=0.000% softirq=0.600% steal=0.200% process=0.202425s",
+      "host_wall_seconds": 5.021290341999702,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.86,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.86
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.52,
+          "guest_cpu_seconds": 0.35,
+          "host_cpu_seconds": 0.17000000000000004
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "RGB565",
+      "phase": "static",
+      "guest": "CPU RGB565 static wall=5.000 guest_busy=0.200% irq=0.000% softirq=0.200% steal=0.000% process=0.000226s",
+      "host_wall_seconds": 5.017337364000923,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.79,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.79
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.29,
+          "guest_cpu_seconds": 0.07,
+          "host_cpu_seconds": 0.21999999999999997
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "guest": "CPU RGB565 full_60hz wall=5.000 guest_busy=2.600% irq=0.000% softirq=0.400% steal=0.000% process=0.145396s",
+      "host_wall_seconds": 5.017062115999579,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.82,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.82
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.47,
+          "guest_cpu_seconds": 0.21,
+          "host_cpu_seconds": 0.26
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "RGB565",
+      "phase": "small_60hz",
+      "guest": "CPU RGB565 small_60hz wall=5.000 guest_busy=2.600% irq=0.000% softirq=0.400% steal=0.000% process=0.061194s",
+      "host_wall_seconds": 5.015167818999544,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.81,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.81
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.38,
+          "guest_cpu_seconds": 0.16,
+          "host_cpu_seconds": 0.22
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    },
+    {
+      "backend": "ssse3",
+      "run": "function-profile",
+      "format": "RGB565",
+      "phase": "profile_full_60hz",
+      "guest": "CPU RGB565 profile_full_60hz wall=5.000 guest_busy=3.000% irq=0.000% softirq=0.800% steal=0.200% process=0.152594s",
+      "host_wall_seconds": 5.017568547000337,
+      "qemu_threads": [
+        {
+          "tid": 7349,
+          "name": "qemu-system-x86",
+          "total_cpu_seconds": 0.81,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.81
+        },
+        {
+          "tid": 7350,
+          "name": "call_rcu",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7351,
+          "name": "CPU 0/KVM",
+          "total_cpu_seconds": 0.48,
+          "guest_cpu_seconds": 0.23,
+          "host_cpu_seconds": 0.24999999999999997
+        },
+        {
+          "tid": 7352,
+          "name": "libusb_event",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        },
+        {
+          "tid": 7353,
+          "name": "kvm-nx-lpage-re",
+          "total_cpu_seconds": 0.0,
+          "guest_cpu_seconds": 0.0,
+          "host_cpu_seconds": 0.0
+        }
+      ]
+    }
+  ],
+  "cleanup_validation": "/workspace/.qemu-build/fl2000-tests/performance-final/cleanup-validation/results.json",
+  "limitations": [
+    "Process CPU includes synchronous DRM work and benchmark userspace; excludes independent asynchronous tasks and QEMU host work.",
+    "Kernel samples are diagnostic call-chain counts, not exact CPU percentages.",
+    "The long profiling run reached its watchdog after the final measurement; a shorter rerun completed mode restoration, unload, and shutdown successfully.",
+    "QEMU guest-time tick accounting is noisy; host CPU excludes USB IRQ work outside QEMU.",
+    "The isolated FPU loop measures repeated protection calls, not the complete user-to-kernel state transition.",
+    "Host instruction sampling was denied by container permissions."
+  ],
+  "raw_logs": [
+    "/workspace/.qemu-build/fl2000-tests/performance-final/final/guest.log",
+    "/workspace/.qemu-build/fl2000-tests/performance-final/kernel-bench/guest.log",
+    "/workspace/.qemu-build/fl2000-tests/performance-final/cleanup-validation/guest.log"
+  ],
+  "final_validation": {
+    "regressions": [
+      "logic: generic, SSSE3, BMI2",
+      "interrupt",
+      "bridge",
+      "EDID"
+    ],
+    "strict_builds": [
+      "7.0.0-34-generic: auto",
+      "7.0.0-38-generic: generic, bmi2, auto"
+    ],
+    "hardware_fallback": {
+      "cpu_model": "qemu64",
+      "ssse3": false,
+      "bmi2": false,
+      "backends": [
+        "ssse3",
+        "bmi2"
+      ],
+      "formats": [
+        "XRGB8888",
+        "RGB888",
+        "RGB565"
+      ],
+      "result": "passed; module unload and guest shutdown completed",
+      "raw_results": "/workspace/.qemu-build/fl2000-tests/performance-final/fallback-validation/results.json"
+    },
+    "default_backend": "SSSE3 on x86-64; generic on other targets",
+    "native_reordering": "portable"
+  }
+}
