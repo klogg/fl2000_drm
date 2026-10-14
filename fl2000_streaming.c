@@ -7,6 +7,7 @@
 #include "fl2000.h"
 #include <linux/overflow.h>
 #include <linux/unaligned.h>
+#include "fl2000_frame.h"
 
 #define FL2000_QUEUE_DEPTH 3
 /* Three in-flight frames, a latest frame, and a free conversion target. */
@@ -218,6 +219,27 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width,
 				unsigned int offset, unsigned int bytes_pix)
 {
 	unsigned int x;
+	unsigned int count;
+
+	/* Scalar prefix reaches a complete wire word, including cropped rows. */
+	while (width && (offset & 7)) {
+		u32 pixel = get_unaligned_le32(line);
+		unsigned int i;
+
+		if (bytes_pix == 2)
+			pixel = fl2000_rgb565(pixel);
+		for (i = 0; i < bytes_pix; i++)
+			dst[offset++ ^ 4] = pixel >> (8 * i);
+		line += 4;
+		width--;
+	}
+	while ((count = fl2000_frame_convert(dst + offset, line, width, bytes_pix))) {
+		line += count * 4;
+		offset += count * bytes_pix;
+		width -= count;
+		cond_resched();
+	}
+
 	if (bytes_pix == 2) {
 		x = 0;
 		if ((offset & 3) && width) {
@@ -276,9 +298,15 @@ static void fl2000_convert_frame(u8 *dst, const void *src, unsigned int height,
 	unsigned int y;
 
 	memset(dst + (size & ~7U), 0, buf_size - (size & ~7U));
-	for (y = 0; y < height; y++) {
+	for (y = 0; y < height;) {
+		unsigned int rows = 1;
+
+		/* Batch contiguous rows without extending a preparation span. */
+		if (pitch == width * 4)
+			rows = min(height - y, max(1U, 4096U / width));
 		fl2000_convert_line(dst, (const u8 *)src + (size_t)y * pitch,
-				    width, y * width * bytes_pix, bytes_pix);
+				    width * rows, y * width * bytes_pix, bytes_pix);
+		y += rows;
 		cond_resched();
 	}
 }
@@ -291,8 +319,17 @@ static void fl2000_reorder_line(u8 *dst, const u8 *line, unsigned int remaining,
 		remaining--;
 	}
 	while (remaining >= 8) {
+		unsigned int prepared = fl2000_frame_reorder(dst + offset, line, remaining);
 		unsigned int count = min_t(unsigned int, remaining & ~7U, 65536);
 		unsigned int i;
+
+		if (prepared) {
+			line += prepared;
+			offset += prepared;
+			remaining -= prepared;
+			cond_resched();
+			continue;
+		}
 
 		for (i = 0; i < count; i += 8) {
 			u64 word = get_unaligned_le64(line + i);

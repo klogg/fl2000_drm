@@ -28,3 +28,5 @@ jobs:
           ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
           test -n "$ksrc"
           make -C "$ksrc" M="$GITHUB_WORKSPACE" W=1 KCFLAGS=-Werror modules
+          make -C "$ksrc" M="$GITHUB_WORKSPACE" FL2000_FRAME_BACKEND=bmi2 W=1 KCFLAGS=-Werror modules
+          make -C "$ksrc" M="$GITHUB_WORKSPACE" FL2000_FRAME_BACKEND=generic W=1 KCFLAGS=-Werror modules

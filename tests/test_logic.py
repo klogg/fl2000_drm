@@ -72,6 +72,12 @@ struct drm_rect { int x1,y1,x2,y2; };
 #define ALIGN(n, a) (((n) + (a) - 1) & ~((a) - 1))
 #define min_t(t, a, b) ((t)(a) < (t)(b) ? (t)(a) : (t)(b))
 #define cond_resched() ((void)0)
+#ifndef TEST_SIMD
+static unsigned int fl2000_frame_convert(u8 *d, const u8 *s, unsigned int n, unsigned int b)
+{ (void)d; (void)s; (void)n; (void)b; return 0; }
+static unsigned int fl2000_frame_reorder(u8 *d, const u8 *s, unsigned int n)
+{ (void)d; (void)s; (void)n; return 0; }
+#endif
 #define spin_lock_irqsave(lock, flags) ((void)(lock), (flags) = 0)
 #define spin_unlock_irqrestore(lock, flags) ((void)(lock), (void)(flags))
 #define mutex_lock(lock) ((void)(lock))
@@ -824,6 +830,33 @@ with tempfile.TemporaryDirectory(prefix="fl2000-tests-") as temp:
     source = Path(temp) / "test.c"
     executable = Path(temp) / "test"
     variants = [("generic", [], [])]
+    if os.uname().machine == "x86_64" and "ssse3" in Path("/proc/cpuinfo").read_text():
+        simd = (ROOT / "frame/ssse3.c").read_text().replace("#include <linux/types.h>", "").replace('#include "ssse3.h"', '#include "frame/ssse3.h"')
+        wrapper = (ROOT / "frame/x86.c").read_text()
+        wrapper = re.sub(r'^#include.*$', '', wrapper, flags=re.M)
+        mock = """
+#define X86_FEATURE_SSSE3 0
+#define boot_cpu_has(x) (simd_cpu_available && __builtin_cpu_supports("ssse3"))
+#define irq_fpu_usable() simd_context_available
+static bool simd_cpu_available = true, simd_context_available = true;
+static int fpu_depth;
+#define kernel_fpu_begin() assert(!fpu_depth++)
+#define kernel_fpu_end() assert(fpu_depth-- == 1)
+"""
+        variants.append(("ssse3", ["-DTEST_SIMD", "-mssse3", "-mno-avx"], [mock, simd, wrapper]))
+    if os.uname().machine == "x86_64" and "bmi2" in Path("/proc/cpuinfo").read_text():
+        bmi = (ROOT / "frame/bmi2.c").read_text()
+        bmi = re.sub(r'^#include <linux/.*$', '', bmi, flags=re.M)
+        bmi = bmi.replace('#include "bmi2.h"', '#include "frame/bmi2.h"')
+        wrapper = (ROOT / "frame/x86_bmi2.c").read_text()
+        wrapper = re.sub(r'^#include.*$', '', wrapper, flags=re.M)
+        mock = """
+#define X86_FEATURE_BMI2 1
+#define boot_cpu_has(x) (simd_cpu_available && __builtin_cpu_supports("bmi2"))
+static bool simd_cpu_available = true, simd_context_available = true;
+static int fpu_depth;
+"""
+        variants.append(("bmi2", ["-DTEST_SIMD", "-mbmi2"], [mock, bmi, wrapper]))
     for name, flags, backend in variants:
         source.write_text("\n\n".join([parts[0], *backend, *parts[1:]]))
         subprocess.run([
