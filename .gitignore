@@ -20,3 +20,8 @@ spelling.txt
 .cache.mk
 .vscode-ctags
 .vscode/*
+
+/.qemu-build/
+
+__pycache__/
+*.pyc

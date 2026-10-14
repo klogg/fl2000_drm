@@ -1,4 +1,4 @@
-name: Makefile CI
+name: Linux 7.0 build and logic tests
 
 on:
   push:
@@ -8,14 +8,23 @@ on:
 
 jobs:
   build:
-
-    runs-on: ubuntu-22.04
-
+    runs-on: ubuntu-latest
+    container: ubuntu:26.04
     steps:
-    - uses: actions/checkout@v4
-
-    - name: Install dependencies
-      run: uname -r
-
-    - name: Build
-      run: make
+      - uses: actions/checkout@v4
+      - name: Install compiler and Linux 7.0 headers
+        run: |
+          apt-get update
+          apt-get install -y build-essential linux-headers-generic python3
+      - name: Run sanitizer-backed logic regressions
+        run: |
+          python3 tests/test_logic.py
+          python3 tests/test_edid.py
+          python3 tests/test_bridge.py
+          python3 tests/test_interrupt.py
+      - name: Build against the installed 7.0 headers
+        shell: bash
+        run: |
+          ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
+          test -n "$ksrc"
+          make -C "$ksrc" M="$GITHUB_WORKSPACE" W=1 KCFLAGS=-Werror modules
