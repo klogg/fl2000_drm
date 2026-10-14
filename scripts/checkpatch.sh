@@ -1,25 +1,26 @@
 #!/bin/bash
-
-if [ ! -f checkpatch.pl ]; then
-	wget https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/scripts/checkpatch.pl
+set -eu
+repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+source "$repo_dir/scripts/kernel-tools.sh"
+if [[ ${1:-} == --help ]]; then
+    printf '%s\n' 'Usage: checkpatch.sh [checkpatch-options]' \
+        'Checks production C/headers in the repository, bridge and frame folders.' \
+        'Overrides: CHECKPATCH, KSRC, KVER, KERNEL_TOOLS_TAG.'
+    exit 0
 fi
-
-if [ ! -f spelling.txt ]; then
-	wget https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/scripts/spelling.txt
+checker=${CHECKPATCH:-$(kernel_tool scripts/checkpatch.pl)}
+# Downloaded checkpatch uses companion resources beside the script.
+if [[ $checker == "$repo_dir/.cache/"* ]]; then
+    kernel_tool scripts/spelling.txt cache >/dev/null
+    kernel_tool scripts/const_structs.checkpatch cache >/dev/null
 fi
-
-if [ ! -f const_structs.checkpatch ]; then
-	wget https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/scripts/const_structs.checkpatch
-fi
-
-declare -i status=0
-for file in {,bridge/}*.[ch]
-do
-	if [[ $file == *.mod.c ]]; then
-		continue
-	fi
-	perl checkpatch.pl --strict --no-summary --no-tree "$@" -f "$file"
-	status=$status+$?
+cd "$repo_dir"
+shopt -s nullglob
+status=0
+for file in *.[ch] bridge/*.[ch] frame/*.[ch]; do
+    [[ $file == *.mod.c ]] && continue
+    if ! perl "$checker" --strict --no-summary --no-tree "$@" -f "$file"; then
+        status=1
+    fi
 done
-
-exit $status
+exit "$status"
