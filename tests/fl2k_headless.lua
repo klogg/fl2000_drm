@@ -33,8 +33,13 @@ TextWindow = {new = function(title)
     return win
 end}
 
-assert(arg and arg[1], 'pass the driver path using -X lua_script1:path')
-dofile(arg[1])
+local arguments = {...}
+local driver_path = arguments[1] or (arg and arg[1])
+assert(driver_path, 'pass the driver path using -X lua_script1:path')
+-- Command-line Lua scripts have a sandbox; keep the test widgets in scope.
+local driver_chunk = assert(loadfile(driver_path))
+debug.setupvalue(driver_chunk, 1, _ENV)
+driver_chunk()
 
 assert(test_menu, 'analysis menu was not registered')
 test_menu()

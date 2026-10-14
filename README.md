@@ -66,6 +66,15 @@ traffic. Run these commands as a regular user with read access to the capture
 and scripts, using a Lua-enabled TShark build. The regression replaces window
 widgets with test objects; visual layout still needs GUI testing.
 
+GitHub CI builds the automatic, BMI2, and generic backends in separate Ubuntu
+26.04 containers against installed Linux 7.0 headers. It runs the sanitizer
+regressions and hardware-free USB replay (`python3 tests/test_fl2k.py`) on a
+regular hosted runner; no private initramfs or attached device is required.
+Style jobs use pinned Linux 7.0 tools and clang-format 18, preserve diagnostics
+as artifacts, and fail on existing style violations. SonarCloud uses a clean
+7.0 build and its compilation database; analysis is skipped for fork pull
+requests or when `SONAR_TOKEN` is missing.
+
 **NOTE:** This revision targets Linux 7.0. Build tools and headers matching the
 kernel are required. Both modules have been compile-tested on x86_64 against
 Ubuntu kernels 7.0.0-34 and 7.0.0-38. Older kernels require a separate API port.

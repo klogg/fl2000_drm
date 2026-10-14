@@ -2,31 +2,88 @@ name: Linux 7.0 build and logic tests
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [master]
   pull_request:
-    branches: [ "master" ]
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Linux 7.0 / ${{ matrix.backend }}
+    runs-on: ubuntu-24.04
     container: ubuntu:26.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [auto, bmi2, generic]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install compiler and Linux 7.0 headers
         run: |
           apt-get update
-          apt-get install -y build-essential linux-headers-generic python3
+          apt-get install -y --no-install-recommends build-essential linux-headers-generic
+      - name: Build against the installed 7.0 headers
+        env:
+          FRAME_BACKEND: ${{ matrix.backend }}
+        run: |
+          ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
+          test -n "$ksrc"
+          make -C "$ksrc" M="$GITHUB_WORKSPACE" \
+            FL2000_FRAME_BACKEND="$FRAME_BACKEND" W=1 KCFLAGS=-Werror modules
+      - name: Save modules
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: linux-7.0-${{ matrix.backend }}
+          path: |
+            fl2000.ko
+            it66121.ko
+          if-no-files-found: error
+          retention-days: 7
+
+  regressions:
+    name: Sanitizers and script regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install headless test dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo --preserve-env=DEBIAN_FRONTEND apt-get install -y --no-install-recommends \
+            build-essential python3 lua5.4 tshark
       - name: Run sanitizer-backed logic regressions
         run: |
           python3 tests/test_logic.py
           python3 tests/test_edid.py
           python3 tests/test_bridge.py
           python3 tests/test_interrupt.py
-      - name: Build against the installed 7.0 headers
-        shell: bash
+      - name: Validate scripts
         run: |
-          ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
-          test -n "$ksrc"
-          make -C "$ksrc" M="$GITHUB_WORKSPACE" W=1 KCFLAGS=-Werror modules
-          make -C "$ksrc" M="$GITHUB_WORKSPACE" FL2000_FRAME_BACKEND=bmi2 W=1 KCFLAGS=-Werror modules
-          make -C "$ksrc" M="$GITHUB_WORKSPACE" FL2000_FRAME_BACKEND=generic W=1 KCFLAGS=-Werror modules
+          for script in scripts/*.sh; do bash -n "$script"; done
+          for script in startup emulate sign; do sh -n "scripts/$script.sh"; done
+          for script in startup emulate sign checkpatch clang-format; do
+            "scripts/$script.sh" --help
+          done
+          python3 -m py_compile tests/qemu_hardware.py tests/qemu_smoke.py
+          luac -p scripts/fl2k.lua
+          luac -p tests/fl2k_headless.lua
+      - name: Replay USB and analysis callback regressions
+        run: python3 tests/test_fl2k.py
