@@ -115,17 +115,51 @@ static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 	i2c_del_adapter(adapter);
 }
 
-struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev)
+/**
+ * fl2000_i2c_verify_client - Verify I2C client
+ *
+ * @usb_dev: USB device
+ * @client_dev: Device to verify
+ * @client_name: Expected I2C client name
+ *
+ * @return: true if client is verified, false otherwise
+ */
+bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_dev,
+			      const char *client_name)
+{
+	struct i2c_adapter *adapter;
+	struct i2c_client *client;
+	struct device_driver *driver;
+
+	adapter = devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
+	if (!adapter)
+		return false;
+
+	client = i2c_verify_client(client_dev);
+	if (!client)
+		return false;
+
+	driver = client_dev->driver;
+	if (strcmp(driver->name, client_name))
+		return false;
+
+	if (client->adapter != adapter)
+		return false;
+
+	return true;
+}
+
+int fl2000_i2c_init(struct usb_device *usb_dev)
 {
 	int ret;
 	struct i2c_adapter *adapter;
-	u8 usb_path[32];
 
 	/* Adapter must be allocated before anything else */
 	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter), GFP_KERNEL);
-	if (!adapter)
-		return ERR_PTR(-ENOMEM);
-	devres_add(&usb_dev->dev, adapter);
+	if (!adapter) {
+		dev_err(&usb_dev->dev, "Cannot allocate adapter!");
+		return -ENOMEM;
+	}
 
 	adapter->owner = THIS_MODULE;
 	adapter->class = I2C_CLASS_DEPRECATED;
@@ -137,13 +171,16 @@ struct i2c_adapter *fl2000_i2c_init(struct usb_device *usb_dev)
 
 	ret = i2c_add_adapter(adapter);
 	if (ret) {
+		dev_err(&usb_dev->dev, "Cannot add adapter! (%d)", ret);
 		devres_free(adapter);
-		return ERR_PTR(ret);
+		return ret;
 	}
 
-	usb_make_path(usb_dev, usb_path, sizeof(usb_path));
-	dev_dbg(&usb_dev->dev, "Created FL2000 bridge I2C bus %d at interface %s",
-		i2c_adapter_id(adapter), usb_path);
+	devres_add(&usb_dev->dev, adapter);
+	return 0;
+}
 
-	return adapter;
+void fl2000_i2c_cleanup(struct usb_device *usb_dev)
+{
+	devres_release(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
 }

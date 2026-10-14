@@ -454,30 +454,27 @@ static int it66121_bind(struct device *comp, struct device *master, void *master
 {
 	int ret;
 	struct drm_bridge *bridge = dev_get_drvdata(comp);
-	struct drm_simple_display_pipe *pipe = master_data;
-	struct i2c_adapter *adapter = i2c_verify_adapter(master);
+	struct drm_device *drm = master_data;
 
-	if (!adapter)
-		return -ENODEV;
+	dev_info(comp, "Binding IT66121 component to %s", dev_name(master));
 
-	dev_info(comp, "Binding IT66121 component");
-
-	/* XXX: check adapter, check bridge */
-
-	ret = drm_simple_display_pipe_attach_bridge(pipe, bridge);
-	if (ret)
-		dev_err(comp, "Cannot attach IT66121 bridge (%d)", ret);
+	/* TODO: change to devm/devres from master
+	 * Or maybe use drv_data of some device other than usb_dev?
+	 * Also this hast o be linked to some specific encoder
+	 */
+	drm->dev_private = bridge;
 
 	return ret;
 }
 
 static void it66121_unbind(struct device *comp, struct device *master, void *master_data)
 {
-	/* TODO: drm_bridge_detach()? */
-	UNUSED(master);
-	UNUSED(master_data);
+	struct drm_bridge *bridge = dev_get_drvdata(comp);
+	struct drm_device *drm = master_data;
 
-	dev_info(comp, "Unbinding IT66121 component");
+	dev_info(comp, "Unbinding IT66121 component from %s", dev_name(master));
+
+	drm_bridge_detach(bridge);
 }
 
 static const struct component_ops it66121_component_ops = {
@@ -570,7 +567,7 @@ static int it66121_bridge_attach(struct drm_bridge *bridge, enum drm_bridge_atta
 
 static void it66121_bridge_detach(struct drm_bridge *bridge)
 {
-	/* TODO: Detach encoder */
+	/* TODO: Detach bridge poperly */
 	dev_info(bridge->dev->dev, "it66121_bridge_detach");
 }
 
@@ -903,8 +900,19 @@ static int __init it66121_probe(void)
 	return 0;
 }
 
-module_init(it66121_probe);
-module_exit(it66121_remove);
+static const struct i2c_device_id it66121_ids[] = { { "it66121", 0 }, {} };
+MODULE_DEVICE_TABLE(i2c, it66121_ids);
+
+static struct i2c_driver it66121_driver = {
+	.probe = it66121_probe,
+	.remove = it66121_remove,
+	.driver = {
+		.name = "it66121",
+	},
+	.id_table = it66121_ids,
+};
+
+module_i2c_driver(it66121_driver);
 
 MODULE_AUTHOR("Artem Mygaiev");
 MODULE_DESCRIPTION("IT66121 HDMI transmitter driver");
