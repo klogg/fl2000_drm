@@ -46,13 +46,15 @@ endif
 KVER ?= $(shell uname -r)
 KSRC ?= /lib/modules/$(KVER)/build
 
-EXTRA_CFLAGS := -Wall
+ccflags-y += -Wall
+
+.PHONY: all modules clean
 
 all:	modules
 
 modules:
-	$(MAKE) CHECK="/usr/bin/sparse" -C $(KSRC) M=$(CURDIR) FL2000_FRAME_BACKEND=$(FL2000_FRAME_BACKEND) modules
+	$(MAKE) -C "$(KSRC)" M="$(CURDIR)" FL2000_FRAME_BACKEND=$(FL2000_FRAME_BACKEND) modules
 
 clean:
-	make -C $(KSRC) M=$(CURDIR) clean
-	rm -f $(PWD)/Module.symvers $(PWD)/*.ur-safe
+	$(MAKE) -C "$(KSRC)" M="$(CURDIR)" clean
+	$(RM) "$(CURDIR)/Module.symvers" "$(CURDIR)"/*.ur-safe
