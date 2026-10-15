@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 """Compare modules in one KVM guest and account QEMU threads per workload.
 
 Only the guest loads modules. QEMU guest_time is included in utime, so subtract

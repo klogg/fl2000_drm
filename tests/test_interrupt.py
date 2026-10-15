@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 """Exercise actual interrupt startup, recovery, and stop with mocked USB I/O."""
 from pathlib import Path
 import subprocess,tempfile

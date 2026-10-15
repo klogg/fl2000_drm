@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
 # Shared by the style scripts. Prefer installed kernel resources, then a pinned tag.
 kernel_tool() {
     local resource=$1 source_policy=${2:-installed} kernel_dir cache_dir temporary

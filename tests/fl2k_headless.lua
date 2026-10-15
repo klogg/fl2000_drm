@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0
 -- Headless integration test of the Wireshark analysis callbacks.
 -- Run with a FL2000 capture that includes enumeration and register traffic:
 -- tshark -X lua_script:tests/fl2k_headless.lua \

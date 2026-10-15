@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 """Benchmark actual conversion/PLL helpers without hardware.
 
 Portable/SSSE3/BMI2 code, CPU thread time, rotating five destination buffers, padded

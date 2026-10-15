@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 """Append a newc overlay to the compressed base image and boot with KVM."""
 from pathlib import Path
 import argparse

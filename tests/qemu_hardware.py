@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 """Boot the supplied base initramfs with a driver-only overlay and USB port passthrough."""
 import argparse
 import os

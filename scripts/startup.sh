@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
 # Load only the test-guest modules; the prepared base supplies DRM dependencies.
 set -eu
 

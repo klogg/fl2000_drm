@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 """Replay synthetic usbmon traffic through the real Wireshark Lua API."""
 from pathlib import Path
 import os

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 """Build a temporary computation benchmark and run it only in hardware-free KVM.
 
 Extracts the real conversion helpers and backends. Includes real kernel FPU

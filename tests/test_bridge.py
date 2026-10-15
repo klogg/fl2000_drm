@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0
 """Exercise rebased bridge modesetting, reset restoration, and HPD acknowledgment."""
 from pathlib import Path
 import re

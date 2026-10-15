@@ -1,3 +1,4 @@
+-- SPDX-License-Identifier: GPL-2.0
 -- Copyright 2019 Artem Mygaiev <joculator@gmail.com>
 
 -- Here goes Dissector

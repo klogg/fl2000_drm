@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
 set -eu
 if [ "${1:-}" = "--help" ]; then
     printf '%s\n' 'Usage: sign.sh' \
