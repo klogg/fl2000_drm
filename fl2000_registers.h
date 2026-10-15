@@ -10,8 +10,6 @@
 
 #include <linux/types.h>
 
-#define regmap_reg_default(addr, val) { .reg = addr, .def = val }
-
 /* #### USB Control Registers Bank #### */
 /* Some unknown & undocumented FL2000 USB settings */
 
