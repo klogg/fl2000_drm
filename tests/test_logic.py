@@ -146,6 +146,7 @@ struct drm_crtc { struct drm_crtc_state *state; };
 struct drm_atomic_state { struct drm_plane plane; struct drm_plane_state *old_plane,*new_plane; struct drm_crtc_state *crtc; int get_error; bool allow_modeset; };
 #define IS_ERR(p) ((uintptr_t)(p)>=(uintptr_t)-4095)
 #define PTR_ERR(p) ((intptr_t)(p))
+#define PTR_ERR_OR_ZERO(p) (IS_ERR(p) ? (int)PTR_ERR(p) : 0)
 #define for_each_oldnew_plane_in_state(s,p,o,n,i) \
  for((i)=0,(p)=&(s)->plane,(o)=(s)->old_plane,(n)=(s)->new_plane; (i)<1 && (p); (i)++)
 static struct drm_crtc_state *drm_atomic_get_crtc_state(struct drm_atomic_state *state,struct drm_crtc *crtc)

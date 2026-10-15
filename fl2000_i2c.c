@@ -162,7 +162,7 @@ static int fl2000_bridge_detect(struct i2c_adapter *adapter, unsigned short addr
 	int ret;
 
 	for (unsigned int i = 0; i < sizeof(bytes); i++) {
-		u8 reg = i;
+		u8 reg = (u8)i;
 		struct i2c_msg msgs[] = {
 			{ .addr = addr, .len = 1, .buf = &reg },
 			{ .addr = addr, .flags = I2C_M_RD, .len = 1, .buf = &bytes[i] },
@@ -209,7 +209,7 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	devres_add(&usb_dev->dev, adapter);
 	client = i2c_new_scanned_device(adapter, &info, addresses, fl2000_bridge_detect);
 	if (IS_ERR(client)) {
-		ret = PTR_ERR(client);
+		ret = PTR_ERR_OR_ZERO(client);
 		devres_release(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
 		return ret;
 	}

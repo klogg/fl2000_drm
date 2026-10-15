@@ -464,7 +464,7 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 
 	regmap = regmap_init(&usb_dev->dev, NULL, usb_dev, &fl2000_regmap_config);
 	if (IS_ERR(regmap))
-		return PTR_ERR(regmap);
+		return PTR_ERR_OR_ZERO(regmap);
 
 	return 0;
 }

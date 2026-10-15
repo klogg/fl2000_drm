@@ -276,12 +276,12 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 			return ret;
 		ret = it66121_ddc_write(priv, IT66121_DDC_CONTROL, IT66121_DDC_MASTER_HOST,
 					EDID_DDC_ADDR, (u8)(offset - FL2000_EDID_FIFO_SKIP),
-					count + FL2000_EDID_FIFO_SKIP);
+					(u8)(count + FL2000_EDID_FIFO_SKIP));
 		if (ret)
 			return ret;
 		/* Status and FIFO are read-only; write them as zero without a pre-read. */
-		ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, segment, DDC_CMD_EDID_READ, 0,
-					0);
+		ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, (u8)segment, DDC_CMD_EDID_READ,
+					0, 0);
 		if (ret)
 			return ret;
 		/* Let the requested burst fill the FIFO before a status snapshot can
@@ -516,6 +516,7 @@ static int it66121_bridge_check(struct drm_bridge *bridge, struct drm_bridge_sta
 static int it66121_configure_hdmi(struct it66121_ctx *ctx, const struct drm_display_mode *mode)
 {
 	u8 buf[HDMI_INFOFRAME_SIZE(AVI)];
+	ssize_t packed_len;
 	int ret;
 
 	if (!ctx->connector->display_info.is_hdmi) {
@@ -530,10 +531,10 @@ static int it66121_configure_hdmi(struct it66121_ctx *ctx, const struct drm_disp
 		DRM_ERROR("Failed to setup AVI infoframe: %d\n", ret);
 		return ret;
 	}
-	ret = hdmi_avi_infoframe_pack(&ctx->hdmi_avi_infoframe, buf, sizeof(buf));
-	if (ret < 0) {
-		DRM_ERROR("Failed to pack infoframe: %d\n", ret);
-		return ret;
+	packed_len = hdmi_avi_infoframe_pack(&ctx->hdmi_avi_infoframe, buf, sizeof(buf));
+	if (packed_len < 0) {
+		DRM_ERROR("Failed to pack infoframe: %zd\n", packed_len);
+		return (int)packed_len;
 	}
 	ret = regmap_bulk_write(ctx->regmap, IT66121_AVIINFO_DB1_REG,
 				&buf[HDMI_INFOFRAME_HEADER_SIZE], HDMI_AVI_INFOFRAME_SIZE);
@@ -741,7 +742,7 @@ static int it66121_probe(struct i2c_client *client)
 	ctx = devm_drm_bridge_alloc(&client->dev, struct it66121_ctx, bridge,
 				    &it66121_bridge_funcs);
 	if (IS_ERR(ctx))
-		return PTR_ERR(ctx);
+		return PTR_ERR_OR_ZERO(ctx);
 	ctx->dev = &client->dev;
 	ctx->client = client;
 	ctx->adapter = client->adapter;
@@ -750,13 +751,13 @@ static int it66121_probe(struct i2c_client *client)
 	mutex_init(&ctx->lock);
 	ctx->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
 	if (IS_ERR(ctx->regmap))
-		return dev_err_probe(ctx->dev, PTR_ERR(ctx->regmap),
+		return dev_err_probe(ctx->dev, PTR_ERR_OR_ZERO(ctx->regmap),
 				     "Register map initialization failed\n");
 	for (unsigned int i = 0; i < ARRAY_SIZE(bytes); i++) {
 		ret = regmap_read(ctx->regmap, i, &value);
 		if (ret)
 			return dev_err_probe(ctx->dev, ret, "ID register %u read failed\n", i);
-		bytes[i] = value;
+		bytes[i] = (u8)value;
 	}
 	if (bytes[0] != 0x54 || bytes[1] != 0x49 || bytes[2] != 0x12 || (bytes[3] & 0x0f) != 0x06)
 		return -ENODEV;

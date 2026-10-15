@@ -78,7 +78,8 @@ static unsigned int fl2000_get_bytes_pix(enum usb_device_speed speed, unsigned i
 	/* Maximum bytes per pixel with maximum bandwidth */
 	if (!pixclock)
 		return 0;
-	bytes_pix = div_u64(max_bw, pixclock);
+	/* USB bandwidth is bounded by 1.25 GB/s, even at a one-Hz clock. */
+	bytes_pix = (unsigned int)div_u64(max_bw, pixclock);
 	switch (bytes_pix) {
 	case 0: /* Not enough */
 	case 1: /* RGB 332 not supported*/
@@ -100,7 +101,8 @@ static unsigned int fl2000_active_pixel_rate(const struct drm_display_mode *mode
 	u64 total = (u64)mode->htotal * mode->vtotal;
 	u64 pixels = (u64)mode->clock * 1000 * mode->hdisplay * mode->vdisplay;
 
-	return total ? div64_u64(pixels + total - 1, total) : 0;
+	/* Validated timings have active dimensions no larger than their totals. */
+	return total ? (unsigned int)div64_u64(pixels + total - 1, total) : 0;
 }
 
 static unsigned int fl2000_frame_bytes_pix(enum usb_device_speed speed,
@@ -164,7 +166,7 @@ static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_state *
 			continue;
 		crtc = drm_atomic_get_crtc_state(state, new_plane->crtc);
 		if (IS_ERR(crtc))
-			return PTR_ERR(crtc);
+			return PTR_ERR_OR_ZERO(crtc);
 		if (crtc->active)
 			crtc->mode_changed = true;
 	}
@@ -606,7 +608,7 @@ static int fl2000_drm_bind(struct device *master)
 	drm_if = __drm_dev_alloc(master, &fl2000_drm_driver, sizeof(*drm_if),
 				 offsetof(struct fl2000_drm_if, drm));
 	if (IS_ERR(drm_if))
-		return PTR_ERR(drm_if);
+		return PTR_ERR_OR_ZERO(drm_if);
 	drm = &drm_if->drm;
 	drm_if->usb_dev = usb_dev;
 	ret = drmm_mode_config_init(drm);
@@ -637,7 +639,7 @@ static int fl2000_drm_bind(struct device *master)
 		goto unbind;
 	connector = fl2000_bridge_connector_init(drm, &drm_if->pipe.encoder, drm_if->bridge.bridge);
 	if (IS_ERR(connector)) {
-		ret = PTR_ERR(connector);
+		ret = PTR_ERR_OR_ZERO(connector);
 		goto detach_encoder;
 	}
 	ret = drm_connector_attach_encoder(connector, &drm_if->pipe.encoder);
@@ -716,7 +718,7 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 
 	component_match_add(&usb_dev->dev, &match, fl2000_component_compare, usb_dev);
 	if (IS_ERR(match))
-		return PTR_ERR(match);
+		return PTR_ERR_OR_ZERO(match);
 	return component_master_add_with_match(&usb_dev->dev, &fl2000_master_ops, match);
 }
 

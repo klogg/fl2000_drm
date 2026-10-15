@@ -224,7 +224,7 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width, uns
 		if (bytes_pix == 2)
 			pixel = fl2000_rgb565(pixel);
 		for (unsigned int i = 0; i < bytes_pix; i++)
-			dst[offset++ ^ 4] = pixel >> (8 * i);
+			dst[offset++ ^ 4] = (u8)(pixel >> (8 * i));
 		line += 4;
 		width--;
 	}
@@ -258,9 +258,9 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width, uns
 		while (x < width && (offset & 3)) {
 			u32 pixel = get_unaligned_le32(line + x++ * 4);
 
-			dst[offset++ ^ 4] = pixel;
-			dst[offset++ ^ 4] = pixel >> 8;
-			dst[offset++ ^ 4] = pixel >> 16;
+			dst[offset++ ^ 4] = (u8)pixel;
+			dst[offset++ ^ 4] = (u8)(pixel >> 8);
+			dst[offset++ ^ 4] = (u8)(pixel >> 16);
 		}
 		for (; x + 4 <= width; x += 4, offset += 12) {
 			u32 a = get_unaligned_le32(line + x * 4);
@@ -276,9 +276,9 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width, uns
 		for (; x < width; x++) {
 			u32 pixel = get_unaligned_le32(line + x * 4);
 
-			dst[offset++ ^ 4] = pixel;
-			dst[offset++ ^ 4] = pixel >> 8;
-			dst[offset++ ^ 4] = pixel >> 16;
+			dst[offset++ ^ 4] = (u8)pixel;
+			dst[offset++ ^ 4] = (u8)(pixel >> 8);
+			dst[offset++ ^ 4] = (u8)(pixel >> 16);
 		}
 	}
 }
