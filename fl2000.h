@@ -137,8 +137,8 @@ int fl2000_init_clock(struct usb_device *usb_dev);
 int fl2000_afe_magic(struct usb_device *usb_dev);
 int fl2000_set_transfers(struct usb_device *usb_dev);
 int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix);
-int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timings);
-int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll);
+int fl2000_set_timings(struct usb_device *usb_dev, const struct fl2000_timings *timings);
+int fl2000_set_pll(struct usb_device *usb_dev, const struct fl2000_pll *pll);
 int fl2000_enable_interrupts(struct usb_device *usb_dev);
 int fl2000_check_interrupt(struct usb_device *usb_dev);
 int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data);
@@ -147,8 +147,8 @@ int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset,
 int fl2000_drm_init(struct usb_device *usb_dev);
 void fl2000_drm_cleanup(struct usb_device *usb_dev);
 /* ... and interface */
-void fl2000_drm_hotplug(struct usb_device *usb_dev);
-void fl2000_drm_set_polling(struct usb_device *usb_dev, bool polling);
+void fl2000_drm_hotplug(const struct usb_device *usb_dev);
+void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling);
 int fl2000_drm_suspend(struct usb_device *usb_dev);
 int fl2000_drm_resume(struct usb_device *usb_dev);
 

@@ -148,9 +148,9 @@ static struct drm_driver fl2000_drm_driver = {
 
 static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_state *state)
 {
-	struct drm_plane *plane;
-	struct drm_plane_state *old_plane;
-	struct drm_plane_state *new_plane;
+	const struct drm_plane *plane;
+	const struct drm_plane_state *old_plane;
+	const struct drm_plane_state *new_plane;
 	int i;
 
 	/* A format switch may change the USB pixel depth. Drain the old stream
@@ -330,7 +330,7 @@ static struct fl2000_drm_if *fl2000_pipe_device(struct drm_simple_display_pipe *
 static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_pipe *pipe,
 						      const struct drm_display_mode *mode)
 {
-	struct fl2000_drm_if *drm_if = fl2000_pipe_device(pipe);
+	const struct fl2000_drm_if *drm_if = fl2000_pipe_device(pipe);
 	struct drm_display_mode adjusted;
 	struct fl2000_pll pll;
 
@@ -511,7 +511,7 @@ static void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
 static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 				  struct drm_plane_state *old_state)
 {
-	struct drm_crtc_state *crtc = pipe->crtc.state;
+	const struct drm_crtc_state *crtc = pipe->crtc.state;
 	struct drm_rect damage;
 	int idx;
 	int ret;
@@ -548,7 +548,7 @@ static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
 	.destroy_plane_state = drm_gem_simple_kms_destroy_shadow_plane_state,
 };
 
-void fl2000_drm_hotplug(struct usb_device *usb_dev)
+void fl2000_drm_hotplug(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct drm_device *drm = READ_ONCE(device->drm);
@@ -566,7 +566,7 @@ void fl2000_drm_hotplug(struct usb_device *usb_dev)
 	}
 }
 
-void fl2000_drm_set_polling(struct usb_device *usb_dev, bool polling)
+void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct drm_device *drm = READ_ONCE(device->drm);

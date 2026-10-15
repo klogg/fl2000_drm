@@ -123,9 +123,9 @@ static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_dev,
 			      const char *client_name)
 {
-	struct i2c_adapter *adapter;
-	struct i2c_client *client;
-	struct device_driver *driver;
+	const struct i2c_adapter *adapter;
+	const struct i2c_client *client;
+	const struct device_driver *driver;
 
 	adapter = devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
 	if (!adapter)

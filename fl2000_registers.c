@@ -97,7 +97,7 @@ static const struct regmap_config fl2000_regmap_config = {
 	.use_single_write = true,
 };
 
-int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll)
+int fl2000_set_pll(struct usb_device *usb_dev, const struct fl2000_pll *pll)
 {
 	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -125,7 +125,7 @@ int fl2000_set_pll(struct usb_device *usb_dev, struct fl2000_pll *pll)
 	return 0;
 }
 
-int fl2000_set_timings(struct usb_device *usb_dev, struct fl2000_timings *timings)
+int fl2000_set_timings(struct usb_device *usb_dev, const struct fl2000_timings *timings)
 {
 	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -460,7 +460,7 @@ int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset,
 
 int fl2000_regmap_init(struct usb_device *usb_dev)
 {
-	struct regmap *regmap;
+	const struct regmap *regmap;
 
 	regmap = regmap_init(&usb_dev->dev, NULL, usb_dev, &fl2000_regmap_config);
 	if (IS_ERR(regmap))

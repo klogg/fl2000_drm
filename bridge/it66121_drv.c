@@ -440,7 +440,7 @@ static u32 *it66121_bridge_atomic_get_input_bus_fmts(struct drm_bridge *bridge,
 						     struct drm_connector_state *conn_state,
 						     u32 output_fmt, unsigned int *num_input_fmts)
 {
-	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
+	const struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	u32 *input_fmts;
 
 	*num_input_fmts = 0;
@@ -498,7 +498,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_
 static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_state *state)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
-	struct drm_crtc_state *crtc_state;
+	const struct drm_crtc_state *crtc_state;
 
 	mutex_lock(&ctx->lock);
 	ctx->connector = drm_atomic_get_new_connector_for_encoder(state, bridge->encoder);
@@ -527,7 +527,7 @@ static int it66121_bridge_check(struct drm_bridge *bridge, struct drm_bridge_sta
 				struct drm_crtc_state *crtc_state,
 				struct drm_connector_state *conn_state)
 {
-	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
+	const struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 
 	if (ctx->id == ID_IT6610) {
 		/* The IT6610 only supports these settings */
@@ -617,7 +617,7 @@ static enum drm_mode_status it66121_bridge_mode_valid(struct drm_bridge *bridge,
 						      const struct drm_display_info *info,
 						      const struct drm_display_mode *mode)
 {
-	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
+	const struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	unsigned long max_clock;
 
 	max_clock = (ctx->bus_width == 12) ? 74250 : 148500;
@@ -695,7 +695,7 @@ static void it66121_bridge_interrupt(struct drm_bridge *bridge)
 	int ret;
 	unsigned int val;
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
-	struct device *dev = ctx->dev;
+	const struct device *dev = ctx->dev;
 	enum drm_connector_status status;
 	bool event = false;
 
