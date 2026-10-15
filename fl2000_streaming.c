@@ -44,15 +44,15 @@ struct fl2000_stream {
 	unsigned int buf_size;
 	u32 bytes_pix;
 	const void *source;
-	unsigned int width, height, pitch;
+	unsigned int width;
+	unsigned int height;
+	unsigned int pitch;
 	u32 format;
 	bool enabled;
 };
 
 static void fl2000_free_frame(struct usb_device *usb_dev, struct fl2000_frame *frame)
 {
-	unsigned int i;
-
 	if (frame->dma_sgt) {
 		usb_free_noncoherent(usb_dev, frame->size, frame->vaddr, DMA_TO_DEVICE,
 				     frame->dma_sgt);
@@ -61,7 +61,7 @@ static void fl2000_free_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 	}
 	vunmap(frame->vaddr);
 	if (frame->pages) {
-		for (i = 0; i < frame->nr_pages; i++)
+		for (unsigned int i = 0; i < frame->nr_pages; i++)
 			if (frame->pages[i])
 				__free_page(frame->pages[i]);
 	}
@@ -72,8 +72,6 @@ static void fl2000_free_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 static int fl2000_alloc_frame(struct usb_device *usb_dev, struct fl2000_frame *frame,
 			      unsigned int size)
 {
-	unsigned int i;
-
 	frame->size = size;
 	frame->vaddr = usb_alloc_noncoherent(usb_dev, size, GFP_KERNEL, &frame->dma, DMA_TO_DEVICE,
 					     &frame->dma_sgt);
@@ -86,7 +84,7 @@ static int fl2000_alloc_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 	frame->pages = kcalloc(frame->nr_pages, sizeof(*frame->pages), GFP_KERNEL);
 	if (!frame->pages)
 		return -ENOMEM;
-	for (i = 0; i < frame->nr_pages; i++) {
+	for (unsigned int i = 0; i < frame->nr_pages; i++) {
 		frame->pages[i] = alloc_page(GFP_KERNEL | __GFP_ZERO);
 		if (!frame->pages[i])
 			return -ENOMEM;
@@ -102,7 +100,8 @@ static int fl2000_submit_transfer(struct fl2000_transfer *transfer)
 	struct fl2000_frame *frame = stream->latest;
 	struct urb *urb = transfer->urb;
 	struct scatterlist *sg;
-	unsigned int i, remaining = stream->buf_size;
+	unsigned int i;
+	unsigned int remaining = stream->buf_size;
 	int ret;
 
 	if (!stream->enabled || !frame)
@@ -170,27 +169,25 @@ static void fl2000_data_completion(struct urb *urb)
 static void fl2000_stop_stream(struct fl2000_stream *stream)
 {
 	unsigned long flags;
-	unsigned int i;
 
 	spin_lock_irqsave(&stream->lock, flags);
 	stream->enabled = false;
 	spin_unlock_irqrestore(&stream->lock, flags);
-	for (i = 0; i < FL2000_QUEUE_DEPTH; i++)
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++)
 		usb_kill_urb(stream->transfers[i].urb);
 }
 
 static void fl2000_streaming_release(struct device *dev, void *res)
 {
 	struct fl2000_stream *stream = res;
-	unsigned int i;
 
 	mutex_lock(&stream->mutex);
 	fl2000_stop_stream(stream);
-	for (i = 0; i < FL2000_QUEUE_DEPTH; i++) {
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		usb_free_urb(stream->transfers[i].urb);
 		sg_free_table(&stream->transfers[i].sgt);
 	}
-	for (i = 0; i < FL2000_FRAME_COUNT; i++)
+	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		fl2000_free_frame(stream->usb_dev, &stream->frames[i]);
 	mutex_unlock(&stream->mutex);
 }
@@ -223,11 +220,10 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width, uns
 	/* Scalar prefix reaches a complete wire word, including cropped rows. */
 	while (width && (offset & 7)) {
 		u32 pixel = get_unaligned_le32(line);
-		unsigned int i;
 
 		if (bytes_pix == 2)
 			pixel = fl2000_rgb565(pixel);
-		for (i = 0; i < bytes_pix; i++)
+		for (unsigned int i = 0; i < bytes_pix; i++)
 			dst[offset++ ^ 4] = pixel >> (8 * i);
 		line += 4;
 		width--;
@@ -291,10 +287,9 @@ static void fl2000_convert_frame(u8 *dst, const void *src, unsigned int height, 
 				 unsigned int pitch, unsigned int bytes_pix, unsigned int buf_size)
 {
 	unsigned int size = width * height * bytes_pix;
-	unsigned int y;
 
 	memset(dst + (size & ~7U), 0, buf_size - (size & ~7U));
-	for (y = 0; y < height;) {
+	for (unsigned int y = 0; y < height;) {
 		unsigned int rows = 1;
 
 		/* Batch contiguous rows without extending a preparation span. */
@@ -317,7 +312,6 @@ static void fl2000_reorder_line(u8 *dst, const u8 *line, unsigned int remaining,
 	while (remaining >= 8) {
 		unsigned int prepared = fl2000_frame_reorder(dst + offset, line, remaining);
 		unsigned int count = min_t(unsigned int, remaining & ~7U, 65536);
-		unsigned int i;
 
 		if (prepared) {
 			line += prepared;
@@ -327,7 +321,7 @@ static void fl2000_reorder_line(u8 *dst, const u8 *line, unsigned int remaining,
 			continue;
 		}
 
-		for (i = 0; i < count; i += 8) {
+		for (unsigned int i = 0; i < count; i += 8) {
 			u64 word = get_unaligned_le64(line + i);
 
 			put_unaligned_le64((word << 32) | (word >> 32), dst + offset + i);
@@ -348,14 +342,13 @@ static void fl2000_reorder_frame(u8 *dst, const void *src, unsigned int height, 
 {
 	unsigned int size = width * height * bytes_pix;
 	unsigned int row_bytes = width * bytes_pix;
-	unsigned int y;
 
 	memset(dst + (size & ~7U), 0, buf_size - (size & ~7U));
 	if (pitch == row_bytes) {
 		row_bytes = size;
 		height = 1;
 	}
-	for (y = 0; y < height; y++) {
+	for (unsigned int y = 0; y < height; y++) {
 		fl2000_reorder_line(dst, (const u8 *)src + (size_t)y * pitch, row_bytes,
 				    y * row_bytes);
 		cond_resched();
@@ -393,9 +386,8 @@ static void fl2000_convert_damage(u8 *dst, const void *src, unsigned int width, 
 				  const struct drm_rect *damage)
 {
 	unsigned int count = damage->x2 - damage->x1;
-	int y;
 
-	for (y = damage->y1; y < damage->y2; y++) {
+	for (int y = damage->y1; y < damage->y2; y++) {
 		const u8 *line = (const u8 *)src + (size_t)y * pitch + damage->x1 * source_bytes;
 		unsigned int offset = (y * width + damage->x1) * bytes_pix;
 
@@ -414,7 +406,7 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
 	struct fl2000_frame *frame = NULL;
 	struct drm_rect full = { 0, 0, width, height };
-	unsigned int size, i;
+	unsigned int size;
 	unsigned int source_bytes = fl2000_source_bytes_pix(format);
 	unsigned long flags;
 	int ret = 0;
@@ -443,7 +435,7 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 	/* A different crop, mapping, layout or format invalidates every cached image. */
 	if (stream->source != src || stream->width != width || stream->height != height ||
 	    stream->pitch != pitch || stream->format != format) {
-		for (i = 0; i < FL2000_FRAME_COUNT; i++)
+		for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 			stream->frames[i].valid = false;
 		stream->source = src;
 		stream->width = width;
@@ -452,10 +444,10 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 		stream->format = format;
 	}
 	/* Preserve damage even if every candidate is currently in flight. */
-	for (i = 0; i < FL2000_FRAME_COUNT; i++)
+	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		fl2000_damage_add(&stream->frames[i].dirty, damage);
 	spin_lock_irqsave(&stream->lock, flags);
-	for (i = 0; i < FL2000_FRAME_COUNT; i++) {
+	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) {
 		if (!stream->frames[i].users && &stream->frames[i] != stream->latest) {
 			frame = &stream->frames[i];
 			break;
@@ -492,7 +484,7 @@ out:
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
-	unsigned int size, i;
+	unsigned int size;
 	bool needs_sg = false;
 	int ret = 0;
 
@@ -506,7 +498,7 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 	fl2000_stop_stream(stream);
 	stream->latest = NULL;
 	stream->source = NULL;
-	for (i = 0; i < FL2000_FRAME_COUNT; i++) {
+	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) {
 		stream->frames[i].valid = false;
 		stream->frames[i].dirty = (struct drm_rect){ 0 };
 	}
@@ -515,13 +507,13 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 		goto out;
 	stream->latest = NULL;
 	stream->buf_size = 0;
-	for (i = 0; i < FL2000_FRAME_COUNT; i++)
+	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		fl2000_free_frame(stream->usb_dev, &stream->frames[i]);
-	for (i = 0; i < FL2000_QUEUE_DEPTH; i++) {
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		sg_free_table(&stream->transfers[i].sgt);
 		stream->transfers[i].sg_frame = NULL;
 	}
-	for (i = 0; i < FL2000_FRAME_COUNT; i++) {
+	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) {
 		ret = fl2000_alloc_frame(usb_dev, &stream->frames[i], size);
 		if (ret)
 			break;
@@ -532,13 +524,13 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 
 		if (pages > usb_dev->bus->sg_tablesize)
 			ret = -E2BIG;
-		for (i = 0; !ret && i < FL2000_QUEUE_DEPTH; i++)
+		for (unsigned int i = 0; !ret && i < FL2000_QUEUE_DEPTH; i++)
 			ret = sg_alloc_table(&stream->transfers[i].sgt, pages, GFP_KERNEL);
 	}
 	if (ret) {
-		for (i = 0; i < FL2000_FRAME_COUNT; i++)
+		for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 			fl2000_free_frame(stream->usb_dev, &stream->frames[i]);
-		for (i = 0; i < FL2000_QUEUE_DEPTH; i++)
+		for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++)
 			sg_free_table(&stream->transfers[i].sgt);
 	} else {
 		stream->buf_size = size;
@@ -552,7 +544,6 @@ int fl2000_streaming_enable(struct usb_device *usb_dev)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
 	unsigned long flags;
-	unsigned int i;
 	bool enabled;
 	int ret = 0;
 
@@ -575,7 +566,7 @@ int fl2000_streaming_enable(struct usb_device *usb_dev)
 		goto out;
 	spin_lock_irqsave(&stream->lock, flags);
 	stream->enabled = true;
-	for (i = 0; i < FL2000_QUEUE_DEPTH; i++) {
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		ret = fl2000_submit_transfer(&stream->transfers[i]);
 		if (ret)
 			break;
@@ -605,7 +596,6 @@ int fl2000_streaming_create(struct usb_interface *interface)
 	struct usb_interface *control = usb_ifnum_to_if(usb_dev, FL2000_USBIF_AVCONTROL);
 	struct usb_endpoint_descriptor *ep;
 	struct fl2000_stream *stream;
-	unsigned int i;
 	int ret;
 
 	if (!control || usb_find_bulk_out_endpoint(control->cur_altsetting, &ep) ||
@@ -617,7 +607,7 @@ int fl2000_streaming_create(struct usb_interface *interface)
 	stream->usb_dev = usb_dev;
 	mutex_init(&stream->mutex);
 	spin_lock_init(&stream->lock);
-	for (i = 0; i < FL2000_QUEUE_DEPTH; i++) {
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		struct fl2000_transfer *transfer = &stream->transfers[i];
 
 		transfer->stream = stream;

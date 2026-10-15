@@ -149,10 +149,9 @@ static int fl2000_bridge_detect(struct i2c_adapter *adapter, unsigned short addr
 {
 	/* i2c_new_scanned_device expects 1 for a match, 0 otherwise. */
 	u8 bytes[4];
-	unsigned int i;
 	int ret;
 
-	for (i = 0; i < sizeof(bytes); i++) {
+	for (unsigned int i = 0; i < sizeof(bytes); i++) {
 		u8 reg = i;
 		struct i2c_msg msgs[] = {
 			{ .addr = addr, .len = 1, .buf = &reg },

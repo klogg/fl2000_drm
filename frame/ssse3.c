@@ -27,10 +27,11 @@ void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned 
 {
 	const v16qi rgb = { 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, -1, -1, -1, -1 };
 	const v16qi wire = { 4, 5, 6, 7, 0, 1, 2, 3, 12, 13, 14, 15, 8, 9, 10, 11 };
-	unsigned int i;
 
-	for (i = 0; i < pixels; i += 8, src += 32) {
-		v16qi a = load(src), b = load(src + 16), out;
+	for (unsigned int i = 0; i < pixels; i += 8, src += 32) {
+		v16qi a = load(src);
+		v16qi b = load(src + 16);
+		v16qi out;
 
 		if (bytes_pix == 3) {
 			a = __builtin_ia32_pshufb128(a, rgb);
@@ -43,7 +44,8 @@ void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned 
 			__builtin_memcpy(dst + 16, &out, 8);
 			dst += 24;
 		} else {
-			v4su pa = (v4su)a, pb = (v4su)b;
+			v4su pa = (v4su)a;
+			v4su pb = (v4su)b;
 			const v4su bias = { 32768, 32768, 32768, 32768 };
 			const v8hu sign = { 0x8000, 0x8000, 0x8000, 0x8000,
 					    0x8000, 0x8000, 0x8000, 0x8000 };

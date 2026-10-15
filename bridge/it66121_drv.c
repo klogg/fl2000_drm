@@ -641,7 +641,8 @@ static enum drm_connector_status it66121_bridge_detect(struct drm_bridge *bridge
 
 	enum drm_connector_status status;
 	unsigned int value;
-	int idx, ret;
+	int idx;
+	int ret;
 
 	if (!drm_dev_enter(bridge->dev, &idx))
 		return connector_status_disconnected;

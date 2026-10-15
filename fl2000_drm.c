@@ -149,7 +149,8 @@ static struct drm_driver fl2000_drm_driver = {
 static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_state *state)
 {
 	struct drm_plane *plane;
-	struct drm_plane_state *old_plane, *new_plane;
+	struct drm_plane_state *old_plane;
+	struct drm_plane_state *new_plane;
 	int i;
 
 	/* A format switch may change the USB pixel depth. Drain the old stream
@@ -401,7 +402,8 @@ static int fl2000_copy_frame(struct drm_simple_display_pipe *pipe, struct drm_pl
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
 	struct drm_rect visible;
 	size_t offset;
-	int idx, ret;
+	int idx;
+	int ret;
 
 	if (!fb || !drm_dev_enter(&drm_if->drm, &idx))
 		return -ENODEV;
@@ -484,7 +486,8 @@ static void fl2000_display_enable(struct drm_simple_display_pipe *pipe, struct d
 				  struct drm_plane_state *plane)
 {
 	struct fl2000_drm_if *drm_if = fl2000_pipe_device(pipe);
-	int idx, ret;
+	int idx;
+	int ret;
 
 	if (!drm_dev_enter(&drm_if->drm, &idx))
 		return;
@@ -510,7 +513,8 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 {
 	struct drm_crtc_state *crtc = pipe->crtc.state;
 	struct drm_rect damage;
-	int idx, ret;
+	int idx;
+	int ret;
 
 	/* The enable callback configures and copies the first frame on modesets. */
 	if (!crtc->active || crtc->mode_changed || !pipe->plane.state->fb)
