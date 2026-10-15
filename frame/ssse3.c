@@ -4,7 +4,6 @@
 
 #include "ssse3.h"
 
-typedef long long v2di __attribute__((vector_size(16)));
 typedef char v16qi __attribute__((vector_size(16)));
 typedef int v4si __attribute__((vector_size(16)));
 typedef unsigned int v4su __attribute__((vector_size(16)));
@@ -36,10 +35,14 @@ void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned 
 		if (bytes_pix == 3) {
 			a = __builtin_ia32_pshufb128(a, rgb);
 			b = __builtin_ia32_pshufb128(b, rgb);
-			out = a | (v16qi)__builtin_ia32_pslldqi128((v2di)b, 96);
+			const v16qi zero = { 0 };
+
+			out = a | __builtin_shufflevector(b, zero, 16, 17, 18, 19, 20, 21, 22, 23,
+							  24, 25, 26, 27, 0, 1, 2, 3);
 			out = __builtin_ia32_pshufb128(out, wire);
 			store(dst, out);
-			out = (v16qi)__builtin_ia32_psrldqi128((v2di)b, 32);
+			out = __builtin_shufflevector(b, zero, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+						      15, 16, 17, 18, 19);
 			out = __builtin_ia32_pshufb128(out, wire);
 			__builtin_memcpy(dst + 16, &out, 8);
 			dst += 24;
