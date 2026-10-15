@@ -399,6 +399,20 @@ static void fl2000_convert_damage(u8 *dst, const void *src, unsigned int width, 
 	}
 }
 
+static bool fl2000_frame_layout_valid(const struct fl2000_stream *stream, const void *src,
+				      unsigned int height, unsigned int width, unsigned int pitch,
+				      unsigned int source_bytes)
+{
+	unsigned int size;
+
+	return src && width && height && width <= INT_MAX && height <= INT_MAX && source_bytes &&
+	       width <= pitch / source_bytes &&
+	       (source_bytes == 4 || source_bytes == stream->bytes_pix) &&
+	       !check_mul_overflow(width, height, &size) &&
+	       !check_mul_overflow(size, stream->bytes_pix, &size) && stream->bytes_pix &&
+	       ALIGN(size, 8) == stream->buf_size;
+}
+
 int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int height,
 			    unsigned int width, unsigned int pitch, u32 format,
 			    const struct drm_rect *damage)
@@ -406,7 +420,6 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
 	struct fl2000_frame *frame = NULL;
 	struct drm_rect full = { 0, 0, width, height };
-	unsigned int size;
 	unsigned int source_bytes = fl2000_source_bytes_pix(format);
 	unsigned long flags;
 	int ret = 0;
@@ -414,12 +427,7 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 	if (!stream)
 		return -ENODEV;
 	mutex_lock(&stream->mutex);
-	if (!src || !width || !height || width > INT_MAX || height > INT_MAX || !source_bytes ||
-	    width > pitch / source_bytes ||
-	    (source_bytes != 4 && source_bytes != stream->bytes_pix) ||
-	    check_mul_overflow(width, height, &size) ||
-	    check_mul_overflow(size, stream->bytes_pix, &size) || !stream->bytes_pix ||
-	    ALIGN(size, 8) != stream->buf_size) {
+	if (!fl2000_frame_layout_valid(stream, src, height, width, pitch, source_bytes)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -481,6 +489,21 @@ out:
 	return ret;
 }
 
+static int fl2000_alloc_transfer_tables(struct fl2000_stream *stream, unsigned int size)
+{
+	unsigned int pages = DIV_ROUND_UP(size, PAGE_SIZE);
+	int ret;
+
+	if (pages > stream->usb_dev->bus->sg_tablesize)
+		return -E2BIG;
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
+		ret = sg_alloc_table(&stream->transfers[i].sgt, pages, GFP_KERNEL);
+		if (ret)
+			return ret;
+	}
+	return 0;
+}
+
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
@@ -519,14 +542,8 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 			break;
 		needs_sg = needs_sg || !stream->frames[i].dma_sgt;
 	}
-	if (!ret && needs_sg) {
-		unsigned int pages = DIV_ROUND_UP(size, PAGE_SIZE);
-
-		if (pages > usb_dev->bus->sg_tablesize)
-			ret = -E2BIG;
-		for (unsigned int i = 0; !ret && i < FL2000_QUEUE_DEPTH; i++)
-			ret = sg_alloc_table(&stream->transfers[i].sgt, pages, GFP_KERNEL);
-	}
+	if (!ret && needs_sg)
+		ret = fl2000_alloc_transfer_tables(stream, size);
 	if (ret) {
 		for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 			fl2000_free_frame(stream->usb_dev, &stream->frames[i]);

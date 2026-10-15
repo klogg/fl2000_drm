@@ -841,6 +841,7 @@ parts += [
         "fl2000_source_bytes_pix",
         "fl2000_damage_add",
         "fl2000_convert_damage",
+        "fl2000_frame_layout_valid",
         "fl2000_streaming_update",
         "fl2000_submit_transfer",
         "fl2000_data_completion",
@@ -854,6 +855,7 @@ parts += [
     for name in (
         "fl2000_i2c_read_dword",
         "fl2000_i2c_write_dword",
+        "fl2000_i2c_xfer_valid",
         "fl2000_i2c_xfer",
     )
 ]

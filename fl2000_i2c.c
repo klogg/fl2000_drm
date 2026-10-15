@@ -24,6 +24,23 @@ static inline int fl2000_i2c_write_dword(struct usb_device *usb_dev, u16 addr, u
 	return fl2000_i2c_dword(usb_dev, false, addr, offset, data);
 }
 
+static bool fl2000_i2c_xfer_valid(const struct i2c_msg *msgs, int num)
+{
+	bool read;
+
+	if (!msgs || (num != 1 && num != 2) || !msgs[0].buf || msgs[0].flags || msgs[0].addr > 0x7f)
+		return false;
+	read = num == 2;
+	if (read) {
+		if (msgs[0].len != 1 || !msgs[1].buf || (msgs[1].len != 1 && msgs[1].len != 4) ||
+		    msgs[1].flags != I2C_M_RD || msgs[1].addr != msgs[0].addr)
+			return false;
+	} else if (msgs[0].len != 2 && msgs[0].len != 5) {
+		return false;
+	}
+	return true;
+}
+
 static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num)
 {
 	int ret;
@@ -36,16 +53,9 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 		u8 b[4];
 	} data;
 
-	if (!msgs || (num != 1 && num != 2) || !msgs[0].buf || msgs[0].flags || msgs[0].addr > 0x7f)
+	if (!fl2000_i2c_xfer_valid(msgs, num))
 		return -EOPNOTSUPP;
 	read = num == 2;
-	if (read) {
-		if (msgs[0].len != 1 || !msgs[1].buf || (msgs[1].len != 1 && msgs[1].len != 4) ||
-		    msgs[1].flags != I2C_M_RD || msgs[1].addr != msgs[0].addr)
-			return -EOPNOTSUPP;
-	} else if (msgs[0].len != 2 && msgs[0].len != 5) {
-		return -EOPNOTSUPP;
-	}
 	addr = msgs[0].addr;
 	offset = msgs[0].buf[0] & I2C_XFER_ADDR_MASK;
 	idx = msgs[0].buf[0] - offset;

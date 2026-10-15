@@ -37,6 +37,26 @@ static void fl2000_destroy_interface(struct usb_interface *interface)
 	}
 }
 
+/* The caller serializes control-interface setup with the device mutex. */
+static int fl2000_control_init(struct usb_device *usb_dev)
+{
+	int ret;
+
+	ret = fl2000_regmap_init(usb_dev);
+	if (ret)
+		return ret;
+	ret = fl2000_reset(usb_dev);
+	if (!ret)
+		ret = fl2000_init_clock(usb_dev);
+	if (!ret)
+		ret = fl2000_usb_magic(usb_dev);
+	if (!ret)
+		ret = fl2000_i2c_init(usb_dev);
+	if (ret)
+		fl2000_regmap_cleanup(usb_dev);
+	return ret;
+}
+
 static int fl2000_probe(struct usb_interface *interface, const struct usb_device_id *id)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
@@ -64,18 +84,7 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 	}
 	switch (ifnum) {
 	case FL2000_USBIF_AVCONTROL:
-		ret = fl2000_regmap_init(usb_dev);
-		if (!ret) {
-			ret = fl2000_reset(usb_dev);
-			if (!ret)
-				ret = fl2000_init_clock(usb_dev);
-			if (!ret)
-				ret = fl2000_usb_magic(usb_dev);
-			if (!ret)
-				ret = fl2000_i2c_init(usb_dev);
-			if (ret)
-				fl2000_regmap_cleanup(usb_dev);
-		}
+		ret = fl2000_control_init(usb_dev);
 		break;
 	case FL2000_USBIF_STREAMING:
 		ret = fl2000_streaming_create(interface);
