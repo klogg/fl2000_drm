@@ -343,8 +343,8 @@ static enum drm_mode_status fl2000_crtc_mode_valid(struct drm_crtc *crtc,
 		       MODE_CLOCK_HIGH;
 }
 
-static int fl2000_display_check(const struct fl2000_drm_if *drm_if, struct drm_plane_state *plane,
-				struct drm_crtc_state *crtc)
+static int fl2000_display_check(const struct fl2000_drm_if *drm_if,
+				const struct drm_plane_state *plane, struct drm_crtc_state *crtc)
 {
 	struct fl2000_pll pll;
 	int ret;
@@ -542,7 +542,7 @@ static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomi
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
 	const struct drm_crtc_state *crtc = drm_atomic_get_new_crtc_state(state, &drm_if->crtc);
-	struct drm_plane_state *old_plane = drm_atomic_get_old_plane_state(state, plane);
+	const struct drm_plane_state *old_plane = drm_atomic_get_old_plane_state(state, plane);
 	struct drm_plane_state *new_plane = drm_atomic_get_new_plane_state(state, plane);
 	struct drm_rect damage;
 	int idx;

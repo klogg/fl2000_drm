@@ -165,7 +165,7 @@ static struct drm_plane_state *drm_atomic_get_old_plane_state(struct drm_atomic_
 { (void)plane;return state->old_plane; }
 static bool damage_merged;
 static struct drm_rect merged_damage;
-static bool drm_atomic_helper_damage_merged(struct drm_plane_state *old,struct drm_plane_state *new,struct drm_rect *rect)
+static bool drm_atomic_helper_damage_merged(const struct drm_plane_state *old,const struct drm_plane_state *new,struct drm_rect *rect)
 { (void)old;(void)new;*rect=merged_damage;return damage_merged; }
 static struct drm_crtc_state *drm_atomic_get_new_crtc_state(struct drm_atomic_state *state,struct drm_crtc *crtc)
 { (void)crtc;return state->crtc; }

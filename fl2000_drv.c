@@ -56,7 +56,8 @@ static int fl2000_control_init(struct usb_device *usb_dev)
 }
 
 /* Clear every callback's data before synchronous sibling disconnects. */
-static void fl2000_release_interfaces(struct fl2000_device *device, struct usb_interface *origin)
+static void fl2000_release_interfaces(struct fl2000_device *device,
+				      const struct usb_interface *origin)
 {
 	struct usb_interface *interfaces[FL2000_USBIF_INTERRUPT + 1];
 	unsigned int i;
@@ -74,8 +75,6 @@ static void fl2000_release_interfaces(struct fl2000_device *device, struct usb_i
 
 static void fl2000_cleanup(struct usb_device *usb_dev, struct fl2000_device *device)
 {
-	unsigned int i;
-
 	if (device->master_registered) {
 		fl2000_drm_cleanup(usb_dev);
 		device->master_registered = false;
@@ -84,7 +83,7 @@ static void fl2000_cleanup(struct usb_device *usb_dev, struct fl2000_device *dev
 		fl2000_disable_interrupt(usb_dev);
 	if (device->active_interfaces & BIT(FL2000_USBIF_STREAMING))
 		fl2000_streaming_disable(usb_dev);
-	for (i = ARRAY_SIZE(device->interfaces); i-- > 0;)
+	for (unsigned int i = ARRAY_SIZE(device->interfaces); i-- > 0;)
 		if (device->active_interfaces & BIT(i))
 			fl2000_destroy_interface(device->interfaces[i]);
 	device->active_interfaces = 0;
@@ -96,7 +95,6 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_device *device;
 	struct usb_interface *sibling;
-	unsigned int i;
 	int ret;
 
 	if (usb_dev->speed < USB_SPEED_HIGH ||
@@ -115,7 +113,7 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 	device->interfaces[FL2000_USBIF_AVCONTROL] = interface;
 	usb_set_intfdata(interface, device);
 	/* Own the complete device before changing endpoints or hardware state. */
-	for (i = FL2000_USBIF_STREAMING; i <= FL2000_USBIF_INTERRUPT; i++) {
+	for (unsigned int i = FL2000_USBIF_STREAMING; i <= FL2000_USBIF_INTERRUPT; i++) {
 		sibling = usb_ifnum_to_if(usb_dev, i);
 		ret = usb_driver_claim_interface(&fl2000_driver, sibling, device);
 		if (ret)
