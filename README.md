@@ -81,6 +81,11 @@ as artifacts, and fail on existing style violations. SonarCloud uses a clean 7.0
 build and its compilation database; analysis is skipped for fork pull requests
 or when `SONAR_TOKEN` is missing.
 
+All SonarCloud configuration lives in `.github/workflows/sonarcloud.yaml`,
+including project identity, source/test scope, server URL, and the compilation
+database path. Authentication uses the `SONAR_TOKEN` secret. No separate project
+properties file or fixed project version is used.
+
 **NOTE:** This revision targets Linux 7.0. Build tools and headers matching the
 kernel are required. Both modules have been compile-tested on x86_64 against
 Ubuntu kernels 7.0.0-34 and 7.0.0-38. Older kernels require a separate API port.

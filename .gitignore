@@ -23,6 +23,8 @@ spelling.txt
 
 /.qemu-build/
 /.cache/
+/.sonar/
+/.scannerwork/
 
 __pycache__/
 *.pyc

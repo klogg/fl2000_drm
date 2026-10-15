@@ -28,6 +28,7 @@ jobs:
     timeout-minutes: 30
     env:
       BUILD_WRAPPER_OUT_DIR: .sonar
+      SONAR_HOST_URL: https://sonarcloud.io
     steps:
       - name: Check analysis configuration
         id: configuration
@@ -68,5 +69,15 @@ jobs:
       - name: Run SonarQube Cloud analysis
         if: steps.configuration.outputs.enabled == 'true'
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        with:
+          args: >-
+            -Dsonar.projectKey=klogg_fl2000_drm
+            -Dsonar.organization=klogg
+            -Dsonar.projectName=fl2000_drm
+            -Dsonar.sources=.
+            -Dsonar.tests=tests
+            -Dsonar.exclusions=tests/**,.github/**,**/*.mod.c
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.cfamily.compile-commands=${{ env.BUILD_WRAPPER_OUT_DIR }}/compile_commands.json
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
