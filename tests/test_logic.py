@@ -909,6 +909,7 @@ parts += [
         "fl2000_damage_add",
         "fl2000_convert_damage",
         "fl2000_frame_layout_valid",
+        "fl2000_find_free_frame",
         "fl2000_streaming_update",
         "fl2000_submit_transfer",
         "fl2000_data_completion",

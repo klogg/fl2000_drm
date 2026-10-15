@@ -413,12 +413,29 @@ static bool fl2000_frame_layout_valid(const struct fl2000_stream *stream, const 
 	       ALIGN(size, 8) == stream->buf_size;
 }
 
+/* The caller holds stream->mutex; the spinlock protects URB frame references. */
+static struct fl2000_frame *fl2000_find_free_frame(struct fl2000_stream *stream)
+{
+	struct fl2000_frame *frame = NULL;
+	unsigned long flags;
+
+	spin_lock_irqsave(&stream->lock, flags);
+	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) {
+		if (!stream->frames[i].users && &stream->frames[i] != stream->latest) {
+			frame = &stream->frames[i];
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&stream->lock, flags);
+	return frame;
+}
+
 int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int height,
 			    unsigned int width, unsigned int pitch, u32 format,
 			    const struct drm_rect *damage)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
-	struct fl2000_frame *frame = NULL;
+	struct fl2000_frame *frame;
 	struct drm_rect full = { 0, 0, width, height };
 	unsigned int source_bytes = fl2000_source_bytes_pix(format);
 	unsigned long flags;
@@ -454,14 +471,7 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 	/* Preserve damage even if every candidate is currently in flight. */
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		fl2000_damage_add(&stream->frames[i].dirty, damage);
-	spin_lock_irqsave(&stream->lock, flags);
-	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) {
-		if (!stream->frames[i].users && &stream->frames[i] != stream->latest) {
-			frame = &stream->frames[i];
-			break;
-		}
-	}
-	spin_unlock_irqrestore(&stream->lock, flags);
+	frame = fl2000_find_free_frame(stream);
 	if (!frame) {
 		ret = -EBUSY;
 		goto out;
