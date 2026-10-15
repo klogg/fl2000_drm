@@ -169,6 +169,7 @@ names = (
     "it66121_is_hpd_detect",
     "it66121_set_mute",
     "it66121_restore_interrupts",
+    "it66121_configure_hdmi",
     "it66121_bridge_mode_set",
     "it66121_bridge_enable",
     "it66121_bridge_disable",

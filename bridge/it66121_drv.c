@@ -103,61 +103,33 @@ static int it66121_configure_input(struct it66121_ctx *ctx)
  */
 static int it66121_configure_afe(struct it66121_ctx *ctx, const struct drm_display_mode *mode)
 {
+	bool high_clock = mode->clock > IT66121_AFE_CLK_HIGH;
 	int ret;
 
 	ret = regmap_write(ctx->regmap, IT66121_AFE_DRV_REG, IT66121_AFE_DRV_RST);
 	if (ret)
 		return ret;
 
-	if (mode->clock > IT66121_AFE_CLK_HIGH) {
-		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG,
-					IT66121_AFE_XP_GAINBIT | IT66121_AFE_XP_ENO,
-					IT66121_AFE_XP_GAINBIT);
+	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG,
+				IT66121_AFE_XP_GAINBIT | IT66121_AFE_XP_ENO,
+				high_clock ? IT66121_AFE_XP_GAINBIT : IT66121_AFE_XP_ENO);
+	if (ret)
+		return ret;
+	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
+				IT66121_AFE_IP_GAINBIT | IT66121_AFE_IP_ER0,
+				high_clock ? IT66121_AFE_IP_GAINBIT : IT66121_AFE_IP_ER0);
+	if (ret)
+		return ret;
+	if (ctx->id == ID_IT66121 || ctx->id == ID_IT66122) {
+		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG, IT66121_AFE_IP_EC1,
+					high_clock ? 0 : IT66121_AFE_IP_EC1);
 		if (ret)
 			return ret;
-
-		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
-					IT66121_AFE_IP_GAINBIT | IT66121_AFE_IP_ER0,
-					IT66121_AFE_IP_GAINBIT);
+		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_EC1_REG,
+					IT66121_AFE_XP_EC1_LOWCLK,
+					high_clock ? 0x80 : IT66121_AFE_XP_EC1_LOWCLK);
 		if (ret)
 			return ret;
-
-		if (ctx->id == ID_IT66121 || ctx->id == ID_IT66122) {
-			ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG, IT66121_AFE_IP_EC1,
-						0);
-			if (ret)
-				return ret;
-
-			ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_EC1_REG,
-						IT66121_AFE_XP_EC1_LOWCLK, 0x80);
-			if (ret)
-				return ret;
-		}
-	} else {
-		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG,
-					IT66121_AFE_XP_GAINBIT | IT66121_AFE_XP_ENO,
-					IT66121_AFE_XP_ENO);
-		if (ret)
-			return ret;
-
-		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
-					IT66121_AFE_IP_GAINBIT | IT66121_AFE_IP_ER0,
-					IT66121_AFE_IP_ER0);
-		if (ret)
-			return ret;
-
-		if (ctx->id == ID_IT66121 || ctx->id == ID_IT66122) {
-			ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG, IT66121_AFE_IP_EC1,
-						IT66121_AFE_IP_EC1);
-			if (ret)
-				return ret;
-
-			ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_EC1_REG,
-						IT66121_AFE_XP_EC1_LOWCLK,
-						IT66121_AFE_XP_EC1_LOWCLK);
-			if (ret)
-				return ret;
-		}
 	}
 
 	/* Clear reset flags */
@@ -225,12 +197,10 @@ static int it66121_ddc_collect(struct it66121_ctx *priv, u8 *buf, size_t len)
 				return -EIO;
 			buf[received++] = word[3];
 		}
-		if (word[2] & BIT(7)) {
-			if (!buf || received == len)
-				return 0;
-			if (word[2] & BIT(1))
-				return -EIO;
-		}
+		if ((word[2] & BIT(7)) && (!buf || received == len))
+			return 0;
+		if ((word[2] & BIT(7)) && (word[2] & BIT(1)))
+			return -EIO;
 		if (!(word[2] & BIT(7)) && ktime_compare(ktime_get(), deadline) >= 0)
 			return -ETIMEDOUT;
 		if (!(word[2] & BIT(7)) || (word[2] & BIT(1)))
@@ -543,56 +513,52 @@ static int it66121_bridge_check(struct drm_bridge *bridge, struct drm_bridge_sta
 	return 0;
 }
 
-static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
-				    const struct drm_display_mode *adjusted_mode)
+static int it66121_configure_hdmi(struct it66121_ctx *ctx, const struct drm_display_mode *mode)
 {
 	u8 buf[HDMI_INFOFRAME_SIZE(AVI)];
-	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	int ret;
 
-	mutex_lock(&ctx->lock);
-	/* FL2000 owns resets; restore transport-facing masks after modesets. */
-	if (!ctx->connector)
-		goto unlock;
 	if (!ctx->connector->display_info.is_hdmi) {
-		if (regmap_write(ctx->regmap, IT66121_AVI_INFO_PKT_REG, 0) ||
-		    regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, 0))
-			goto unlock;
-		goto configure;
+		ret = regmap_write(ctx->regmap, IT66121_AVI_INFO_PKT_REG, 0);
+		if (ret)
+			return ret;
+		return regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, 0);
 	}
-
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&ctx->hdmi_avi_infoframe, ctx->connector,
-						       adjusted_mode);
+						       mode);
 	if (ret) {
 		DRM_ERROR("Failed to setup AVI infoframe: %d\n", ret);
-		goto unlock;
+		return ret;
 	}
-
 	ret = hdmi_avi_infoframe_pack(&ctx->hdmi_avi_infoframe, buf, sizeof(buf));
 	if (ret < 0) {
 		DRM_ERROR("Failed to pack infoframe: %d\n", ret);
-		goto unlock;
+		return ret;
 	}
-
-	/* Write new AVI infoframe packet */
 	ret = regmap_bulk_write(ctx->regmap, IT66121_AVIINFO_DB1_REG,
 				&buf[HDMI_INFOFRAME_HEADER_SIZE], HDMI_AVI_INFOFRAME_SIZE);
 	if (ret)
+		return ret;
+	ret = regmap_write(ctx->regmap, IT66121_AVIINFO_CSUM_REG, buf[3]);
+	if (ret)
+		return ret;
+	ret = regmap_write(ctx->regmap, IT66121_AVI_INFO_PKT_REG,
+			   IT66121_AVI_INFO_PKT_ON | IT66121_AVI_INFO_PKT_RPT);
+	if (ret)
+		return ret;
+	return regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, IT66121_HDMI_MODE_HDMI);
+}
+
+static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
+				    const struct drm_display_mode *adjusted_mode)
+{
+	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
+
+	mutex_lock(&ctx->lock);
+	/* FL2000 owns resets; restore transport-facing masks after modesets. */
+	if (!ctx->connector || it66121_configure_hdmi(ctx, adjusted_mode))
 		goto unlock;
 
-	if (regmap_write(ctx->regmap, IT66121_AVIINFO_CSUM_REG, buf[3]))
-		goto unlock;
-
-	/* Enable AVI infoframe */
-	if (regmap_write(ctx->regmap, IT66121_AVI_INFO_PKT_REG,
-			 IT66121_AVI_INFO_PKT_ON | IT66121_AVI_INFO_PKT_RPT))
-		goto unlock;
-
-	/* Set TX mode to HDMI */
-	if (regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, IT66121_HDMI_MODE_HDMI))
-		goto unlock;
-
-configure:
 	if ((ctx->id == ID_IT66121 || ctx->id == ID_IT66122) &&
 	    regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG, IT66121_CLK_BANK_PWROFF_TXCLK,
 			      IT66121_CLK_BANK_PWROFF_TXCLK)) {
