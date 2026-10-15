@@ -10,14 +10,20 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
-import shutil
 import socket
 import subprocess
 import time
+from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from qemu_utils import (
+    ROOT,
+    add_qemu_arguments,
+    check_modules,
+    qemu_command,
+    write_initramfs,
+)
+
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument(
     "--module", action="append", required=True, help="LABEL=MODULE_PATH"
@@ -28,11 +34,7 @@ parser.add_argument(
 )
 parser.add_argument("--repeat", type=int, default=2)
 parser.add_argument("--duration", type=int, default=5)
-parser.add_argument("--kernel", default=os.uname().release)
-parser.add_argument(
-    "--qemu", default=str(ROOT / ".qemu-build/qemu-11.1.2/build/qemu-system-x86_64")
-)
-parser.add_argument("--cpu", default="host")
+add_qemu_arguments(parser)
 parser.add_argument("--hostbus", default="2")
 parser.add_argument("--hostport", default="2")
 parser.add_argument("--profiler", type=Path, required=True)
@@ -47,22 +49,13 @@ for item in args.module:
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", label):
         parser.error("module labels must be alphanumeric, underscores or hyphens")
     path = Path(path)
-    version = subprocess.check_output(
-        ["modinfo", "-F", "vermagic", str(path)], text=True
-    ).split()[0]
-    if version != args.kernel:
-        parser.error(f"{path}: kernel version mismatch")
+    check_modules([path], args.kernel)
     modules.append((label, path))
 if args.profile_label and args.profile_label not in dict(modules):
     parser.error("profile label must match one of the modules")
 bridge = ROOT / "it66121.ko"
-version = subprocess.check_output(
-    ["modinfo", "-F", "vermagic", str(bridge)], text=True
-).split()[0]
-if version != args.kernel:
-    parser.error(f"{bridge}: kernel version mismatch")
+check_modules([bridge], args.kernel)
 args.output.mkdir(parents=True, exist_ok=True)
-archive = bytearray()
 entries = [
     (f"fl2000-{label}.ko", path.read_bytes(), 0o100644) for label, path in modules
 ]
@@ -72,33 +65,12 @@ entries += [
 ]
 if args.sampler:
     entries.append(("kernel-sample", args.sampler.read_bytes(), 0o100755))
-entries.append(("TRAILER!!!", b"", 0))
-for ino, (name, data, mode) in enumerate(entries, 1):
-    fields = [ino, mode, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(name) + 1, 0]
-    archive.extend(b"070701" + "".join(f"{value:08x}" for value in fields).encode())
-    archive.extend(name.encode() + b"\0")
-    archive.extend(b"\0" * (-len(archive) % 4))
-    archive.extend(data)
-    archive.extend(b"\0" * (-len(archive) % 4))
-archive.extend(b"\0" * (-len(archive) % 512))
 boot = args.output / "boot.cpio"
-with boot.open("wb") as output:
-    with (ROOT / "base-initramfs.cpio.gz").open("rb") as base:
-        shutil.copyfileobj(base, output)
-    output.write(b"\0" * (-output.tell() % 4))
-    output.write(archive)
+write_initramfs(args.base, entries, boot)
 console_path = args.output / "console.sock"
 if console_path.exists():
     console_path.unlink()
-command = [
-    args.qemu,
-    "-enable-kvm",
-    "-cpu",
-    args.cpu,
-    "-m",
-    "1G",
-    "-nic",
-    "none",
+command = qemu_command(args) + [
     "-kernel",
     f"/boot/vmlinuz-{args.kernel}",
     "-initrd",

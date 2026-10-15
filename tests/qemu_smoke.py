@@ -2,10 +2,18 @@
 # SPDX-License-Identifier: GPL-2.0
 """Append a newc overlay to the compressed base image and boot with KVM."""
 
-from pathlib import Path
 import argparse
 import re
 import subprocess
+from pathlib import Path
+
+from qemu_utils import (
+    OUTPUT,
+    add_qemu_arguments,
+    check_modules,
+    qemu_command,
+    write_initramfs,
+)
 
 parser = argparse.ArgumentParser(
     description="KVM module load/unload smoke test without hardware"
@@ -14,11 +22,12 @@ parser.add_argument("kernel", help="Kernel version, e.g. 7.0.0-38-generic")
 parser.add_argument(
     "modules", type=Path, help="Directory containing matching built modules"
 )
-parser.add_argument("--base", type=Path, default=Path("base-initramfs.cpio.gz"))
-parser.add_argument("--output", type=Path, default=Path("/tmp/fl2000-qemu"))
+add_qemu_arguments(parser, kernel=False)
+parser.add_argument("--output", type=Path, default=OUTPUT)
 args = parser.parse_args()
 kernel = args.kernel
 source = args.modules
+check_modules([source / name for name in ("fl2000.ko", "it66121.ko")], kernel)
 init = r"""#!/bin/sh
 export PATH=/usr/sbin:/usr/bin:/bin:/sbin:/usr/lib/klibc/bin
 mount -t proc none /proc
@@ -62,42 +71,19 @@ echo "FL2000_QEMU_DONE"
 /usr/lib/klibc/bin/poweroff -f
 while :; do :; done
 """
-archive = bytearray()
-
-
-def add(name, data, mode, ino):
-    fields = [ino, mode, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(name) + 1, 0]
-    archive.extend(b"070701" + "".join(f"{x:08x}" for x in fields).encode())
-    archive.extend(name.encode() + b"\0")
-    archive.extend(b"\0" * (-len(archive) % 4))
-    archive.extend(data)
-    archive.extend(b"\0" * (-len(archive) % 4))
-
-
-add("init", init.encode(), 0o100755, 1)
-for i, name in enumerate(("fl2000.ko", "it66121.ko"), 2):
-    add(name, (source / name).read_bytes(), 0o100644, i)
-add("TRAILER!!!", b"", 0, 4)
-archive.extend(b"\0" * (-len(archive) % 512))
 p = args.output
 p.mkdir(parents=True, exist_ok=True)
-(p / f"payload-{kernel}.cpio").write_bytes(archive)
-with (p / f"boot-{kernel}.cpio").open("wb") as f:
-    with args.base.open("rb") as base:
-        import shutil
-
-        shutil.copyfileobj(base, f)
-    f.write(b"\0" * (-f.tell() % 4))
-    f.write(archive)
+entries = [("init", init.encode(), 0o100755)]
+entries += [
+    (name, (source / name).read_bytes(), 0o100644)
+    for name in ("fl2000.ko", "it66121.ko")
+]
+write_initramfs(
+    args.base, entries, p / f"boot-{kernel}.cpio", payload=p / f"payload-{kernel}.cpio"
+)
 
 log = p / f"{kernel}.log"
-command = [
-    "qemu-system-x86_64",
-    "-enable-kvm",
-    "-cpu",
-    "host",
-    "-m",
-    "512",
+command = qemu_command(args, memory="512") + [
     "-smp",
     "2",
     "-nodefaults",
@@ -108,8 +94,6 @@ command = [
     "none",
     "-serial",
     "stdio",
-    "-nic",
-    "none",
     "-kernel",
     f"/boot/vmlinuz-{kernel}",
     "-initrd",

@@ -8,20 +8,29 @@ costs. Native SSSE3 reordering is an experimental benchmark-only candidate.
 """
 
 import argparse
-from pathlib import Path
-
-from source_helpers import function
-import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+from qemu_utils import (
+    ROOT,
+    add_qemu_arguments,
+    kernel_headers,
+    qemu_command,
+    write_initramfs,
+)
+from source_helpers import function
+
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--kernel", default=os.uname().release)
+add_qemu_arguments(parser)
+parser.add_argument(
+    "--ksrc", type=Path, help="Override the matching kernel header tree"
+)
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
+
 stream = (ROOT / "fl2000_streaming.c").read_text()
 ssse3 = (ROOT / "frame/x86.c").read_text()
 bmi2 = (ROOT / "frame/x86_bmi2.c").read_text()
@@ -165,7 +174,7 @@ subprocess.run(
     [
         "make",
         "-C",
-        f"/usr/src/linux-headers-{args.kernel}",
+        str(kernel_headers(args.kernel, args.ksrc)),
         f"M={args.output.resolve()}",
         "W=1",
         "KCFLAGS=-Werror",
@@ -186,36 +195,12 @@ fi
 dmesg
 /usr/lib/klibc/bin/poweroff -f
 """
-archive = bytearray()
-for ino, (name, data, mode) in enumerate(
-    [
-        ("init", init.encode(), 0o100755),
-        ("frame_bench.ko", (args.output / "frame_bench.ko").read_bytes(), 0o100644),
-        ("TRAILER!!!", b"", 0),
-    ],
-    1,
-):
-    fields = [ino, mode, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(name) + 1, 0]
-    archive.extend(b"070701" + "".join(f"{x:08x}" for x in fields).encode())
-    archive.extend(name.encode() + b"\0")
-    archive.extend(b"\0" * (-len(archive) % 4))
-    archive.extend(data)
-    archive.extend(b"\0" * (-len(archive) % 4))
-archive.extend(b"\0" * (-len(archive) % 512))
-with (args.output / "boot.cpio").open("wb") as output:
-    with (ROOT / "base-initramfs.cpio.gz").open("rb") as base:
-        shutil.copyfileobj(base, output)
-    output.write(b"\0" * (-output.tell() % 4))
-    output.write(archive)
-command = [
-    "qemu-system-x86_64",
-    "-enable-kvm",
-    "-cpu",
-    "host",
-    "-m",
-    "1G",
-    "-nic",
-    "none",
+entries = [
+    ("init", init.encode(), 0o100755),
+    ("frame_bench.ko", (args.output / "frame_bench.ko").read_bytes(), 0o100644),
+]
+write_initramfs(args.base, entries, args.output / "boot.cpio")
+command = qemu_command(args) + [
     "-kernel",
     f"/boot/vmlinuz-{args.kernel}",
     "-initrd",
