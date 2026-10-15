@@ -255,7 +255,6 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width, uns
 		if (x < width) {
 			put_unaligned_le16(fl2000_rgb565(get_unaligned_le32(line + x * 4)),
 					   dst + (offset ^ 4));
-			offset += 2;
 		}
 	} else {
 		x = 0;
