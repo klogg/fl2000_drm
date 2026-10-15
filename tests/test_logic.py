@@ -46,7 +46,7 @@ typedef uintptr_t dma_addr_t;
 #define DRM_FORMAT_RGB565 3
 #define DMA_FROM_DEVICE 2
 #define check_mul_overflow(a,b,p) __builtin_mul_overflow(a,b,p)
-#define UNUSED(x) ((void)(x))
+#define __always_unused __attribute__((__unused__))
 #define URB_NO_TRANSFER_DMA_MAP 4
 #define __aligned(n) __attribute__((aligned(n)))
 #define __packed __attribute__((packed))

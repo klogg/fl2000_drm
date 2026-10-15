@@ -25,8 +25,6 @@
 
 #include "it66121_registers.h"
 
-#define UNUSED(x) ((void)(x))
-
 /* Component handoff from the USB-attached bridge to the FL2000 DRM master. */
 struct fl2000_bridge {
 	struct drm_bridge *bridge;

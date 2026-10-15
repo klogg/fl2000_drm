@@ -42,8 +42,6 @@
 
 #include "fl2000_registers.h"
 
-#define UNUSED(x) ((void)(x))
-
 struct drm_connector *fl2000_bridge_connector_init(struct drm_device *drm,
 						   struct drm_encoder *encoder,
 						   struct drm_bridge *bridge);

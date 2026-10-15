@@ -133,7 +133,7 @@ static void fl2000_intr_stop(struct fl2000_interrupt *intr)
 	cancel_work_sync(&intr->work);
 }
 
-static void fl2000_intr_release(struct device *dev, void *res)
+static void fl2000_intr_release(struct device *dev __always_unused, void *res)
 {
 	struct fl2000_interrupt *intr = res;
 

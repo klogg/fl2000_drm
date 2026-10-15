@@ -90,7 +90,8 @@ static void fl2000_cleanup(struct usb_device *usb_dev, struct fl2000_device *dev
 	device->suspended = false;
 }
 
-static int fl2000_probe(struct usb_interface *interface, const struct usb_device_id *id)
+static int fl2000_probe(struct usb_interface *interface,
+			const struct usb_device_id *id __always_unused)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_device *device;
@@ -163,7 +164,7 @@ static void fl2000_disconnect(struct usb_interface *interface)
 	mutex_unlock(&fl2000_device_lock);
 }
 
-static int fl2000_suspend(struct usb_interface *interface, pm_message_t message)
+static int fl2000_suspend(struct usb_interface *interface, pm_message_t message __always_unused)
 {
 	struct fl2000_device *device = usb_get_intfdata(interface);
 	int ret = 0;

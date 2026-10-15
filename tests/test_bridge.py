@@ -22,6 +22,7 @@ prelude = r"""
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#define __always_unused __attribute__((__unused__))
 typedef uint8_t u8;
 typedef uint32_t u32;
 #define BIT(n) (1U << (n))

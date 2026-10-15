@@ -11,15 +11,13 @@
 
 #define FL2000_HW_RST_MDELAY 10
 
-static bool fl2000_reg_precious(struct device *dev, unsigned int reg)
+static bool fl2000_reg_precious(struct device *dev __always_unused, unsigned int reg)
 {
-	UNUSED(dev);
 	return FL2000_REG_PRECIOUS(reg);
 }
 
-static bool fl2000_reg_volatile(struct device *dev, unsigned int reg)
+static bool fl2000_reg_volatile(struct device *dev __always_unused, unsigned int reg)
 {
-	UNUSED(dev);
 	return FL2000_REG_VOLATILE(reg);
 }
 

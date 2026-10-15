@@ -389,11 +389,12 @@ static int it66121_set_mute(struct it66121_ctx *ctx, bool mute)
 			    IT66121_PKT_GEN_CTRL_ON | IT66121_PKT_GEN_CTRL_RPT);
 }
 
-static u32 *it66121_bridge_atomic_get_output_bus_fmts(struct drm_bridge *bridge,
-						      struct drm_bridge_state *bridge_state,
-						      struct drm_crtc_state *crtc_state,
-						      struct drm_connector_state *conn_state,
-						      unsigned int *num_output_fmts)
+static u32 *
+it66121_bridge_atomic_get_output_bus_fmts(struct drm_bridge *bridge __always_unused,
+					  struct drm_bridge_state *bridge_state __always_unused,
+					  struct drm_crtc_state *crtc_state __always_unused,
+					  struct drm_connector_state *conn_state __always_unused,
+					  unsigned int *num_output_fmts)
 {
 	u32 *output_fmts;
 
@@ -408,11 +409,11 @@ static u32 *it66121_bridge_atomic_get_output_bus_fmts(struct drm_bridge *bridge,
 	return output_fmts;
 }
 
-static u32 *it66121_bridge_atomic_get_input_bus_fmts(struct drm_bridge *bridge,
-						     struct drm_bridge_state *bridge_state,
-						     struct drm_crtc_state *crtc_state,
-						     struct drm_connector_state *conn_state,
-						     u32 output_fmt, unsigned int *num_input_fmts)
+static u32 *it66121_bridge_atomic_get_input_bus_fmts(
+	struct drm_bridge *bridge, struct drm_bridge_state *bridge_state __always_unused,
+	struct drm_crtc_state *crtc_state __always_unused,
+	struct drm_connector_state *conn_state __always_unused, u32 output_fmt __always_unused,
+	unsigned int *num_input_fmts)
 {
 	const struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	u32 *input_fmts;
@@ -487,7 +488,8 @@ static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_s
 	mutex_unlock(&ctx->lock);
 }
 
-static void it66121_bridge_disable(struct drm_bridge *bridge, struct drm_atomic_state *state)
+static void it66121_bridge_disable(struct drm_bridge *bridge,
+				   struct drm_atomic_state *state __always_unused)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 
@@ -498,8 +500,8 @@ static void it66121_bridge_disable(struct drm_bridge *bridge, struct drm_atomic_
 }
 
 static int it66121_bridge_check(struct drm_bridge *bridge, struct drm_bridge_state *bridge_state,
-				struct drm_crtc_state *crtc_state,
-				struct drm_connector_state *conn_state)
+				struct drm_crtc_state *crtc_state __always_unused,
+				struct drm_connector_state *conn_state __always_unused)
 {
 	const struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 
@@ -550,7 +552,8 @@ static int it66121_configure_hdmi(struct it66121_ctx *ctx, const struct drm_disp
 	return regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, IT66121_HDMI_MODE_HDMI);
 }
 
-static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
+static void it66121_bridge_mode_set(struct drm_bridge *bridge,
+				    const struct drm_display_mode *mode __always_unused,
 				    const struct drm_display_mode *adjusted_mode)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
@@ -584,9 +587,10 @@ unlock:
 	mutex_unlock(&ctx->lock);
 }
 
-static enum drm_mode_status it66121_bridge_mode_valid(struct drm_bridge *bridge,
-						      const struct drm_display_info *info,
-						      const struct drm_display_mode *mode)
+static enum drm_mode_status
+it66121_bridge_mode_valid(struct drm_bridge *bridge,
+			  const struct drm_display_info *info __always_unused,
+			  const struct drm_display_mode *mode)
 {
 	const struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	unsigned long max_clock;
@@ -605,8 +609,8 @@ static enum drm_mode_status it66121_bridge_mode_valid(struct drm_bridge *bridge,
 	return MODE_OK;
 }
 
-static enum drm_connector_status it66121_bridge_detect(struct drm_bridge *bridge,
-						       struct drm_connector *connector)
+static enum drm_connector_status
+it66121_bridge_detect(struct drm_bridge *bridge, struct drm_connector *connector __always_unused)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 
@@ -705,7 +709,7 @@ unlock:
 }
 
 /* USB component glue: the bridge has no Device Tree graph or GPIO IRQ. */
-static int it66121_bind(struct device *comp, struct device *master, void *data)
+static int it66121_bind(struct device *comp, struct device *master __always_unused, void *data)
 {
 	struct fl2000_bridge *binding = data;
 	struct it66121_ctx *ctx = dev_get_drvdata(comp);
@@ -716,7 +720,8 @@ static int it66121_bind(struct device *comp, struct device *master, void *data)
 	return 0;
 }
 
-static void it66121_unbind(struct device *comp, struct device *master, void *data)
+static void it66121_unbind(struct device *comp __always_unused,
+			   struct device *master __always_unused, void *data)
 {
 	struct fl2000_bridge *binding = data;
 

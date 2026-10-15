@@ -387,11 +387,11 @@ static int fl2000_prepare_fb(struct drm_plane *plane, struct drm_plane_state *st
 	return 0;
 }
 
-static void fl2000_cleanup_fb(struct drm_plane *plane, struct drm_plane_state *state)
+static void fl2000_cleanup_fb(struct drm_plane *plane __always_unused,
+			      struct drm_plane_state *state)
 {
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
 
-	UNUSED(plane);
 	if (state->fb)
 		drm_gem_fb_vunmap(state->fb, shadow->map);
 }
@@ -531,7 +531,8 @@ static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_s
 	drm_dev_exit(idx);
 }
 
-static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc, struct drm_atomic_state *state)
+static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
+				       struct drm_atomic_state *state __always_unused)
 {
 	struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
 

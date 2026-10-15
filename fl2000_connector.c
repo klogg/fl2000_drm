@@ -15,7 +15,7 @@ static struct drm_bridge *fl2000_connector_bridge(struct drm_connector *connecto
 }
 
 static enum drm_connector_status fl2000_connector_detect(struct drm_connector *connector,
-							 bool force)
+							 bool force __always_unused)
 {
 	struct drm_bridge *bridge = fl2000_connector_bridge(connector);
 
@@ -69,7 +69,7 @@ static const struct drm_connector_funcs fl2000_connector_funcs = {
 };
 
 struct drm_connector *fl2000_bridge_connector_init(struct drm_device *drm,
-						   struct drm_encoder *encoder,
+						   struct drm_encoder *encoder __always_unused,
 						   struct drm_bridge *bridge)
 {
 	struct fl2000_connector *output;

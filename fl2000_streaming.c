@@ -177,7 +177,7 @@ static void fl2000_stop_stream(struct fl2000_stream *stream)
 		usb_kill_urb(stream->transfers[i].urb);
 }
 
-static void fl2000_streaming_release(struct device *dev, void *res)
+static void fl2000_streaming_release(struct device *dev __always_unused, void *res)
 {
 	struct fl2000_stream *stream = res;
 

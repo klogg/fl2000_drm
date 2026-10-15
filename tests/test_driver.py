@@ -16,6 +16,7 @@ pre = r"""
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#define __always_unused __attribute__((__unused__))
 #define FL2000_USBIF_AVCONTROL 0
 #define FL2000_USBIF_STREAMING 1
 #define FL2000_USBIF_INTERRUPT 2

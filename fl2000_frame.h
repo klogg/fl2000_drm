@@ -2,6 +2,7 @@
 #ifndef FL2000_FRAME_H
 #define FL2000_FRAME_H
 
+#include <linux/compiler_attributes.h>
 #include <linux/types.h>
 
 /*
@@ -16,13 +17,17 @@ unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels,
 				  unsigned int bytes_pix);
 unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src, unsigned int bytes);
 #else
-static inline unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels,
-						unsigned int bytes_pix)
+static inline unsigned int fl2000_frame_convert(u8 *dst __always_unused,
+						const u8 *src __always_unused,
+						unsigned int pixels __always_unused,
+						unsigned int bytes_pix __always_unused)
 {
 	return 0;
 }
 
-static inline unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src, unsigned int bytes)
+static inline unsigned int fl2000_frame_reorder(u8 *dst __always_unused,
+						const u8 *src __always_unused,
+						unsigned int bytes __always_unused)
 {
 	return 0;
 }

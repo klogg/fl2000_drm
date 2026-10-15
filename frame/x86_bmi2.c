@@ -16,10 +16,8 @@ unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels,
 	return count;
 }
 
-unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src, unsigned int bytes)
+unsigned int fl2000_frame_reorder(u8 *dst __always_unused, const u8 *src __always_unused,
+				  unsigned int bytes __always_unused)
 {
-	(void)dst;
-	(void)src;
-	(void)bytes;
 	return 0;
 }

@@ -6,7 +6,11 @@ import re
 
 def function(source, name):
     match = re.search(
-        r"(?:static\s+)?(?:inline\s+)?[\w *]+\b" + name + r"\([^;]*?\)\s*\{", source
+        r"^[ \t]*(?:static\s+)?(?:inline\s+)?[\w \t*]+(?:\n[ \t]*)?\b"
+        + name
+        + r"\([^;]*?\)\s*\{",
+        source,
+        re.MULTILINE,
     )
     if not match:
         raise AssertionError(f"Function not found: {name}")
