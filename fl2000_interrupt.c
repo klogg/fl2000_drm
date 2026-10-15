@@ -75,8 +75,7 @@ static void fl2000_intr_work(struct work_struct *work)
 	spin_unlock_irqrestore(&intr->lock, flags);
 	if (ret) {
 		fl2000_drm_set_polling(intr->usb_dev, true);
-		dev_err_ratelimited(&intr->usb_dev->dev,
-				    "Interrupt submission failed: %d\n", ret);
+		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt submission failed: %d\n", ret);
 	}
 }
 
@@ -112,12 +111,12 @@ static void fl2000_intr_completion(struct urb *urb)
 unlock:
 	spin_unlock_irqrestore(&intr->lock, flags);
 	if (exhausted)
-		dev_warn_ratelimited(&intr->usb_dev->dev,
-				     "Interrupt endpoint repeatedly stalled; using connector polling\n");
-	if (status && status != -EPIPE && status != -ENOENT &&
-	    status != -ECONNRESET && status != -ESHUTDOWN)
-		dev_err_ratelimited(&intr->usb_dev->dev,
-				    "Interrupt transfer failed: %d\n", status);
+		dev_warn_ratelimited(
+			&intr->usb_dev->dev,
+			"Interrupt endpoint repeatedly stalled; using connector polling\n");
+	if (status && status != -EPIPE && status != -ENOENT && status != -ECONNRESET &&
+	    status != -ESHUTDOWN)
+		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt transfer failed: %d\n", status);
 }
 
 static void fl2000_intr_stop(struct fl2000_interrupt *intr)
@@ -224,8 +223,8 @@ int fl2000_interrupt_create(struct usb_interface *interface)
 		devres_free(intr);
 		return -ENOMEM;
 	}
-	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, INTERRUPT_EP),
-			 intr->buf, 1, fl2000_intr_completion, intr, ep->bInterval);
+	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, INTERRUPT_EP), intr->buf, 1,
+			 fl2000_intr_completion, intr, ep->bInterval);
 	devres_add(&usb_dev->dev, intr);
 	return 0;
 }

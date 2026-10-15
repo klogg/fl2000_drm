@@ -44,14 +44,13 @@
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_damage_helper.h>
 
-
 #include "fl2000_registers.h"
 
 #define UNUSED(x) ((void)(x))
 
 struct drm_connector *fl2000_bridge_connector_init(struct drm_device *drm,
-						 struct drm_encoder *encoder,
-						 struct drm_bridge *bridge);
+						   struct drm_encoder *encoder,
+						   struct drm_bridge *bridge);
 
 /* Known USB interfaces of FL2000 */
 enum fl2000_interface {
@@ -70,14 +69,14 @@ enum fl2000_interface {
  * Sets bits to 1 in '__mask' variable that correspond to field '__field' of
  * structure type '__type'. Tested only with u32 data types
  */
-#define fl2000_add_bitmask(__mask, __type, __field) \
-	({                                          \
-		union {                             \
-			__type __umask;             \
-			typeof(__mask) __val;       \
-		} __aligned(4) __data = { .__val = 0 };              \
-		__data.__umask.__field = ~0;        \
-		(__mask) |= __data.__val;           \
+#define fl2000_add_bitmask(__mask, __type, __field)     \
+	({                                              \
+		union {                                 \
+			__type __umask;                 \
+			typeof(__mask) __val;           \
+		} __aligned(4) __data = { .__val = 0 }; \
+		__data.__umask.__field = ~0;            \
+		(__mask) |= __data.__val;               \
 	})
 
 struct fl2000_timings {
@@ -114,7 +113,7 @@ void fl2000_streaming_destroy(struct usb_interface *interface);
 /* ... and interface */
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix);
 int fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned int height,
-			       unsigned int width, unsigned int pitch, u32 format);
+			      unsigned int width, unsigned int pitch, u32 format);
 int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int height,
 			    unsigned int width, unsigned int pitch, u32 format,
 			    const struct drm_rect *damage);

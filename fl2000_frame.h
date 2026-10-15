@@ -10,18 +10,16 @@
  * Each call must release SIMD protection before returning; callers can sleep.
  */
 #ifdef FL2000_FRAME_ACCELERATED
-unsigned int fl2000_frame_convert(u8 *dst, const u8 *src,
-				 unsigned int pixels, unsigned int bytes_pix);
+unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels,
+				  unsigned int bytes_pix);
 unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src, unsigned int bytes);
 #else
-static inline unsigned int fl2000_frame_convert(u8 *dst, const u8 *src,
-					       unsigned int pixels,
-					       unsigned int bytes_pix)
+static inline unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels,
+						unsigned int bytes_pix)
 {
 	return 0;
 }
-static inline unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src,
-					       unsigned int bytes)
+static inline unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src, unsigned int bytes)
 {
 	return 0;
 }

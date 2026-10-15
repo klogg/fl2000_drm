@@ -54,8 +54,8 @@ static void fl2000_free_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 	unsigned int i;
 
 	if (frame->dma_sgt) {
-		usb_free_noncoherent(usb_dev, frame->size, frame->vaddr,
-				     DMA_TO_DEVICE, frame->dma_sgt);
+		usb_free_noncoherent(usb_dev, frame->size, frame->vaddr, DMA_TO_DEVICE,
+				     frame->dma_sgt);
 		memset(frame, 0, sizeof(*frame));
 		return;
 	}
@@ -75,8 +75,8 @@ static int fl2000_alloc_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 	unsigned int i;
 
 	frame->size = size;
-	frame->vaddr = usb_alloc_noncoherent(usb_dev, size, GFP_KERNEL, &frame->dma,
-					   DMA_TO_DEVICE, &frame->dma_sgt);
+	frame->vaddr = usb_alloc_noncoherent(usb_dev, size, GFP_KERNEL, &frame->dma, DMA_TO_DEVICE,
+					     &frame->dma_sgt);
 	if (frame->vaddr) {
 		memset(frame->vaddr, 0, size);
 		return 0;
@@ -159,11 +159,11 @@ static void fl2000_data_completion(struct urb *urb)
 		ret = fl2000_submit_transfer(transfer);
 	spin_unlock_irqrestore(&stream->lock, flags);
 	if (ret)
-		dev_err_ratelimited(&stream->usb_dev->dev,
-				    "Streaming submission failed: %d\n", ret);
+		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming submission failed: %d\n",
+				    ret);
 	if (status && status != -ENOENT && status != -ECONNRESET && status != -ESHUTDOWN)
-		dev_err_ratelimited(&stream->usb_dev->dev,
-				    "Streaming transfer failed: %d\n", status);
+		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming transfer failed: %d\n",
+				    status);
 }
 
 /* mutex held; setting enabled under lock prevents racing resubmission. */
@@ -202,8 +202,7 @@ static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev)
 
 static u16 fl2000_rgb565(u32 pixel)
 {
-	return ((pixel >> 8) & 0xf800) | ((pixel >> 5) & 0x07e0) |
-	       ((pixel >> 3) & 0x001f);
+	return ((pixel >> 8) & 0xf800) | ((pixel >> 5) & 0x07e0) | ((pixel >> 3) & 0x001f);
 }
 
 static u32 fl2000_rgb565_pair(u64 pixels)
@@ -215,8 +214,8 @@ static u32 fl2000_rgb565_pair(u64 pixels)
 	return (u32)values | (u32)(values >> 16);
 }
 
-static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width,
-				unsigned int offset, unsigned int bytes_pix)
+static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width, unsigned int offset,
+				unsigned int bytes_pix)
 {
 	unsigned int x;
 	unsigned int count;
@@ -277,8 +276,7 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width,
 			put_unaligned_le32((a & 0xffffff) | (b << 24), dst + (offset ^ 4));
 			put_unaligned_le32(((b >> 8) & 0xffff) | (c << 16),
 					   dst + ((offset + 4) ^ 4));
-			put_unaligned_le32(((c >> 16) & 0xff) | (d << 8),
-					   dst + ((offset + 8) ^ 4));
+			put_unaligned_le32(((c >> 16) & 0xff) | (d << 8), dst + ((offset + 8) ^ 4));
 		}
 		for (; x < width; x++) {
 			u32 pixel = get_unaligned_le32(line + x * 4);
@@ -290,9 +288,8 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width,
 	}
 }
 
-static void fl2000_convert_frame(u8 *dst, const void *src, unsigned int height,
-				 unsigned int width, unsigned int pitch,
-				 unsigned int bytes_pix, unsigned int buf_size)
+static void fl2000_convert_frame(u8 *dst, const void *src, unsigned int height, unsigned int width,
+				 unsigned int pitch, unsigned int bytes_pix, unsigned int buf_size)
 {
 	unsigned int size = width * height * bytes_pix;
 	unsigned int y;
@@ -304,8 +301,8 @@ static void fl2000_convert_frame(u8 *dst, const void *src, unsigned int height,
 		/* Batch contiguous rows without extending a preparation span. */
 		if (pitch == width * 4)
 			rows = min(height - y, max(1U, 4096U / width));
-		fl2000_convert_line(dst, (const u8 *)src + (size_t)y * pitch,
-				    width * rows, y * width * bytes_pix, bytes_pix);
+		fl2000_convert_line(dst, (const u8 *)src + (size_t)y * pitch, width * rows,
+				    y * width * bytes_pix, bytes_pix);
 		y += rows;
 		cond_resched();
 	}
@@ -347,9 +344,8 @@ static void fl2000_reorder_line(u8 *dst, const u8 *line, unsigned int remaining,
 	}
 }
 
-static void fl2000_reorder_frame(u8 *dst, const void *src, unsigned int height,
-				 unsigned int width, unsigned int pitch,
-				 unsigned int bytes_pix, unsigned int buf_size)
+static void fl2000_reorder_frame(u8 *dst, const void *src, unsigned int height, unsigned int width,
+				 unsigned int pitch, unsigned int bytes_pix, unsigned int buf_size)
 {
 	unsigned int size = width * height * bytes_pix;
 	unsigned int row_bytes = width * bytes_pix;
@@ -361,8 +357,8 @@ static void fl2000_reorder_frame(u8 *dst, const void *src, unsigned int height,
 		height = 1;
 	}
 	for (y = 0; y < height; y++) {
-		fl2000_reorder_line(dst, (const u8 *)src + (size_t)y * pitch,
-				    row_bytes, y * row_bytes);
+		fl2000_reorder_line(dst, (const u8 *)src + (size_t)y * pitch, row_bytes,
+				    y * row_bytes);
 		cond_resched();
 	}
 }
@@ -393,9 +389,9 @@ static void fl2000_damage_add(struct drm_rect *pending, const struct drm_rect *d
 	pending->y2 = max(pending->y2, damage->y2);
 }
 
-static void fl2000_convert_damage(u8 *dst, const void *src, unsigned int width,
-				  unsigned int pitch, unsigned int source_bytes,
-				  unsigned int bytes_pix, const struct drm_rect *damage)
+static void fl2000_convert_damage(u8 *dst, const void *src, unsigned int width, unsigned int pitch,
+				  unsigned int source_bytes, unsigned int bytes_pix,
+				  const struct drm_rect *damage)
 {
 	unsigned int count = damage->x2 - damage->x1;
 	int y;
@@ -427,19 +423,19 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 	if (!stream)
 		return -ENODEV;
 	mutex_lock(&stream->mutex);
-	if (!src || !width || !height || width > INT_MAX || height > INT_MAX ||
-	    !source_bytes || width > pitch / source_bytes ||
+	if (!src || !width || !height || width > INT_MAX || height > INT_MAX || !source_bytes ||
+	    width > pitch / source_bytes ||
 	    (source_bytes != 4 && source_bytes != stream->bytes_pix) ||
 	    check_mul_overflow(width, height, &size) ||
-	    check_mul_overflow(size, stream->bytes_pix, &size) ||
-	    !stream->bytes_pix || ALIGN(size, 8) != stream->buf_size) {
+	    check_mul_overflow(size, stream->bytes_pix, &size) || !stream->bytes_pix ||
+	    ALIGN(size, 8) != stream->buf_size) {
 		ret = -EINVAL;
 		goto out;
 	}
 	if (!damage)
 		damage = &full;
-	if (damage->x1 < 0 || damage->y1 < 0 || damage->x2 > (int)width || damage->y2 > (int)height ||
-	    damage->x1 > damage->x2 || damage->y1 > damage->y2) {
+	if (damage->x1 < 0 || damage->y1 < 0 || damage->x2 > (int)width ||
+	    damage->y2 > (int)height || damage->x1 > damage->x2 || damage->y1 > damage->y2) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -473,7 +469,7 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 	}
 
 	if (!frame->valid || (frame->dirty.x1 == 0 && frame->dirty.y1 == 0 &&
-			     frame->dirty.x2 == (int)width && frame->dirty.y2 == (int)height)) {
+			      frame->dirty.x2 == (int)width && frame->dirty.y2 == (int)height)) {
 		if (source_bytes == 4)
 			fl2000_convert_frame(frame->vaddr, src, height, width, pitch,
 					     stream->bytes_pix, stream->buf_size);
@@ -485,7 +481,7 @@ int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int 
 				      stream->bytes_pix, &frame->dirty);
 	}
 	frame->valid = true;
-	frame->dirty = (struct drm_rect) { 0 };
+	frame->dirty = (struct drm_rect){ 0 };
 	spin_lock_irqsave(&stream->lock, flags);
 	stream->latest = frame;
 	spin_unlock_irqrestore(&stream->lock, flags);
@@ -519,7 +515,7 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 	stream->source = NULL;
 	for (i = 0; i < FL2000_FRAME_COUNT; i++) {
 		stream->frames[i].valid = false;
-		stream->frames[i].dirty = (struct drm_rect) { 0 };
+		stream->frames[i].dirty = (struct drm_rect){ 0 };
 	}
 	stream->bytes_pix = bytes_pix;
 	if (stream->buf_size == size)
@@ -651,6 +647,5 @@ fail:
 
 void fl2000_streaming_destroy(struct usb_interface *interface)
 {
-	devres_release(&interface_to_usbdev(interface)->dev,
-		       fl2000_streaming_release, NULL, NULL);
+	devres_release(&interface_to_usbdev(interface)->dev, fl2000_streaming_release, NULL, NULL);
 }

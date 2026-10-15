@@ -23,13 +23,10 @@ static void store(u8 *dst, v16qi value)
 	__builtin_memcpy(dst, &value, 16);
 }
 
-void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels,
-			  unsigned int bytes_pix)
+void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned int bytes_pix)
 {
-	const v16qi rgb = {0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14,
-			  -1, -1, -1, -1};
-	const v16qi wire = {4, 5, 6, 7, 0, 1, 2, 3,
-			   12, 13, 14, 15, 8, 9, 10, 11};
+	const v16qi rgb = { 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, -1, -1, -1, -1 };
+	const v16qi wire = { 4, 5, 6, 7, 0, 1, 2, 3, 12, 13, 14, 15, 8, 9, 10, 11 };
 	unsigned int i;
 
 	for (i = 0; i < pixels; i += 8, src += 32) {
@@ -47,16 +44,13 @@ void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels,
 			dst += 24;
 		} else {
 			v4su pa = (v4su)a, pb = (v4su)b;
-			const v4su bias = {32768, 32768, 32768, 32768};
-			const v8hu sign = {32768, 32768, 32768, 32768,
-					  32768, 32768, 32768, 32768};
+			const v4su bias = { 32768, 32768, 32768, 32768 };
+			const v8hu sign = { 32768, 32768, 32768, 32768, 32768, 32768, 32768, 32768 };
 
-			pa = ((pa >> 8) & 0xf800) | ((pa >> 5) & 0x7e0) |
-			     ((pa >> 3) & 0x1f);
-			pb = ((pb >> 8) & 0xf800) | ((pb >> 5) & 0x7e0) |
-			     ((pb >> 3) & 0x1f);
+			pa = ((pa >> 8) & 0xf800) | ((pa >> 5) & 0x7e0) | ((pa >> 3) & 0x1f);
+			pb = ((pb >> 8) & 0xf800) | ((pb >> 5) & 0x7e0) | ((pb >> 3) & 0x1f);
 			out = (v16qi)__builtin_ia32_packssdw128((v4si)(pa - bias),
-							    (v4si)(pb - bias));
+								(v4si)(pb - bias));
 			out = (v16qi)((v8hu)out ^ sign);
 			store(dst, __builtin_ia32_pshufb128(out, wire));
 			dst += 16;

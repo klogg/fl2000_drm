@@ -15,7 +15,7 @@ static struct drm_bridge *fl2000_connector_bridge(struct drm_connector *connecto
 }
 
 static enum drm_connector_status fl2000_connector_detect(struct drm_connector *connector,
-							bool force)
+							 bool force)
 {
 	struct drm_bridge *bridge = fl2000_connector_bridge(connector);
 
@@ -37,7 +37,7 @@ static int fl2000_connector_get_modes(struct drm_connector *connector)
 }
 
 static enum drm_mode_status fl2000_connector_mode_valid(struct drm_connector *connector,
-						       const struct drm_display_mode *mode)
+							const struct drm_display_mode *mode)
 {
 	struct drm_bridge *bridge = fl2000_connector_bridge(connector);
 
@@ -46,8 +46,8 @@ static enum drm_mode_status fl2000_connector_mode_valid(struct drm_connector *co
 
 static void fl2000_connector_destroy(struct drm_connector *connector)
 {
-	struct fl2000_connector *output = container_of(connector, struct fl2000_connector,
-						     connector);
+	struct fl2000_connector *output =
+		container_of(connector, struct fl2000_connector, connector);
 
 	drm_connector_cleanup(connector);
 	drm_bridge_put(output->bridge);
@@ -69,8 +69,8 @@ static const struct drm_connector_funcs fl2000_connector_funcs = {
 };
 
 struct drm_connector *fl2000_bridge_connector_init(struct drm_device *drm,
-						 struct drm_encoder *encoder,
-						 struct drm_bridge *bridge)
+						   struct drm_encoder *encoder,
+						   struct drm_bridge *bridge)
 {
 	struct fl2000_connector *output;
 	int ret;

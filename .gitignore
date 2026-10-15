@@ -9,7 +9,6 @@ modules.order
 *.mod
 *.mod.c
 *.ur-safe
-.clang-format
 checkpatch.pl
 const_structs.checkpatch
 spelling.txt

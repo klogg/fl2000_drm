@@ -59,17 +59,17 @@ static const struct regmap_config it66121_regmap_config = {
 };
 
 /* FL2000 DWORD transport consumes three bytes before each EDID payload. */
-#define EDID_SLEEP 1000
-#define EDID_TIMEOUT 200000
-#define EDID_FIFO_SIZE 32
-#define FL2000_EDID_FIFO_SKIP 3
-#define EDID_DDC_ADDR 0xa0
-#define IT66121_DDC_CONTROL IT66121_MASTER_SEL_REG
-#define IT66121_DDC_SEGMENT IT66121_DDC_SEGMENT_REG
+#define EDID_SLEEP		1000
+#define EDID_TIMEOUT		200000
+#define EDID_FIFO_SIZE		32
+#define FL2000_EDID_FIFO_SKIP	3
+#define EDID_DDC_ADDR		0xa0
+#define IT66121_DDC_CONTROL	IT66121_MASTER_SEL_REG
+#define IT66121_DDC_SEGMENT	IT66121_DDC_SEGMENT_REG
 #define IT66121_DDC_MASTER_HOST IT66121_MASTER_SEL_HOST
-#define DDC_CMD_FIFO_CLEAR IT66121_DDC_COMMAND_FIFO_CLR
-#define DDC_CMD_ABORT IT66121_DDC_COMMAND_ABORT
-#define DDC_CMD_EDID_READ IT66121_DDC_COMMAND_EDID_READ
+#define DDC_CMD_FIFO_CLEAR	IT66121_DDC_COMMAND_FIFO_CLR
+#define DDC_CMD_ABORT		IT66121_DDC_COMMAND_ABORT
+#define DDC_CMD_EDID_READ	IT66121_DDC_COMMAND_EDID_READ
 
 static inline int it66121_fire_afe(struct it66121_ctx *ctx)
 {
@@ -100,34 +100,30 @@ static int it66121_configure_input(struct it66121_ctx *ctx)
  * RETURNS:
  * zero if success, a negative error code otherwise.
  */
-static int it66121_configure_afe(struct it66121_ctx *ctx,
-				 const struct drm_display_mode *mode)
+static int it66121_configure_afe(struct it66121_ctx *ctx, const struct drm_display_mode *mode)
 {
 	int ret;
 
-	ret = regmap_write(ctx->regmap, IT66121_AFE_DRV_REG,
-			   IT66121_AFE_DRV_RST);
+	ret = regmap_write(ctx->regmap, IT66121_AFE_DRV_REG, IT66121_AFE_DRV_RST);
 	if (ret)
 		return ret;
 
 	if (mode->clock > IT66121_AFE_CLK_HIGH) {
 		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG,
-					IT66121_AFE_XP_GAINBIT |
-					IT66121_AFE_XP_ENO,
+					IT66121_AFE_XP_GAINBIT | IT66121_AFE_XP_ENO,
 					IT66121_AFE_XP_GAINBIT);
 		if (ret)
 			return ret;
 
 		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
-					IT66121_AFE_IP_GAINBIT |
-					IT66121_AFE_IP_ER0,
+					IT66121_AFE_IP_GAINBIT | IT66121_AFE_IP_ER0,
 					IT66121_AFE_IP_GAINBIT);
 		if (ret)
 			return ret;
 
 		if (ctx->id == ID_IT66121 || ctx->id == ID_IT66122) {
-			ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
-						IT66121_AFE_IP_EC1, 0);
+			ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG, IT66121_AFE_IP_EC1,
+						0);
 			if (ret)
 				return ret;
 
@@ -138,22 +134,19 @@ static int it66121_configure_afe(struct it66121_ctx *ctx,
 		}
 	} else {
 		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG,
-					IT66121_AFE_XP_GAINBIT |
-					IT66121_AFE_XP_ENO,
+					IT66121_AFE_XP_GAINBIT | IT66121_AFE_XP_ENO,
 					IT66121_AFE_XP_ENO);
 		if (ret)
 			return ret;
 
 		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
-					IT66121_AFE_IP_GAINBIT |
-					IT66121_AFE_IP_ER0,
+					IT66121_AFE_IP_GAINBIT | IT66121_AFE_IP_ER0,
 					IT66121_AFE_IP_ER0);
 		if (ret)
 			return ret;
 
 		if (ctx->id == ID_IT66121 || ctx->id == ID_IT66122) {
-			ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
-						IT66121_AFE_IP_EC1,
+			ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG, IT66121_AFE_IP_EC1,
 						IT66121_AFE_IP_EC1);
 			if (ret)
 				return ret;
@@ -173,8 +166,7 @@ static int it66121_configure_afe(struct it66121_ctx *ctx,
 		return ret;
 
 	if (ctx->id == ID_IT6610) {
-		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG,
-					IT6610_AFE_XP_BYPASS,
+		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG, IT6610_AFE_XP_BYPASS,
 					IT6610_AFE_XP_BYPASS);
 		if (ret)
 			return ret;
@@ -195,12 +187,13 @@ static int it66121_ddc_snapshot(struct it66121_ctx *priv, u8 *word)
 	return ret == ARRAY_SIZE(msgs) ? 0 : ret < 0 ? ret : -EIO;
 }
 
-static int it66121_ddc_write(struct it66121_ctx *priv, u8 reg,
-			   u8 a, u8 b, u8 c, u8 d)
+static int it66121_ddc_write(struct it66121_ctx *priv, u8 reg, u8 a, u8 b, u8 c, u8 d)
 {
 	u8 word[] = { reg, a, b, c, d };
 	struct i2c_msg msg = {
-		.addr = priv->client->addr, .len = sizeof(word), .buf = word,
+		.addr = priv->client->addr,
+		.len = sizeof(word),
+		.buf = word,
 	};
 	int ret = i2c_transfer(priv->adapter, &msg, 1);
 
@@ -218,8 +211,8 @@ static int it66121_ddc_collect(struct it66121_ctx *priv, u8 *buf, size_t len)
 		ret = it66121_ddc_snapshot(priv, word);
 		if (ret)
 			return ret;
-		dev_dbg(&priv->client->dev, "DDC status=%02x fifo=%02x received=%zu/%zu\n",
-			word[2], word[3], received, len);
+		dev_dbg(&priv->client->dev, "DDC status=%02x fifo=%02x received=%zu/%zu\n", word[2],
+			word[3], received, len);
 		if (word[2] & GENMASK(5, 3))
 			return -EIO;
 		if (buf && !(word[2] & BIT(1))) {
@@ -249,8 +242,7 @@ static int it66121_clear_ddc_fifo(struct it66121_ctx *priv)
 {
 	int ret;
 
-	ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, 0,
-				DDC_CMD_FIFO_CLEAR, 0, 0);
+	ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, 0, DDC_CMD_FIFO_CLEAR, 0, 0);
 	if (ret)
 		return ret;
 
@@ -272,8 +264,7 @@ static int it66121_abort_ddc_ops(struct it66121_ctx *priv)
 	 * do abort DDC twice
 	 */
 	for (int i = 0; i < 2; i++) {
-		ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, 0,
-					DDC_CMD_ABORT, 0, 0);
+		ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, 0, DDC_CMD_ABORT, 0, 0);
 		if (ret)
 			return ret;
 
@@ -294,8 +285,8 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 
 	if (!buf || !len || len > 128 || segment > 255)
 		return -EINVAL;
-	ret = it66121_ddc_write(priv, IT66121_DDC_CONTROL,
-				IT66121_DDC_MASTER_HOST, EDID_DDC_ADDR, 0, 0);
+	ret = it66121_ddc_write(priv, IT66121_DDC_CONTROL, IT66121_DDC_MASTER_HOST, EDID_DDC_ADDR,
+				0, 0);
 	if (ret)
 		return ret;
 	ret = it66121_abort_ddc_ops(priv);
@@ -308,15 +299,14 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 		ret = it66121_clear_ddc_fifo(priv);
 		if (ret)
 			return ret;
-		ret = it66121_ddc_write(priv, IT66121_DDC_CONTROL,
-					IT66121_DDC_MASTER_HOST, EDID_DDC_ADDR,
-					(u8)(offset - FL2000_EDID_FIFO_SKIP),
+		ret = it66121_ddc_write(priv, IT66121_DDC_CONTROL, IT66121_DDC_MASTER_HOST,
+					EDID_DDC_ADDR, (u8)(offset - FL2000_EDID_FIFO_SKIP),
 					count + FL2000_EDID_FIFO_SKIP);
 		if (ret)
 			return ret;
 		/* Status and FIFO are read-only; write them as zero without a pre-read. */
-		ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, segment,
-					DDC_CMD_EDID_READ, 0, 0);
+		ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, segment, DDC_CMD_EDID_READ, 0,
+					0);
 		if (ret)
 			return ret;
 		/* Let the requested burst fill the FIFO before a status snapshot can
@@ -343,8 +333,7 @@ static bool it66121_is_hpd_detect(struct it66121_ctx *ctx)
 	return val & IT66121_SYS_STATUS_HPDETECT;
 }
 
-static int it66121_bridge_attach(struct drm_bridge *bridge,
-				 struct drm_encoder *encoder,
+static int it66121_bridge_attach(struct drm_bridge *bridge, struct drm_encoder *encoder,
 				 enum drm_bridge_attach_flags flags)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
@@ -367,13 +356,11 @@ static int it66121_bridge_attach(struct drm_bridge *bridge,
 			return ret;
 	}
 
-	ret = regmap_write_bits(ctx->regmap, IT66121_INT_REG,
-				IT66121_INT_TX_CLK_OFF, 0);
+	ret = regmap_write_bits(ctx->regmap, IT66121_INT_REG, IT66121_INT_TX_CLK_OFF, 0);
 	if (ret)
 		return ret;
 
-	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_DRV_REG,
-				IT66121_AFE_DRV_PWD, 0);
+	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_DRV_REG, IT66121_AFE_DRV_PWD, 0);
 	if (ret)
 		return ret;
 
@@ -382,28 +369,25 @@ static int it66121_bridge_attach(struct drm_bridge *bridge,
 	if (ret)
 		return ret;
 
-	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
-				IT66121_AFE_IP_PWDPLL, 0);
+	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG, IT66121_AFE_IP_PWDPLL, 0);
 	if (ret)
 		return ret;
 
-	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_DRV_REG,
-				IT66121_AFE_DRV_RST, 0);
+	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_DRV_REG, IT66121_AFE_DRV_RST, 0);
 	if (ret)
 		return ret;
 
-	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG,
-				IT66121_AFE_XP_RESETB, IT66121_AFE_XP_RESETB);
+	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_REG, IT66121_AFE_XP_RESETB,
+				IT66121_AFE_XP_RESETB);
 	if (ret)
 		return ret;
 
-	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG,
-				IT66121_AFE_IP_RESETB, IT66121_AFE_IP_RESETB);
+	ret = regmap_write_bits(ctx->regmap, IT66121_AFE_IP_REG, IT66121_AFE_IP_RESETB,
+				IT66121_AFE_IP_RESETB);
 	if (ret)
 		return ret;
 
-	ret = regmap_write_bits(ctx->regmap, IT66121_SW_RST_REG,
-				IT66121_SW_RST_REF,
+	ret = regmap_write_bits(ctx->regmap, IT66121_SW_RST_REG, IT66121_SW_RST_REF,
 				IT66121_SW_RST_REF);
 	if (ret)
 		return ret;
@@ -438,13 +422,12 @@ static u32 *it66121_bridge_atomic_get_output_bus_fmts(struct drm_bridge *bridge,
 {
 	u32 *output_fmts;
 
-	output_fmts = kcalloc(1, sizeof(*output_fmts),
-			      GFP_KERNEL);
+	output_fmts = kcalloc(1, sizeof(*output_fmts), GFP_KERNEL);
 	if (!output_fmts)
 		return NULL;
 
 	/* TOFIX handle more than MEDIA_BUS_FMT_RGB888_1X24 as output format */
-	output_fmts[0] =  MEDIA_BUS_FMT_RGB888_1X24;
+	output_fmts[0] = MEDIA_BUS_FMT_RGB888_1X24;
 	*num_output_fmts = 1;
 
 	return output_fmts;
@@ -454,16 +437,14 @@ static u32 *it66121_bridge_atomic_get_input_bus_fmts(struct drm_bridge *bridge,
 						     struct drm_bridge_state *bridge_state,
 						     struct drm_crtc_state *crtc_state,
 						     struct drm_connector_state *conn_state,
-						     u32 output_fmt,
-						     unsigned int *num_input_fmts)
+						     u32 output_fmt, unsigned int *num_input_fmts)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	u32 *input_fmts;
 
 	*num_input_fmts = 0;
 
-	input_fmts = kcalloc(1, sizeof(*input_fmts),
-			     GFP_KERNEL);
+	input_fmts = kcalloc(1, sizeof(*input_fmts), GFP_KERNEL);
 	if (!input_fmts)
 		return NULL;
 
@@ -493,8 +474,8 @@ static void it66121_bridge_hpd_disable(struct drm_bridge *bridge)
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	int ret;
 
-	ret = regmap_write_bits(ctx->regmap, IT66121_INT_MASK1_REG,
-				IT66121_INT_MASK1_HPD, IT66121_INT_MASK1_HPD);
+	ret = regmap_write_bits(ctx->regmap, IT66121_INT_MASK1_REG, IT66121_INT_MASK1_HPD,
+				IT66121_INT_MASK1_HPD);
 	if (ret)
 		dev_err(ctx->dev, "failed to disable HPD IRQ\n");
 }
@@ -510,12 +491,10 @@ static int it66121_restore_interrupts(struct it66121_ctx *ctx)
 	return regmap_write_bits(ctx->regmap, IT66121_INT_MASK1_REG, 0xff, 0xfe);
 }
 
-static void it66121_bridge_mode_set(struct drm_bridge *bridge,
-				   const struct drm_display_mode *mode,
-				   const struct drm_display_mode *adjusted_mode);
+static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
+				    const struct drm_display_mode *adjusted_mode);
 
-static void it66121_bridge_enable(struct drm_bridge *bridge,
-				  struct drm_atomic_state *state)
+static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_state *state)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	struct drm_crtc_state *crtc_state;
@@ -533,8 +512,7 @@ static void it66121_bridge_enable(struct drm_bridge *bridge,
 	mutex_unlock(&ctx->lock);
 }
 
-static void it66121_bridge_disable(struct drm_bridge *bridge,
-				   struct drm_atomic_state *state)
+static void it66121_bridge_disable(struct drm_bridge *bridge, struct drm_atomic_state *state)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 
@@ -544,8 +522,7 @@ static void it66121_bridge_disable(struct drm_bridge *bridge,
 	mutex_unlock(&ctx->lock);
 }
 
-static int it66121_bridge_check(struct drm_bridge *bridge,
-				struct drm_bridge_state *bridge_state,
+static int it66121_bridge_check(struct drm_bridge *bridge, struct drm_bridge_state *bridge_state,
 				struct drm_crtc_state *crtc_state,
 				struct drm_connector_state *conn_state)
 {
@@ -554,17 +531,15 @@ static int it66121_bridge_check(struct drm_bridge *bridge,
 	if (ctx->id == ID_IT6610) {
 		/* The IT6610 only supports these settings */
 		bridge_state->input_bus_cfg.flags |= DRM_BUS_FLAG_DE_HIGH |
-			DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE;
-		bridge_state->input_bus_cfg.flags &=
-			~DRM_BUS_FLAG_PIXDATA_DRIVE_POSEDGE;
+						     DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE;
+		bridge_state->input_bus_cfg.flags &= ~DRM_BUS_FLAG_PIXDATA_DRIVE_POSEDGE;
 	}
 
 	return 0;
 }
 
-static void it66121_bridge_mode_set(struct drm_bridge *bridge,
-			     const struct drm_display_mode *mode,
-			     const struct drm_display_mode *adjusted_mode)
+static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
+				    const struct drm_display_mode *adjusted_mode)
 {
 	u8 buf[HDMI_INFOFRAME_SIZE(AVI)];
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
@@ -596,8 +571,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 
 	/* Write new AVI infoframe packet */
 	ret = regmap_bulk_write(ctx->regmap, IT66121_AVIINFO_DB1_REG,
-				&buf[HDMI_INFOFRAME_HEADER_SIZE],
-				HDMI_AVI_INFOFRAME_SIZE);
+				&buf[HDMI_INFOFRAME_HEADER_SIZE], HDMI_AVI_INFOFRAME_SIZE);
 	if (ret)
 		goto unlock;
 
@@ -615,8 +589,7 @@ static void it66121_bridge_mode_set(struct drm_bridge *bridge,
 
 configure:
 	if ((ctx->id == ID_IT66121 || ctx->id == ID_IT66122) &&
-	    regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG,
-			      IT66121_CLK_BANK_PWROFF_TXCLK,
+	    regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG, IT66121_CLK_BANK_PWROFF_TXCLK,
 			      IT66121_CLK_BANK_PWROFF_TXCLK)) {
 		goto unlock;
 	}
@@ -628,8 +601,8 @@ configure:
 		goto unlock;
 
 	if ((ctx->id == ID_IT66121 || ctx->id == ID_IT66122) &&
-	    regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG,
-			      IT66121_CLK_BANK_PWROFF_TXCLK, 0)) {
+	    regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG, IT66121_CLK_BANK_PWROFF_TXCLK,
+			      0)) {
 		goto unlock;
 	}
 
@@ -660,7 +633,8 @@ static enum drm_mode_status it66121_bridge_mode_valid(struct drm_bridge *bridge,
 	return MODE_OK;
 }
 
-static enum drm_connector_status it66121_bridge_detect(struct drm_bridge *bridge, struct drm_connector *connector)
+static enum drm_connector_status it66121_bridge_detect(struct drm_bridge *bridge,
+						       struct drm_connector *connector)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 
@@ -672,16 +646,16 @@ static enum drm_connector_status it66121_bridge_detect(struct drm_bridge *bridge
 		return connector_status_disconnected;
 	mutex_lock(&ctx->lock);
 	ret = regmap_read(ctx->regmap, IT66121_SYS_STATUS_REG, &value);
-	status = ret ? connector_status_unknown :
-		(value & IT66121_SYS_STATUS_HPDETECT) ? connector_status_connected :
-		connector_status_disconnected;
+	status = ret				       ? connector_status_unknown :
+		 (value & IT66121_SYS_STATUS_HPDETECT) ? connector_status_connected :
+							 connector_status_disconnected;
 	mutex_unlock(&ctx->lock);
 	drm_dev_exit(idx);
 	return status;
 }
 
 static const struct drm_edid *it66121_bridge_edid_read(struct drm_bridge *bridge,
-						     struct drm_connector *connector)
+						       struct drm_connector *connector)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	const struct drm_edid *edid;
@@ -736,17 +710,16 @@ static void it66121_bridge_interrupt(struct drm_bridge *bridge)
 	if (ret) {
 		dev_err(dev, "Cannot read STATUS1_REG %d\n", ret);
 	} else if (val & IT66121_INT_STATUS1_HPD_STATUS) {
-		regmap_write_bits(ctx->regmap, IT66121_INT_CLR1_REG,
-				  IT66121_INT_CLR1_HPD, IT66121_INT_CLR1_HPD);
+		regmap_write_bits(ctx->regmap, IT66121_INT_CLR1_REG, IT66121_INT_CLR1_HPD,
+				  IT66121_INT_CLR1_HPD);
 
-		status = it66121_is_hpd_detect(ctx) ? connector_status_connected
-			: connector_status_disconnected;
+		status = it66121_is_hpd_detect(ctx) ? connector_status_connected :
+						      connector_status_disconnected;
 
 		event = true;
 	}
 
-	regmap_write_bits(ctx->regmap, IT66121_SYS_STATUS_REG,
-			  IT66121_SYS_STATUS_CLEAR_IRQ,
+	regmap_write_bits(ctx->regmap, IT66121_SYS_STATUS_REG, IT66121_SYS_STATUS_CLEAR_IRQ,
 			  IT66121_SYS_STATUS_CLEAR_IRQ);
 
 unlock:
@@ -754,7 +727,6 @@ unlock:
 
 	if (event)
 		drm_bridge_hpd_notify(&ctx->bridge, status);
-
 }
 
 /* USB component glue: the bridge has no Device Tree graph or GPIO IRQ. */
@@ -792,7 +764,8 @@ static int it66121_probe(struct i2c_client *client)
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C))
 		return -ENXIO;
-	ctx = devm_drm_bridge_alloc(&client->dev, struct it66121_ctx, bridge, &it66121_bridge_funcs);
+	ctx = devm_drm_bridge_alloc(&client->dev, struct it66121_ctx, bridge,
+				    &it66121_bridge_funcs);
 	if (IS_ERR(ctx))
 		return PTR_ERR(ctx);
 	ctx->dev = &client->dev;
@@ -803,7 +776,8 @@ static int it66121_probe(struct i2c_client *client)
 	mutex_init(&ctx->lock);
 	ctx->regmap = devm_regmap_init_i2c(client, &it66121_regmap_config);
 	if (IS_ERR(ctx->regmap))
-		return dev_err_probe(ctx->dev, PTR_ERR(ctx->regmap), "Register map initialization failed\n");
+		return dev_err_probe(ctx->dev, PTR_ERR(ctx->regmap),
+				     "Register map initialization failed\n");
 	for (unsigned int i = 0; i < ARRAY_SIZE(bytes); i++) {
 		ret = regmap_read(ctx->regmap, i, &value);
 		if (ret)
@@ -831,10 +805,7 @@ static void it66121_remove(struct i2c_client *client)
 	drm_bridge_remove(&ctx->bridge);
 }
 
-static const struct i2c_device_id it66121_ids[] = {
-	{ "it66121", 0 },
-	{ }
-};
+static const struct i2c_device_id it66121_ids[] = { { "it66121", 0 }, {} };
 MODULE_DEVICE_TABLE(i2c, it66121_ids);
 static struct i2c_driver it66121_driver = {
 	.probe = it66121_probe,

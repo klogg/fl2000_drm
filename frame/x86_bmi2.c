@@ -5,8 +5,8 @@
 #include "../fl2000_frame.h"
 #include "bmi2.h"
 
-unsigned int fl2000_frame_convert(u8 *dst, const u8 *src,
-				 unsigned int pixels, unsigned int bytes_pix)
+unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels,
+				  unsigned int bytes_pix)
 {
 	unsigned int count = min(pixels & ~7U, 4096U);
 

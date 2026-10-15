@@ -27,7 +27,7 @@ static const u32 fl2000_pixel_formats[] = {
 };
 
 /* XXX: Shall this has to come from driver parameters? */
-static const char * const fl2000_bridges[] = {
+static const char *const fl2000_bridges[] = {
 	"it66121",
 };
 
@@ -104,7 +104,7 @@ static unsigned int fl2000_active_pixel_rate(const struct drm_display_mode *mode
 }
 
 static unsigned int fl2000_frame_bytes_pix(enum usb_device_speed speed,
-					 const struct drm_display_mode *mode, u32 format)
+					   const struct drm_display_mode *mode, u32 format)
 {
 	unsigned int available = fl2000_get_bytes_pix(speed, fl2000_active_pixel_rate(mode));
 
@@ -262,8 +262,8 @@ int fl2000_init_clock(struct usb_device *usb_dev)
 	struct fl2000_pll pll;
 	u32 clock;
 
-	if (fl2000_pll_calc((u64)FL2000_MIN_PIXCLOCK * FL2000_PLL_PRECISION,
-			    &pll, &clock) >= FL2000_PPM_ERR_MAX)
+	if (fl2000_pll_calc((u64)FL2000_MIN_PIXCLOCK * FL2000_PLL_PRECISION, &pll, &clock) >=
+	    FL2000_PPM_ERR_MAX)
 		return -EINVAL;
 	return fl2000_set_pll(usb_dev, &pll);
 }
@@ -277,18 +277,16 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 	const u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
 	const int max_h_adjustment = 10;
 
-	if (mode->clock < FL2000_MIN_PIXCLOCK / 1000 ||
-	    mode->htotal <= 0 || mode->vtotal <= 0 ||
-	    (u64)mode->clock * 1000 > FL2000_MAX_PIXCLOCK ||
-	    mode->hdisplay <= 0 || mode->vdisplay <= 0 ||
-	    mode->hdisplay > 4095 || mode->vdisplay > 4095 ||
-	    mode->htotal > 4095 || mode->vtotal > 4095 ||
-	    mode->hsync_start < mode->hdisplay || mode->hsync_end <= mode->hsync_start ||
-	    mode->hsync_end > mode->htotal || mode->hsync_end - mode->hsync_start > 255 ||
-	    mode->vsync_start < mode->vdisplay || mode->vsync_end <= mode->vsync_start ||
-	    mode->vsync_end > mode->vtotal || mode->vsync_end - mode->vsync_start > 7 ||
-	    (mode->flags & (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN |
-			    DRM_MODE_FLAG_3D_MASK)) ||
+	if (mode->clock < FL2000_MIN_PIXCLOCK / 1000 || mode->htotal <= 0 || mode->vtotal <= 0 ||
+	    (u64)mode->clock * 1000 > FL2000_MAX_PIXCLOCK || mode->hdisplay <= 0 ||
+	    mode->vdisplay <= 0 || mode->hdisplay > 4095 || mode->vdisplay > 4095 ||
+	    mode->htotal > 4095 || mode->vtotal > 4095 || mode->hsync_start < mode->hdisplay ||
+	    mode->hsync_end <= mode->hsync_start || mode->hsync_end > mode->htotal ||
+	    mode->hsync_end - mode->hsync_start > 255 || mode->vsync_start < mode->vdisplay ||
+	    mode->vsync_end <= mode->vsync_start || mode->vsync_end > mode->vtotal ||
+	    mode->vsync_end - mode->vsync_start > 7 ||
+	    (mode->flags &
+	     (DRM_MODE_FLAG_INTERLACE | DRM_MODE_FLAG_DBLSCAN | DRM_MODE_FLAG_3D_MASK)) ||
 	    mode->vscan > 1)
 		return -EINVAL;
 
@@ -329,7 +327,7 @@ static struct fl2000_drm_if *fl2000_pipe_device(struct drm_simple_display_pipe *
 }
 
 static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_pipe *pipe,
-						    const struct drm_display_mode *mode)
+						      const struct drm_display_mode *mode)
 {
 	struct fl2000_drm_if *drm_if = fl2000_pipe_device(pipe);
 	struct drm_display_mode adjusted;
@@ -338,11 +336,12 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_
 	if (fl2000_mode_calc(mode, &adjusted, &pll))
 		return MODE_BAD;
 	return fl2000_get_bytes_pix(drm_if->usb_dev->speed, fl2000_active_pixel_rate(&adjusted)) ?
-		MODE_OK : MODE_CLOCK_HIGH;
+		       MODE_OK :
+		       MODE_CLOCK_HIGH;
 }
 
-static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
-			       struct drm_plane_state *plane, struct drm_crtc_state *crtc)
+static int fl2000_display_check(struct drm_simple_display_pipe *pipe, struct drm_plane_state *plane,
+				struct drm_crtc_state *crtc)
 {
 	struct fl2000_pll pll;
 	int ret;
@@ -362,13 +361,12 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe,
 			return ret;
 	}
 	if (!plane->fb || !fl2000_frame_bytes_pix(fl2000_pipe_device(pipe)->usb_dev->speed,
-						 &crtc->adjusted_mode, plane->fb->format->format))
+						  &crtc->adjusted_mode, plane->fb->format->format))
 		return -EINVAL;
 	return 0;
 }
 
-static int fl2000_prepare_fb(struct drm_simple_display_pipe *pipe,
-			     struct drm_plane_state *state)
+static int fl2000_prepare_fb(struct drm_simple_display_pipe *pipe, struct drm_plane_state *state)
 {
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
 	int ret;
@@ -386,8 +384,7 @@ static int fl2000_prepare_fb(struct drm_simple_display_pipe *pipe,
 	return 0;
 }
 
-static void fl2000_cleanup_fb(struct drm_simple_display_pipe *pipe,
-			       struct drm_plane_state *state)
+static void fl2000_cleanup_fb(struct drm_simple_display_pipe *pipe, struct drm_plane_state *state)
 {
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
 
@@ -423,16 +420,16 @@ static int fl2000_copy_frame(struct drm_simple_display_pipe *pipe, struct drm_pl
 		damage = &visible;
 	}
 	ret = fl2000_streaming_update(drm_if->usb_dev, (u8 *)shadow->data[0].vaddr + offset,
-				       state->src_h >> 16, state->src_w >> 16, fb->pitches[0],
-				       fb->format->format, damage);
+				      state->src_h >> 16, state->src_w >> 16, fb->pitches[0],
+				      fb->format->format, damage);
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
 exit:
 	drm_dev_exit(idx);
 	return ret;
 }
 
-static int fl2000_configure_mode(struct fl2000_drm_if *drm_if,
-				const struct drm_display_mode *mode, u32 format)
+static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_display_mode *mode,
+				 u32 format)
 {
 	struct usb_device *usb_dev = drm_if->usb_dev;
 	struct fl2000_pll pll;
@@ -457,11 +454,13 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if,
 	ret = fl2000_set_pll(usb_dev, &pll);
 	if (ret)
 		return ret;
-	timings = (struct fl2000_timings) {
-		.hactive = mode->hdisplay, .htotal = mode->htotal,
+	timings = (struct fl2000_timings){
+		.hactive = mode->hdisplay,
+		.htotal = mode->htotal,
 		.hsync_width = mode->hsync_end - mode->hsync_start,
 		.hstart = mode->htotal - mode->hsync_start + 1,
-		.vactive = mode->vdisplay, .vtotal = mode->vtotal,
+		.vactive = mode->vdisplay,
+		.vtotal = mode->vtotal,
 		.vsync_width = mode->vsync_end - mode->vsync_start,
 		.vstart = mode->vtotal - mode->vsync_start + 1,
 		.hsync_positive = !!(mode->flags & DRM_MODE_FLAG_PHSYNC),
@@ -481,8 +480,8 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if,
 	return ret;
 }
 
-static void fl2000_display_enable(struct drm_simple_display_pipe *pipe,
-				  struct drm_crtc_state *crtc, struct drm_plane_state *plane)
+static void fl2000_display_enable(struct drm_simple_display_pipe *pipe, struct drm_crtc_state *crtc,
+				  struct drm_plane_state *plane)
 {
 	struct fl2000_drm_if *drm_if = fl2000_pipe_device(pipe);
 	int idx, ret;
@@ -522,12 +521,12 @@ static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
 	    drm_atomic_helper_damage_merged(old_state, pipe->plane.state, &damage)) {
 		/* New framebuffers must rebuild each buffer, even with explicit clips. */
 		ret = fl2000_copy_frame(pipe, pipe->plane.state,
-				       old_state->fb != pipe->plane.state->fb ? NULL : &damage);
+					old_state->fb != pipe->plane.state->fb ? NULL : &damage);
 		if (!ret)
 			ret = fl2000_streaming_enable(fl2000_pipe_device(pipe)->usb_dev);
 		if (ret)
-			dev_err_ratelimited(pipe->crtc.dev->dev,
-					    "Frame conversion failed: %d\n", ret);
+			dev_err_ratelimited(pipe->crtc.dev->dev, "Frame conversion failed: %d\n",
+					    ret);
 	}
 	drm_dev_exit(idx);
 }
@@ -577,7 +576,8 @@ void fl2000_drm_set_polling(struct usb_device *usb_dev, bool polling)
 		connector = drm_if->bridge.connector ? *drm_if->bridge.connector : NULL;
 		if (connector)
 			connector->polled = polling ? DRM_CONNECTOR_POLL_CONNECT |
-						     DRM_CONNECTOR_POLL_DISCONNECT : DRM_CONNECTOR_POLL_HPD;
+							      DRM_CONNECTOR_POLL_DISCONNECT :
+						      DRM_CONNECTOR_POLL_HPD;
 		mutex_unlock(&drm->mode_config.mutex);
 		if (polling)
 			drm_kms_helper_poll_enable(drm);
@@ -597,7 +597,7 @@ static int fl2000_drm_bind(struct device *master)
 	int ret;
 
 	drm_if = __drm_dev_alloc(master, &fl2000_drm_driver, sizeof(*drm_if),
-				offsetof(struct fl2000_drm_if, drm));
+				 offsetof(struct fl2000_drm_if, drm));
 	if (IS_ERR(drm_if))
 		return PTR_ERR(drm_if);
 	drm = &drm_if->drm;
@@ -617,8 +617,8 @@ static int fl2000_drm_bind(struct device *master)
 		put_device(dma_dev);
 	}
 	ret = drm_simple_display_pipe_init(drm, &drm_if->pipe, &fl2000_display_funcs,
-					 fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats),
-					 modifiers, NULL);
+					   fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats),
+					   modifiers, NULL);
 	if (ret)
 		goto put;
 	ret = component_bind_all(master, &drm_if->bridge);
@@ -628,8 +628,7 @@ static int fl2000_drm_bind(struct device *master)
 				DRM_BRIDGE_ATTACH_NO_CONNECTOR);
 	if (ret)
 		goto unbind;
-	connector = fl2000_bridge_connector_init(drm, &drm_if->pipe.encoder,
-						drm_if->bridge.bridge);
+	connector = fl2000_bridge_connector_init(drm, &drm_if->pipe.encoder, drm_if->bridge.bridge);
 	if (IS_ERR(connector)) {
 		ret = PTR_ERR(connector);
 		goto detach_encoder;

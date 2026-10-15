@@ -36,8 +36,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 		u8 b[4];
 	} data;
 
-	if (!msgs || (num != 1 && num != 2) || !msgs[0].buf ||
-	    msgs[0].flags || msgs[0].addr > 0x7f)
+	if (!msgs || (num != 1 && num != 2) || !msgs[0].buf || msgs[0].flags || msgs[0].addr > 0x7f)
 		return -EOPNOTSUPP;
 	read = num == 2;
 	if (read) {

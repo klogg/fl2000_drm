@@ -14,8 +14,7 @@ static void fl2000_wire_word(u8 *dst, u64 value)
 	put_unaligned_le64((value << 32) | (value >> 32), dst);
 }
 
-void fl2000_bmi2_convert(u8 *dst, const u8 *src, unsigned int pixels,
-			 unsigned int bytes_pix)
+void fl2000_bmi2_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned int bytes_pix)
 {
 	unsigned int i;
 
