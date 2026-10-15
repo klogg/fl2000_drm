@@ -68,13 +68,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo --preserve-env=DEBIAN_FRONTEND apt-get install -y --no-install-recommends \
-            build-essential python3 lua5.4 tshark
+            build-essential libdrm-dev pkg-config python3 lua5.4 tshark
       - name: Run sanitizer-backed logic regressions
         run: |
           python3 tests/test_logic.py
           python3 tests/test_edid.py
           python3 tests/test_bridge.py
           python3 tests/test_interrupt.py
+          python3 tests/test_tools.py
       - name: Validate scripts
         run: |
           for script in scripts/*.sh; do bash -n "$script"; done
@@ -82,8 +83,16 @@ jobs:
           for script in startup emulate sign checkpatch clang-format; do
             "scripts/$script.sh" --help
           done
-          python3 -m py_compile tests/qemu_hardware.py tests/qemu_smoke.py
+          python3 -m compileall -q tests
           luac -p scripts/fl2k.lua
           luac -p tests/fl2k_headless.lua
+      - name: Compile guest utilities without running them
+        run: |
+          mkdir -p .qemu-build/tools
+          read -r -a drm_flags <<< "$(pkg-config --cflags libdrm)"
+          for tool in kms_smoke kms_profile kernel_sample; do
+            cc -O2 -Wall -Wextra -Werror "${drm_flags[@]}" \
+              "tests/$tool.c" -o ".qemu-build/tools/$tool"
+          done
       - name: Replay USB and analysis callback regressions
         run: python3 tests/test_fl2k.py
