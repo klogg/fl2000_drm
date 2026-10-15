@@ -31,7 +31,7 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 	struct usb_device *usb_dev = context;
 	u16 offset = (u16)reg;
 
-	usb_rw_data = kmalloc(sizeof(*usb_rw_data), GFP_KERNEL | GFP_DMA);
+	usb_rw_data = kmalloc_obj(*usb_rw_data, GFP_KERNEL | GFP_DMA);
 	if (!usb_rw_data)
 		return -ENOMEM;
 
@@ -56,7 +56,7 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 	struct usb_device *usb_dev = context;
 	u16 offset = (u16)reg;
 
-	usb_rw_data = kmalloc(sizeof(*usb_rw_data), GFP_KERNEL | GFP_DMA);
+	usb_rw_data = kmalloc_obj(*usb_rw_data, GFP_KERNEL | GFP_DMA);
 	if (!usb_rw_data)
 		return -ENOMEM;
 

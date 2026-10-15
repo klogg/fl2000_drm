@@ -1,7 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: GPL-2.0
 set -eu
-repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 source "$repo_dir/scripts/kernel-tools.sh"
 if [[ ${1:-} == --help ]]; then
     printf '%s\n' 'Usage: checkpatch.sh [checkpatch-options]' \
@@ -20,7 +20,18 @@ shopt -s nullglob
 status=0
 for file in *.[ch] bridge/*.[ch] frame/*.[ch]; do
     [[ $file == *.mod.c ]] && continue
-    if ! perl "$checker" --strict --no-summary --no-tree "$@" -f "$file"; then
+    options=()
+    case "$file" in
+        frame/ssse3.c)
+            # GCC SIMD builtins require these primitive vector type aliases.
+            options+=(--ignore NEW_TYPEDEFS)
+            ;;
+        fl2000_drv.c|fl2000_interrupt.c)
+            # USB descriptor field names are defined by the kernel ABI.
+            options+=(--ignore CAMELCASE)
+            ;;
+    esac
+    if ! perl "$checker" --strict --no-summary --no-tree "${options[@]}" "$@" -f "$file"; then
         status=1
     fi
 done

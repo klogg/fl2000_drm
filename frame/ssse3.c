@@ -45,7 +45,8 @@ void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned 
 		} else {
 			v4su pa = (v4su)a, pb = (v4su)b;
 			const v4su bias = { 32768, 32768, 32768, 32768 };
-			const v8hu sign = { 32768, 32768, 32768, 32768, 32768, 32768, 32768, 32768 };
+			const v8hu sign = { 0x8000, 0x8000, 0x8000, 0x8000,
+					    0x8000, 0x8000, 0x8000, 0x8000 };
 
 			pa = ((pa >> 8) & 0xf800) | ((pa >> 5) & 0x7e0) | ((pa >> 3) & 0x1f);
 			pb = ((pb >> 8) & 0xf800) | ((pb >> 5) & 0x7e0) | ((pb >> 3) & 0x1f);

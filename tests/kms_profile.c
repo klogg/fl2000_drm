@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define _GNU_SOURCE
+#include <drm.h>
+#include <drm_fourcc.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -11,8 +13,6 @@
 #include <sys/syscall.h>
 #include <time.h>
 #include <unistd.h>
-#include <drm.h>
-#include <drm_fourcc.h>
 static void check(int result, const char *what)
 {
 	if (result < 0) {
@@ -58,7 +58,8 @@ static void account(const char *format, const char *phase, struct cpu_sample bef
 {
 	struct cpu_sample after = sample();
 	double elapsed = seconds(CLOCK_MONOTONIC) - start, hz = sysconf(_SC_CLK_TCK);
-	printf("CPU %s %s wall=%.3f guest_busy=%.3f%% irq=%.3f%% softirq=%.3f%% steal=%.3f%% process=%.6fs\n",
+	printf("CPU %s %s wall=%.3f guest_busy=%.3f%% irq=%.3f%% softirq=%.3f%% "
+	       "steal=%.3f%% process=%.6fs\n",
 	       format, phase, elapsed, 100 * (after.busy - before.busy) / hz / elapsed,
 	       100 * (after.irq - before.irq) / hz / elapsed,
 	       100 * (after.softirq - before.softirq) / hz / elapsed,
@@ -265,8 +266,9 @@ int main(int argc, char **argv)
 	const char *names[] = { "XRGB8888", "RGB888", "RGB565" };
 	int filter = open("/sys/kernel/debug/tracing/set_ftrace_filter", O_WRONLY | O_TRUNC);
 	if (filter >= 0) {
-		const char *name =
-			"fl2000_* it66121_* usb_submit_urb xhci_irq xhci_urb_enqueue usb_hcd_map_urb_for_dma usb_hcd_unmap_urb_for_dma __usb_hcd_giveback_urb\n";
+		const char *name = "fl2000_* it66121_* usb_submit_urb xhci_irq "
+				   "xhci_urb_enqueue usb_hcd_map_urb_for_dma "
+				   "usb_hcd_unmap_urb_for_dma __usb_hcd_giveback_urb\n";
 		size_t left = strlen(name);
 		while (left) {
 			ssize_t done = write(filter, name, left);

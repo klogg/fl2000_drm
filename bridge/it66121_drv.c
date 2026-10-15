@@ -19,6 +19,7 @@ enum chip_id {
 	ID_IT66121,
 	ID_IT66122,
 };
+
 struct it66121_ctx {
 	struct regmap *regmap;
 	struct drm_bridge bridge;
@@ -27,7 +28,7 @@ struct it66121_ctx {
 	struct i2c_client *client;
 	struct i2c_adapter *adapter;
 	u32 bus_width;
-	struct mutex lock;
+	struct mutex lock; /* Serializes bridge register sequences. */
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
 	enum chip_id id;
 };

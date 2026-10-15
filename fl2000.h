@@ -7,7 +7,6 @@
 #ifndef __FL2000_DRM_H__
 #define __FL2000_DRM_H__
 
-#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/math64.h>
@@ -19,17 +18,13 @@
 #include <linux/component.h>
 #include <linux/regmap.h>
 #include <linux/vmalloc.h>
-#include <linux/dma-buf.h>
 #include <linux/dma-mapping.h>
-#include <linux/time.h>
 #include <linux/device.h>
 #include <drm/drm_gem.h>
-#include <drm/drm_prime.h>
 #include <drm/drm_vblank.h>
 #include <drm/drm_ioctl.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_fourcc.h>
-#include <drm/drm_fb_helper.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_fbdev_shmem.h>
 #include <drm/clients/drm_client_setup.h>

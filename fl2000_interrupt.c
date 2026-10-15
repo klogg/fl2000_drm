@@ -12,7 +12,7 @@ struct fl2000_interrupt {
 	struct urb *urb;
 	u8 *buf;
 	struct work_struct work;
-	struct mutex mutex;
+	struct mutex mutex; /* Serializes enable, disable and resource release. */
 	spinlock_t lock; /* Serializes submission against stop. */
 	unsigned int stalls;
 	bool stalled;
@@ -111,9 +111,8 @@ static void fl2000_intr_completion(struct urb *urb)
 unlock:
 	spin_unlock_irqrestore(&intr->lock, flags);
 	if (exhausted)
-		dev_warn_ratelimited(
-			&intr->usb_dev->dev,
-			"Interrupt endpoint repeatedly stalled; using connector polling\n");
+		dev_warn_ratelimited(&intr->usb_dev->dev, "Interrupt endpoint repeatedly stalled; "
+							  "using connector polling\n");
 	if (status && status != -EPIPE && status != -ENOENT && status != -ECONNRESET &&
 	    status != -ESHUTDOWN)
 		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt transfer failed: %d\n", status);

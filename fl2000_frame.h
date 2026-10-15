@@ -2,6 +2,8 @@
 #ifndef FL2000_FRAME_H
 #define FL2000_FRAME_H
 
+#include <linux/types.h>
+
 /*
  * dst starts at an eight-byte wire boundary; src may be unaligned.
  * Convert consumes XRGB8888 pixels and produces RGB888/RGB565 wire bytes.
@@ -19,6 +21,7 @@ static inline unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned
 {
 	return 0;
 }
+
 static inline unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src, unsigned int bytes)
 {
 	return 0;
