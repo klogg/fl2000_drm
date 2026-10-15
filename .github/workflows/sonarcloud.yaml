@@ -45,7 +45,7 @@ jobs:
         if: steps.configuration.outputs.enabled == 'true'
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential ca-certificates git linux-headers-generic
+          apt-get install -y --no-install-recommends build-essential ca-certificates git linux-headers-generic python3
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.configuration.outputs.enabled == 'true'
         with:
@@ -62,10 +62,17 @@ jobs:
         run: |
           ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
           test -n "$ksrc"
-          make -C "$ksrc" M="$GITHUB_WORKSPACE" clean
-          "$BUILD_WRAPPER" --out-dir "$BUILD_WRAPPER_OUT_DIR" \
-            make -C "$ksrc" M="$GITHUB_WORKSPACE" W=1 KCFLAGS=-Werror modules
-          test -s "$BUILD_WRAPPER_OUT_DIR/compile_commands.json"
+          mkdir -p "$BUILD_WRAPPER_OUT_DIR"
+          for backend in auto bmi2; do
+            make -C "$ksrc" M="$GITHUB_WORKSPACE" clean
+            "$BUILD_WRAPPER" --out-dir "$BUILD_WRAPPER_OUT_DIR/$backend" \
+              make -C "$ksrc" M="$GITHUB_WORKSPACE" \
+                FL2000_FRAME_BACKEND="$backend" W=1 KCFLAGS=-Werror modules
+          done
+          python3 tests/compile_commands.py \
+            "$BUILD_WRAPPER_OUT_DIR/auto/compile_commands.json" \
+            "$BUILD_WRAPPER_OUT_DIR/bmi2/compile_commands.json" \
+            --output "$BUILD_WRAPPER_OUT_DIR/compile_commands.json"
       - name: Run SonarQube Cloud analysis
         if: steps.configuration.outputs.enabled == 'true'
         uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
