@@ -2,14 +2,14 @@
 # SPDX-License-Identifier: GPL-2.0
 """Exercise actual EDID helpers against a side-effecting register model."""
 
-from pathlib import Path
 import subprocess
 import tempfile
+from pathlib import Path
+
+from source_helpers import function
 
 ROOT = Path(__file__).resolve().parents[1]
-namespace = {"__file__": __file__}
-exec((ROOT / "tests/test_logic.py").read_text().split("drm = ")[0], namespace)
-function = namespace["function"]
+
 source = (
     (ROOT / "bridge/it66121_drv.c")
     .read_text()

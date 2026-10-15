@@ -9,14 +9,16 @@ This compares computation only; select backends using the complete guest workloa
 Run: python3 tests/benchmark_cpu.py
 """
 
+import os
+import re
+import subprocess
+import tempfile
 from pathlib import Path
-import re, subprocess, tempfile, os
+
+from source_helpers import function as f
+from source_helpers import structure as struct
 
 root = Path(__file__).resolve().parents[1]
-ns = {"__file__": str(root / "tests/test_logic.py")}
-exec((root / "tests/test_logic.py").read_text().split("drm = ")[0], ns)
-f = ns["function"]
-struct = ns["structure"]
 stream = (root / "fl2000_streaming.c").read_text()
 drm = (root / "fl2000_drm.c").read_text()
 pre = r"""

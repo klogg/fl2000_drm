@@ -9,6 +9,8 @@ costs. Native SSSE3 reordering is an experimental benchmark-only candidate.
 
 import argparse
 from pathlib import Path
+
+from source_helpers import function
 import os
 import re
 import shutil
@@ -20,9 +22,6 @@ parser.add_argument("--kernel", default=os.uname().release)
 parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
-ns = {"__file__": str(ROOT / "tests/test_logic.py")}
-exec((ROOT / "tests/test_logic.py").read_text().split("drm = ")[0], ns)
-function = ns["function"]
 stream = (ROOT / "fl2000_streaming.c").read_text()
 ssse3 = (ROOT / "frame/x86.c").read_text()
 bmi2 = (ROOT / "frame/x86_bmi2.c").read_text()

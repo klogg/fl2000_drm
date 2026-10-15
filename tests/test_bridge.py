@@ -2,15 +2,15 @@
 # SPDX-License-Identifier: GPL-2.0
 """Exercise rebased bridge modesetting, reset restoration, and HPD acknowledgment."""
 
-from pathlib import Path
 import re
 import subprocess
 import tempfile
+from pathlib import Path
+
+from source_helpers import function, structure
 
 ROOT = Path(__file__).resolve().parents[1]
-namespace = {"__file__": __file__}
-exec((ROOT / "tests/test_logic.py").read_text().split("drm = ")[0], namespace)
-function = namespace["function"]
+
 source = re.sub(
     r"/\*.*?\*/", "", (ROOT / "bridge/it66121_drv.c").read_text(), flags=re.DOTALL
 )
@@ -90,7 +90,7 @@ static int drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *f
 static int hdmi_avi_infoframe_pack(struct hdmi_avi_infoframe *f,u8 *buf,unsigned int n)
 {(void)f;assert(n==17);for(unsigned int i=0;i<n;i++)buf[i]=i+17;return n;}
 """
-ctx = namespace["structure"](source, "it66121_ctx")
+ctx = structure(source, "it66121_ctx")
 checks = r"""
 int main(void)
 {

@@ -2,12 +2,14 @@
 # SPDX-License-Identifier: GPL-2.0
 """Exercise actual interrupt startup, recovery, and stop with mocked USB I/O."""
 
+import subprocess
+import tempfile
 from pathlib import Path
-import subprocess, tempfile
+
+from source_helpers import function, structure
 
 ROOT = Path(__file__).resolve().parents[1]
-ns = {"__file__": __file__}
-exec((ROOT / "tests/test_logic.py").read_text().split("drm = ")[0], ns)
+
 source = (ROOT / "fl2000_interrupt.c").read_text()
 pre = r"""
 #include <assert.h>
@@ -148,9 +150,9 @@ int main(void)
 }
 """
 parts = (
-    [pre, ns["structure"](source, "fl2000_interrupt")]
+    [pre, structure(source, "fl2000_interrupt")]
     + [
-        ns["function"](source, n)
+        function(source, n)
         for n in (
             "fl2000_intr_work",
             "fl2000_intr_completion",

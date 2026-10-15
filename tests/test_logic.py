@@ -6,33 +6,15 @@ USB submission is mocked to exercise ownership, partial submission failure and
 cancellation. This does not emulate USB DMA or physical display timing.
 """
 
-from pathlib import Path
 import os
 import re
 import subprocess
 import tempfile
+from pathlib import Path
+
+from source_helpers import function, structure
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def function(source, name):
-    match = re.search(
-        r"(?:static\s+)?(?:inline\s+)?[\w *]+\b" + name + r"\([^;]*?\)\s*\{", source
-    )
-    if not match:
-        raise AssertionError(f"Function not found: {name}")
-    start = match.start()
-    pos = source.index("{", match.start())
-    depth = 1
-    end = pos + 1
-    while depth:
-        depth += (source[end] == "{") - (source[end] == "}")
-        end += 1
-    return source[start:end]
-
-
-def structure(source, name):
-    return re.search(r"struct " + name + r" \{.*?\n\};", source, re.DOTALL)[0]
 
 
 drm = (ROOT / "fl2000_drm.c").read_text()
@@ -72,6 +54,7 @@ typedef uintptr_t dma_addr_t;
 struct drm_rect { int x1,y1,x2,y2; };
 #define BIT(n) (1U << (n))
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+#define kmalloc_obj(value, flags) kmalloc(sizeof(value), flags)
 #define GFP_ATOMIC 1
 #define STREAMING_EP 1
 #define PAGE_SIZE 4096
@@ -433,9 +416,9 @@ static void test_native_crop(void)
  struct drm_rect crop_damage={2,1,3,2};
  assert(!fl2000_copy_frame(&pipe,&state.base,&crop_damage));
  assert(!memcmp(destination,expected,16));
- assert(fl2000_streaming_compress(&usb,storage,2,2,19,DRM_FORMAT_RGB565)==-EINVAL);
- assert(fl2000_streaming_compress(&usb,storage,2,2,5,DRM_FORMAT_RGB888)==-EINVAL);
- assert(fl2000_streaming_compress(&usb,storage,2,2,19,0)==-EINVAL);
+ assert(fl2000_streaming_update(&usb,storage,2,2,19,DRM_FORMAT_RGB565,NULL)==-EINVAL);
+ assert(fl2000_streaming_update(&usb,storage,2,2,5,DRM_FORMAT_RGB888,NULL)==-EINVAL);
+ assert(fl2000_streaming_update(&usb,storage,2,2,19,0,NULL)==-EINVAL);
  cpu_access_result=-EIO;
  assert(fl2000_copy_frame(&pipe,&state.base,NULL)==-EIO && !cpu_access_count);
  cpu_access_result=0;test_drm_if.drm.unplugged=true;
@@ -859,7 +842,6 @@ parts += [
         "fl2000_damage_add",
         "fl2000_convert_damage",
         "fl2000_streaming_update",
-        "fl2000_streaming_compress",
         "fl2000_submit_transfer",
         "fl2000_data_completion",
         "fl2000_stop_stream",
