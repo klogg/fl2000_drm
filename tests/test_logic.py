@@ -5,6 +5,7 @@
 USB submission is mocked to exercise ownership, partial submission failure and
 cancellation. This does not emulate USB DMA or physical display timing.
 """
+
 from pathlib import Path
 import os
 import re
@@ -15,7 +16,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def function(source, name):
-    match = re.search(r"(?:static\s+)?(?:inline\s+)?[\w *]+\b" + name + r"\([^;]*?\)\s*\{", source)
+    match = re.search(
+        r"(?:static\s+)?(?:inline\s+)?[\w *]+\b" + name + r"\([^;]*?\)\s*\{", source
+    )
     if not match:
         raise AssertionError(f"Function not found: {name}")
     start = match.start()
@@ -29,7 +32,7 @@ def function(source, name):
 
 
 def structure(source, name):
-    return re.search(r"struct " + name + r" \{.*?\n\};", source, re.S)[0]
+    return re.search(r"struct " + name + r" \{.*?\n\};", source, re.DOTALL)[0]
 
 
 drm = (ROOT / "fl2000_drm.c").read_text()
@@ -37,9 +40,11 @@ stream = (ROOT / "fl2000_streaming.c").read_text()
 header = (ROOT / "fl2000.h").read_text()
 i2c = (ROOT / "fl2000_i2c.c").read_text()
 registers = (ROOT / "fl2000_registers.c").read_text()
-defines = "\n".join(re.findall(r"^#define FL2000_.*$", drm + "\n" + stream, re.M))
-mask = re.search(r"#define fl2000_add_bitmask.*?(?=\n\n)", header, re.S)[0]
-prelude = r'''
+defines = "\n".join(
+    re.findall(r"^#define FL2000_.*$", drm + "\n" + stream, re.MULTILINE)
+)
+mask = re.search(r"#define fl2000_add_bitmask.*?(?=\n\n)", header, re.DOTALL)[0]
+prelude = r"""
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -287,8 +292,8 @@ static void *vmap(struct page **pages,unsigned int count,int flags,int prot)
 { (void)flags;(void)prot;for(unsigned int i=0;i<count;i++)assert(pages[i]);return calloc(count,PAGE_SIZE); }
 static void vunmap(void *buffer) { free(buffer); }
 
-'''
-checks = r'''
+"""
+checks = r"""
 static void test_conversion(void)
 {
  const unsigned int widths[] = { 1, 2, 3, 4, 5, 7, 8, 13, 31, 32, 33, 4095, 4096, 4097, 1366, 1920 };
@@ -804,27 +809,81 @@ int main(void)
  puts("PASS: conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, persistent DMA, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers");
  return 0;
 }
-'''
-parts = [prelude, defines, mask, '#include "fl2000_registers.h"', structure(header, "fl2000_pll")]
-parts += [function(drm, name) for name in (
-    "fl2000_get_bytes_pix", "fl2000_active_pixel_rate", "fl2000_frame_bytes_pix", "fl2000_pll_ppm_err", "fl2000_pll_get_divisor",
-    "fl2000_pll_calc", "fl2000_mode_calc",
-    "fl2000_atomic_check", "fl2000_display_check", "fl2000_prepare_fb", "fl2000_cleanup_fb",
-)]
-parts = [part.replace("const int max_h_adjustment = 10;", "const int max_h_adjustment = 10; mode_calls++;") for part in parts]
-parts += [structure(stream, name) for name in ("fl2000_frame", "fl2000_transfer", "fl2000_stream")]
-parts += [function(stream, name) for name in (
-    "fl2000_free_frame", "fl2000_alloc_frame", "fl2000_rgb565", "fl2000_rgb565_pair", "fl2000_convert_line", "fl2000_convert_frame", "fl2000_reorder_line", "fl2000_reorder_frame", "fl2000_source_bytes_pix", "fl2000_damage_add", "fl2000_convert_damage", "fl2000_streaming_update", "fl2000_streaming_compress", "fl2000_submit_transfer", "fl2000_data_completion",
-    "fl2000_stop_stream", "fl2000_streaming_enable",
-)]
+"""
+parts = [
+    prelude,
+    defines,
+    mask,
+    '#include "fl2000_registers.h"',
+    structure(header, "fl2000_pll"),
+]
+parts += [
+    function(drm, name)
+    for name in (
+        "fl2000_get_bytes_pix",
+        "fl2000_active_pixel_rate",
+        "fl2000_frame_bytes_pix",
+        "fl2000_pll_ppm_err",
+        "fl2000_pll_get_divisor",
+        "fl2000_pll_calc",
+        "fl2000_mode_calc",
+        "fl2000_atomic_check",
+        "fl2000_display_check",
+        "fl2000_prepare_fb",
+        "fl2000_cleanup_fb",
+    )
+]
+parts = [
+    part.replace(
+        "const int max_h_adjustment = 10;",
+        "const int max_h_adjustment = 10; mode_calls++;",
+    )
+    for part in parts
+]
+parts += [
+    structure(stream, name)
+    for name in ("fl2000_frame", "fl2000_transfer", "fl2000_stream")
+]
+parts += [
+    function(stream, name)
+    for name in (
+        "fl2000_free_frame",
+        "fl2000_alloc_frame",
+        "fl2000_rgb565",
+        "fl2000_rgb565_pair",
+        "fl2000_convert_line",
+        "fl2000_convert_frame",
+        "fl2000_reorder_line",
+        "fl2000_reorder_frame",
+        "fl2000_source_bytes_pix",
+        "fl2000_damage_add",
+        "fl2000_convert_damage",
+        "fl2000_streaming_update",
+        "fl2000_streaming_compress",
+        "fl2000_submit_transfer",
+        "fl2000_data_completion",
+        "fl2000_stop_stream",
+        "fl2000_streaming_enable",
+    )
+]
 parts.append(function(drm, "fl2000_copy_frame"))
-parts += [function(i2c, name) for name in (
-    "fl2000_i2c_read_dword", "fl2000_i2c_write_dword", "fl2000_i2c_xfer",
-)]
-parts.append("static int i2c_transfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num) { return detect_short ? 0 : fl2000_i2c_xfer(adapter, msgs, num); }")
+parts += [
+    function(i2c, name)
+    for name in (
+        "fl2000_i2c_read_dword",
+        "fl2000_i2c_write_dword",
+        "fl2000_i2c_xfer",
+    )
+]
+parts.append(
+    "static int i2c_transfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num) { return detect_short ? 0 : fl2000_i2c_xfer(adapter, msgs, num); }"
+)
 parts.append(function(i2c, "fl2000_bridge_detect"))
 parts += [function(registers, name) for name in ("fl2000_reg_read", "fl2000_reg_write")]
-parts += [function(registers, name) for name in ("fl2000_enable_interrupts", "fl2000_set_pll", "fl2000_usb_magic")]
+parts += [
+    function(registers, name)
+    for name in ("fl2000_enable_interrupts", "fl2000_set_pll", "fl2000_usb_magic")
+]
 parts.append(function(drm, "fl2000_init_clock"))
 parts.append(checks)
 with tempfile.TemporaryDirectory(prefix="fl2000-tests-") as temp:
@@ -832,9 +891,14 @@ with tempfile.TemporaryDirectory(prefix="fl2000-tests-") as temp:
     executable = Path(temp) / "test"
     variants = [("generic", [], [])]
     if os.uname().machine == "x86_64" and "ssse3" in Path("/proc/cpuinfo").read_text():
-        simd = (ROOT / "frame/ssse3.c").read_text().replace("#include <linux/types.h>", "").replace('#include "ssse3.h"', '#include "frame/ssse3.h"')
+        simd = (
+            (ROOT / "frame/ssse3.c")
+            .read_text()
+            .replace("#include <linux/types.h>", "")
+            .replace('#include "ssse3.h"', '#include "frame/ssse3.h"')
+        )
         wrapper = (ROOT / "frame/x86.c").read_text()
-        wrapper = re.sub(r'^#include.*$', '', wrapper, flags=re.M)
+        wrapper = re.sub(r"^#include.*$", "", wrapper, flags=re.MULTILINE)
         mock = """
 #define X86_FEATURE_SSSE3 0
 #define boot_cpu_has(x) (simd_cpu_available && __builtin_cpu_supports("ssse3"))
@@ -844,13 +908,15 @@ static int fpu_depth;
 #define kernel_fpu_begin() assert(!fpu_depth++)
 #define kernel_fpu_end() assert(fpu_depth-- == 1)
 """
-        variants.append(("ssse3", ["-DTEST_SIMD", "-mssse3", "-mno-avx"], [mock, simd, wrapper]))
+        variants.append(
+            ("ssse3", ["-DTEST_SIMD", "-mssse3", "-mno-avx"], [mock, simd, wrapper])
+        )
     if os.uname().machine == "x86_64" and "bmi2" in Path("/proc/cpuinfo").read_text():
         bmi = (ROOT / "frame/bmi2.c").read_text()
-        bmi = re.sub(r'^#include <linux/.*$', '', bmi, flags=re.M)
+        bmi = re.sub(r"^#include <linux/.*$", "", bmi, flags=re.MULTILINE)
         bmi = bmi.replace('#include "bmi2.h"', '#include "frame/bmi2.h"')
         wrapper = (ROOT / "frame/x86_bmi2.c").read_text()
-        wrapper = re.sub(r'^#include.*$', '', wrapper, flags=re.M)
+        wrapper = re.sub(r"^#include.*$", "", wrapper, flags=re.MULTILINE)
         mock = """
 #define X86_FEATURE_BMI2 1
 #define boot_cpu_has(x) (simd_cpu_available && __builtin_cpu_supports("bmi2"))
@@ -860,10 +926,25 @@ static int fpu_depth;
         variants.append(("bmi2", ["-DTEST_SIMD", "-mbmi2"], [mock, bmi, wrapper]))
     for name, flags, backend in variants:
         source.write_text("\n\n".join([parts[0], *backend, *parts[1:]]))
-        subprocess.run([
-            os.environ.get("CC", "cc"), "-std=gnu11", "-Wall", "-Wextra", "-Werror",
-            "-g", "-fsanitize=address,undefined", "-fno-omit-frame-pointer", "-no-pie",
-            *flags, "-I", str(ROOT), str(source), "-o", str(executable),
-        ], check=True)
+        subprocess.run(
+            [
+                os.environ.get("CC", "cc"),
+                "-std=gnu11",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-g",
+                "-fsanitize=address,undefined",
+                "-fno-omit-frame-pointer",
+                "-no-pie",
+                *flags,
+                "-I",
+                str(ROOT),
+                str(source),
+                "-o",
+                str(executable),
+            ],
+            check=True,
+        )
         print("Frame backend:", name, flush=True)
         subprocess.run([str(executable)], check=True)

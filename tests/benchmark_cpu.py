@@ -8,12 +8,18 @@ and one core; they exclude kernel FPU protection, mapping, scheduling, USB and D
 This compares computation only; select backends using the complete guest workload.
 Run: python3 tests/benchmark_cpu.py
 """
+
 from pathlib import Path
-import re,subprocess,tempfile,os
-root=Path(__file__).resolve().parents[1];ns={'__file__':str(root/'tests/test_logic.py')}
-exec((root/'tests/test_logic.py').read_text().split('drm = ')[0],ns)
-f=ns['function'];struct=ns['structure'];stream=(root/'fl2000_streaming.c').read_text();drm=(root/'fl2000_drm.c').read_text()
-pre=r'''
+import re, subprocess, tempfile, os
+
+root = Path(__file__).resolve().parents[1]
+ns = {"__file__": str(root / "tests/test_logic.py")}
+exec((root / "tests/test_logic.py").read_text().split("drm = ")[0], ns)
+f = ns["function"]
+struct = ns["structure"]
+stream = (root / "fl2000_streaming.c").read_text()
+drm = (root / "fl2000_drm.c").read_text()
+pre = r"""
 #define _GNU_SOURCE
 #include <stdint.h>
 #include <stdlib.h>
@@ -40,8 +46,8 @@ static u32 get_unaligned_le32(const void *p){u32 v;memcpy(&v,p,4);return v;}
 static u64 get_unaligned_le64(const void *p){u64 v;memcpy(&v,p,8);return v;}
 static unsigned long long ns(void){struct timespec t;clock_gettime(CLOCK_THREAD_CPUTIME_ID,&t);return (unsigned long long)t.tv_sec*1000000000+t.tv_nsec;}
 static volatile unsigned long sink;
-'''
-main=r'''
+"""
+main = r"""
 int main(void){
  const unsigned int sizes[][2]={{64,64},{800,480},{1920,1080}};
  const char *backends[]={"generic","ssse3","bmi2"};
@@ -84,11 +90,18 @@ int main(void){
  }
  return 0;
 }
-'''
-simd=(root/'frame/ssse3.c').read_text().replace('#include <linux/types.h>', '').replace('#include "ssse3.h"', '#include "frame/ssse3.h"')
-bmi=(root/'frame/bmi2.c').read_text()
-bmi=re.sub(r'^#include <linux/.*$', '', bmi, flags=re.M).replace('#include "bmi2.h"', '#include "frame/bmi2.h"')
-simd += r'''
+"""
+simd = (
+    (root / "frame/ssse3.c")
+    .read_text()
+    .replace("#include <linux/types.h>", "")
+    .replace('#include "ssse3.h"', '#include "frame/ssse3.h"')
+)
+bmi = (root / "frame/bmi2.c").read_text()
+bmi = re.sub(r"^#include <linux/.*$", "", bmi, flags=re.MULTILINE).replace(
+    '#include "bmi2.h"', '#include "frame/bmi2.h"'
+)
+simd += r"""
 void fl2000_ssse3_reorder(u8 *dst, const u8 *src, unsigned int bytes)
 {
 	const v16qi wire = {4, 5, 6, 7, 0, 1, 2, 3,
@@ -98,8 +111,8 @@ void fl2000_ssse3_reorder(u8 *dst, const u8 *src, unsigned int bytes)
 	for (i = 0; i < bytes; i += 16)
 		store(dst + i, __builtin_ia32_pshufb128(load(src + i), wire));
 }
-'''
-dispatch=r"""
+"""
+dispatch = r"""
 static unsigned int backend;
 static unsigned int fl2000_frame_convert(u8 *dst,const u8 *src,unsigned int pixels,unsigned int bpp){
  unsigned int count=min(pixels&~7U,4096U);if(count<32 || !backend)return 0;
@@ -112,14 +125,53 @@ static unsigned int fl2000_frame_reorder(u8 *dst,const u8 *src,unsigned int byte
  fl2000_ssse3_reorder(dst,src,count);return count;
 }
 """
-parts=[pre,simd,bmi,dispatch,'\n'.join(re.findall(r'^#define FL2000_.*$',drm,re.M)),struct((root/'fl2000.h').read_text(),'fl2000_pll'),f(stream,'fl2000_rgb565'),f(stream,'fl2000_rgb565_pair'),f(stream,'fl2000_convert_line'),f(stream,'fl2000_convert_frame'),f(stream,'fl2000_reorder_line'),f(stream,'fl2000_reorder_frame')]
-parts += [f(drm,n) for n in ('fl2000_pll_ppm_err','fl2000_pll_get_divisor','fl2000_pll_calc','fl2000_mode_calc')]
+parts = [
+    pre,
+    simd,
+    bmi,
+    dispatch,
+    "\n".join(re.findall(r"^#define FL2000_.*$", drm, re.MULTILINE)),
+    struct((root / "fl2000.h").read_text(), "fl2000_pll"),
+    f(stream, "fl2000_rgb565"),
+    f(stream, "fl2000_rgb565_pair"),
+    f(stream, "fl2000_convert_line"),
+    f(stream, "fl2000_convert_frame"),
+    f(stream, "fl2000_reorder_line"),
+    f(stream, "fl2000_reorder_frame"),
+]
+parts += [
+    f(drm, n)
+    for n in (
+        "fl2000_pll_ppm_err",
+        "fl2000_pll_get_divisor",
+        "fl2000_pll_calc",
+        "fl2000_mode_calc",
+    )
+]
 parts.append(main)
 with tempfile.TemporaryDirectory(prefix="fl2000-cpu-") as temp:
-    p=Path(temp)/"benchmark.c"
-    exe=Path(temp)/"benchmark"
+    p = Path(temp) / "benchmark.c"
+    exe = Path(temp) / "benchmark"
     p.write_text("\n".join(parts))
-    subprocess.run([os.environ.get("CC", "gcc"), "-std=gnu11", "-O2",
-                    "-fno-tree-vectorize", "-mssse3", "-mbmi2", "-mno-avx", "-I", str(root), "-fno-strict-aliasing", "-Wall", "-Wextra", "-Werror",
-                    str(p), "-o", str(exe)], check=True)
+    subprocess.run(
+        [
+            os.environ.get("CC", "gcc"),
+            "-std=gnu11",
+            "-O2",
+            "-fno-tree-vectorize",
+            "-mssse3",
+            "-mbmi2",
+            "-mno-avx",
+            "-I",
+            str(root),
+            "-fno-strict-aliasing",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            str(p),
+            "-o",
+            str(exe),
+        ],
+        check=True,
+    )
     subprocess.run([str(exe)], check=True)

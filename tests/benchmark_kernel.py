@@ -6,6 +6,7 @@ Extracts the real conversion helpers and backends. Includes real kernel FPU
 protection and rotating vmalloc buffers, but excludes DRM/USB/DMA and compositor
 costs. Native SSSE3 reordering is an experimental benchmark-only candidate.
 """
+
 import argparse
 from pathlib import Path
 import os
@@ -15,17 +16,17 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--kernel', default=os.uname().release)
-parser.add_argument('--output', type=Path, required=True)
+parser.add_argument("--kernel", default=os.uname().release)
+parser.add_argument("--output", type=Path, required=True)
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
-ns = {'__file__': str(ROOT / 'tests/test_logic.py')}
-exec((ROOT / 'tests/test_logic.py').read_text().split('drm = ')[0], ns)
-function = ns['function']
-stream = (ROOT / 'fl2000_streaming.c').read_text()
-ssse3 = (ROOT / 'frame/x86.c').read_text()
-bmi2 = (ROOT / 'frame/x86_bmi2.c').read_text()
-pre = r'''
+ns = {"__file__": str(ROOT / "tests/test_logic.py")}
+exec((ROOT / "tests/test_logic.py").read_text().split("drm = ")[0], ns)
+function = ns["function"]
+stream = (ROOT / "fl2000_streaming.c").read_text()
+ssse3 = (ROOT / "frame/x86.c").read_text()
+bmi2 = (ROOT / "frame/x86_bmi2.c").read_text()
+pre = r"""
 #include <linux/module.h>
 #include <linux/vmalloc.h>
 #include <linux/unaligned.h>
@@ -36,11 +37,19 @@ pre = r'''
 #include "ssse3.h"
 #include "bmi2.h"
 static unsigned int backend;
-'''
+"""
 parts = [pre]
-parts.append(function(ssse3, 'fl2000_frame_convert').replace('unsigned int fl2000_frame_convert', 'static unsigned int bench_ssse3_convert'))
-parts.append(function(bmi2, 'fl2000_frame_convert').replace('unsigned int fl2000_frame_convert', 'static unsigned int bench_bmi2_convert'))
-parts.append(r'''
+parts.append(
+    function(ssse3, "fl2000_frame_convert").replace(
+        "unsigned int fl2000_frame_convert", "static unsigned int bench_ssse3_convert"
+    )
+)
+parts.append(
+    function(bmi2, "fl2000_frame_convert").replace(
+        "unsigned int fl2000_frame_convert", "static unsigned int bench_bmi2_convert"
+    )
+)
+parts.append(r"""
 void fl2000_ssse3_reorder(u8 *dst, const u8 *src, unsigned int bytes);
 static unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned int bpp)
 {
@@ -54,11 +63,17 @@ static unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src, unsigned int by
  if(backend!=1 || count<128 || !boot_cpu_has(X86_FEATURE_SSSE3) || !irq_fpu_usable())return 0;
  kernel_fpu_begin();fl2000_ssse3_reorder(dst,src,count);kernel_fpu_end();return count;
 }
-''')
-for name in ('fl2000_rgb565', 'fl2000_rgb565_pair', 'fl2000_convert_line',
-             'fl2000_convert_frame', 'fl2000_reorder_line', 'fl2000_reorder_frame'):
+""")
+for name in (
+    "fl2000_rgb565",
+    "fl2000_rgb565_pair",
+    "fl2000_convert_line",
+    "fl2000_convert_frame",
+    "fl2000_reorder_line",
+    "fl2000_reorder_frame",
+):
     parts.append(function(stream, name))
-parts.append(r'''
+parts.append(r"""
 static u64 cpu_ns(void)
 {
  u64 user,system;
@@ -130,22 +145,36 @@ module_init(frame_bench_init);
 module_exit(frame_bench_exit);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Isolated FL2000 frame preparation benchmark");
-''')
-(args.output / 'bench.c').write_text('\n\n'.join(parts))
-for name in ('ssse3.c', 'ssse3.h', 'bmi2.c', 'bmi2.h'):
-    shutil.copyfile(ROOT / 'frame' / name, args.output / name)
-with (args.output / 'ssse3.c').open('a') as output:
-    output.write('\nvoid fl2000_ssse3_reorder(u8 *dst, const u8 *src, unsigned int bytes);\n')
-    output.write(function((ROOT / 'tests/benchmark_cpu.py').read_text(), 'fl2000_ssse3_reorder'))
-(args.output / 'Makefile').write_text('''obj-m := frame_bench.o
+""")
+(args.output / "bench.c").write_text("\n\n".join(parts))
+for name in ("ssse3.c", "ssse3.h", "bmi2.c", "bmi2.h"):
+    shutil.copyfile(ROOT / "frame" / name, args.output / name)
+with (args.output / "ssse3.c").open("a") as output:
+    output.write(
+        "\nvoid fl2000_ssse3_reorder(u8 *dst, const u8 *src, unsigned int bytes);\n"
+    )
+    output.write(
+        function((ROOT / "tests/benchmark_cpu.py").read_text(), "fl2000_ssse3_reorder")
+    )
+(args.output / "Makefile").write_text("""obj-m := frame_bench.o
 frame_bench-y := bench.o ssse3.o bmi2.o
 CFLAGS_REMOVE_ssse3.o += -mno-sse -mno-sse2
 CFLAGS_ssse3.o += -mssse3 -mno-avx
 CFLAGS_bmi2.o += -mbmi2
-''')
-subprocess.run(['make', '-C', f'/usr/src/linux-headers-{args.kernel}',
-                f'M={args.output.resolve()}', 'W=1', 'KCFLAGS=-Werror', 'modules'], check=True)
-init = r'''#!/bin/sh
+""")
+subprocess.run(
+    [
+        "make",
+        "-C",
+        f"/usr/src/linux-headers-{args.kernel}",
+        f"M={args.output.resolve()}",
+        "W=1",
+        "KCFLAGS=-Werror",
+        "modules",
+    ],
+    check=True,
+)
+init = r"""#!/bin/sh
 export PATH=/usr/sbin:/usr/bin:/bin:/sbin:/usr/lib/klibc/bin
 mount -t proc none /proc
 mount -t sysfs none /sys
@@ -157,26 +186,60 @@ else
 fi
 dmesg
 /usr/lib/klibc/bin/poweroff -f
-'''
-archive=bytearray()
-for ino,(name,data,mode) in enumerate([('init',init.encode(),0o100755),
- ('frame_bench.ko',(args.output/'frame_bench.ko').read_bytes(),0o100644),('TRAILER!!!',b'',0)],1):
-    fields=[ino,mode,0,0,1,0,len(data),0,0,0,0,len(name)+1,0]
-    archive.extend(b'070701'+''.join(f'{x:08x}' for x in fields).encode())
-    archive.extend(name.encode()+b'\0');archive.extend(b'\0'*(-len(archive)%4))
-    archive.extend(data);archive.extend(b'\0'*(-len(archive)%4))
-archive.extend(b'\0'*(-len(archive)%512))
-with (args.output/'boot.cpio').open('wb') as output:
-    with (ROOT/'base-initramfs.cpio.gz').open('rb') as base:
-        shutil.copyfileobj(base,output)
-    output.write(b'\0'*(-output.tell()%4));output.write(archive)
-command=['qemu-system-x86_64','-enable-kvm','-cpu','host','-m','1G','-nic','none',
- '-kernel',f'/boot/vmlinuz-{args.kernel}','-initrd',str(args.output/'boot.cpio'),
- '-append','console=ttyS0 quiet rdinit=/init panic=1 oops=panic','-display','none',
- '-monitor','none','-serial','stdio','-no-reboot']
-with (args.output/'guest.log').open('w') as output:
-    subprocess.run(command,stdout=output,stderr=subprocess.STDOUT,timeout=180,check=True)
-log=(args.output/'guest.log').read_text()
-if 'FRAME_BENCH_PASS' not in log or re.search(r'FRAME_BENCH_(?:LOAD|UNLOAD)_FAIL|BUG:|Oops:|WARNING:',log):
-    raise RuntimeError('kernel benchmark failed; inspect guest.log')
-print(f'PASS: real kernel FPU protection, byte comparisons and CPU timings; log: {args.output / "guest.log"}')
+"""
+archive = bytearray()
+for ino, (name, data, mode) in enumerate(
+    [
+        ("init", init.encode(), 0o100755),
+        ("frame_bench.ko", (args.output / "frame_bench.ko").read_bytes(), 0o100644),
+        ("TRAILER!!!", b"", 0),
+    ],
+    1,
+):
+    fields = [ino, mode, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(name) + 1, 0]
+    archive.extend(b"070701" + "".join(f"{x:08x}" for x in fields).encode())
+    archive.extend(name.encode() + b"\0")
+    archive.extend(b"\0" * (-len(archive) % 4))
+    archive.extend(data)
+    archive.extend(b"\0" * (-len(archive) % 4))
+archive.extend(b"\0" * (-len(archive) % 512))
+with (args.output / "boot.cpio").open("wb") as output:
+    with (ROOT / "base-initramfs.cpio.gz").open("rb") as base:
+        shutil.copyfileobj(base, output)
+    output.write(b"\0" * (-output.tell() % 4))
+    output.write(archive)
+command = [
+    "qemu-system-x86_64",
+    "-enable-kvm",
+    "-cpu",
+    "host",
+    "-m",
+    "1G",
+    "-nic",
+    "none",
+    "-kernel",
+    f"/boot/vmlinuz-{args.kernel}",
+    "-initrd",
+    str(args.output / "boot.cpio"),
+    "-append",
+    "console=ttyS0 quiet rdinit=/init panic=1 oops=panic",
+    "-display",
+    "none",
+    "-monitor",
+    "none",
+    "-serial",
+    "stdio",
+    "-no-reboot",
+]
+with (args.output / "guest.log").open("w") as output:
+    subprocess.run(
+        command, stdout=output, stderr=subprocess.STDOUT, timeout=180, check=True
+    )
+log = (args.output / "guest.log").read_text()
+if "FRAME_BENCH_PASS" not in log or re.search(
+    r"FRAME_BENCH_(?:LOAD|UNLOAD)_FAIL|BUG:|Oops:|WARNING:", log
+):
+    raise RuntimeError("kernel benchmark failed; inspect guest.log")
+print(
+    f"PASS: real kernel FPU protection, byte comparisons and CPU timings; log: {args.output / 'guest.log'}"
+)

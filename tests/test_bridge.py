@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
 """Exercise rebased bridge modesetting, reset restoration, and HPD acknowledgment."""
+
 from pathlib import Path
 import re
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-namespace = {'__file__': __file__}
-exec((ROOT / 'tests/test_logic.py').read_text().split('drm = ')[0], namespace)
-function = namespace['function']
-source = re.sub(r'/\*.*?\*/', '', (ROOT / 'bridge/it66121_drv.c').read_text(), flags=re.S)
-prelude = r'''
+namespace = {"__file__": __file__}
+exec((ROOT / "tests/test_logic.py").read_text().split("drm = ")[0], namespace)
+function = namespace["function"]
+source = re.sub(
+    r"/\*.*?\*/", "", (ROOT / "bridge/it66121_drv.c").read_text(), flags=re.DOTALL
+)
+prelude = r"""
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -86,9 +89,9 @@ static int drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *f
 {(void)f;(void)m;assert(c && c->display_info.is_hdmi);return 0;}
 static int hdmi_avi_infoframe_pack(struct hdmi_avi_infoframe *f,u8 *buf,unsigned int n)
 {(void)f;assert(n==17);for(unsigned int i=0;i<n;i++)buf[i]=i+17;return n;}
-'''
-ctx = namespace['structure'](source, 'it66121_ctx')
-checks = r'''
+"""
+ctx = namespace["structure"](source, "it66121_ctx")
+checks = r"""
 int main(void)
 {
  struct regmap map={0};
@@ -158,19 +161,49 @@ int main(void)
  fault_reg=IT66121_INT_MASK1_REG;assert(it66121_restore_interrupts(&ctx)==-EIO);
  puts("PASS: bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors");
 }
-'''
-names = ('it66121_fire_afe','it66121_configure_input','it66121_configure_afe',
-         'it66121_is_hpd_detect','it66121_set_mute','it66121_restore_interrupts',
-         'it66121_bridge_mode_set','it66121_bridge_enable','it66121_bridge_disable',
-         'it66121_bridge_mode_valid','it66121_bridge_detect','it66121_bridge_interrupt')
-parts = [prelude, '#include "bridge/it66121_registers.h"',
-         'enum chip_id { ID_IT6610, ID_IT66121, ID_IT66122 };', ctx]
+"""
+names = (
+    "it66121_fire_afe",
+    "it66121_configure_input",
+    "it66121_configure_afe",
+    "it66121_is_hpd_detect",
+    "it66121_set_mute",
+    "it66121_restore_interrupts",
+    "it66121_bridge_mode_set",
+    "it66121_bridge_enable",
+    "it66121_bridge_disable",
+    "it66121_bridge_mode_valid",
+    "it66121_bridge_detect",
+    "it66121_bridge_interrupt",
+)
+parts = [
+    prelude,
+    '#include "bridge/it66121_registers.h"',
+    "enum chip_id { ID_IT6610, ID_IT66121, ID_IT66122 };",
+    ctx,
+]
 parts += [function(source, name) for name in names]
-with tempfile.TemporaryDirectory(prefix='fl2000-bridge-') as temp:
-    c = Path(temp) / 'test.c'
-    exe = Path(temp) / 'test'
-    c.write_text('\n\n'.join(parts + [checks]))
-    subprocess.run(['cc','-std=gnu11','-Wall','-Wextra','-Werror','-Wno-unused-parameter',
-                    '-fsanitize=address,undefined','-fno-omit-frame-pointer','-no-pie',
-                    '-I',str(ROOT),str(c),'-o',str(exe)],check=True)
-    subprocess.run([str(exe)],check=True)
+with tempfile.TemporaryDirectory(prefix="fl2000-bridge-") as temp:
+    c = Path(temp) / "test.c"
+    exe = Path(temp) / "test"
+    c.write_text("\n\n".join(parts + [checks]))
+    subprocess.run(
+        [
+            "cc",
+            "-std=gnu11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-Wno-unused-parameter",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-no-pie",
+            "-I",
+            str(ROOT),
+            str(c),
+            "-o",
+            str(exe),
+        ],
+        check=True,
+    )
+    subprocess.run([str(exe)], check=True)

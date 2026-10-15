@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
 """Exercise actual interrupt startup, recovery, and stop with mocked USB I/O."""
+
 from pathlib import Path
-import subprocess,tempfile
-ROOT=Path(__file__).resolve().parents[1]
-ns={'__file__':__file__}
-exec((ROOT/'tests/test_logic.py').read_text().split('drm = ')[0],ns)
-source=(ROOT/'fl2000_interrupt.c').read_text()
-pre=r'''
+import subprocess, tempfile
+
+ROOT = Path(__file__).resolve().parents[1]
+ns = {"__file__": __file__}
+exec((ROOT / "tests/test_logic.py").read_text().split("drm = ")[0], ns)
+source = (ROOT / "fl2000_interrupt.c").read_text()
+pre = r"""
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -54,8 +56,8 @@ static void fl2000_drm_hotplug(struct usb_device *usb) { (void)usb;hotplugs++; }
 static void fl2000_intr_completion(struct urb *urb);
 static void usb_kill_urb(struct urb *urb)
 { if(urb->submitted){urb->submitted=false;urb->status=-ECONNRESET;fl2000_intr_completion(urb);} }
-'''
-checks=r'''
+"""
+checks = r"""
 static struct fl2000_interrupt *current;
 static void disable_during_clear(void) { current->enabled=false; }
 static void run_work(struct fl2000_interrupt *intr) { intr->work.pending=false;fl2000_intr_work(&intr->work); }
@@ -144,9 +146,38 @@ int main(void)
  submit_hook=NULL;fl2000_intr_stop(&intr);
  puts("PASS: immediate failure preserves polling fallback, polling fallback and IRQ recovery, status acknowledgment before rearm, initial status acknowledgment, idempotent start, error propagation, bounded stall recovery, cancellation, no resubmission after stop");
 }
-'''
-parts=[pre,ns['structure'](source,'fl2000_interrupt')]+[ns['function'](source,n) for n in ('fl2000_intr_work','fl2000_intr_completion','fl2000_intr_stop','fl2000_enable_interrupt')]+[checks]
-with tempfile.TemporaryDirectory(prefix='fl2000-intr-') as temp:
- p=Path(temp)/'test.c';exe=Path(temp)/'test';p.write_text('\n\n'.join(parts))
- subprocess.run(['cc','-std=gnu11','-Wall','-Wextra','-Werror','-fsanitize=address,undefined','-fno-omit-frame-pointer','-no-pie',str(p),'-o',str(exe)],check=True)
- subprocess.run([str(exe)],check=True)
+"""
+parts = (
+    [pre, ns["structure"](source, "fl2000_interrupt")]
+    + [
+        ns["function"](source, n)
+        for n in (
+            "fl2000_intr_work",
+            "fl2000_intr_completion",
+            "fl2000_intr_stop",
+            "fl2000_enable_interrupt",
+        )
+    ]
+    + [checks]
+)
+with tempfile.TemporaryDirectory(prefix="fl2000-intr-") as temp:
+    p = Path(temp) / "test.c"
+    exe = Path(temp) / "test"
+    p.write_text("\n\n".join(parts))
+    subprocess.run(
+        [
+            "cc",
+            "-std=gnu11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-no-pie",
+            str(p),
+            "-o",
+            str(exe),
+        ],
+        check=True,
+    )
+    subprocess.run([str(exe)], check=True)

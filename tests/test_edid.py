@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
 """Exercise actual EDID helpers against a side-effecting register model."""
+
 from pathlib import Path
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 namespace = {"__file__": __file__}
-exec((ROOT / 'tests/test_logic.py').read_text().split('drm = ')[0], namespace)
-function = namespace['function']
-source = (ROOT / 'bridge/it66121_drv.c').read_text().replace('struct it66121_ctx', 'struct it66121_priv')
-prelude = r'''
+exec((ROOT / "tests/test_logic.py").read_text().split("drm = ")[0], namespace)
+function = namespace["function"]
+source = (
+    (ROOT / "bridge/it66121_drv.c")
+    .read_text()
+    .replace("struct it66121_ctx", "struct it66121_priv")
+)
+prelude = r"""
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -76,8 +81,8 @@ static int i2c_transfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int n
  else b[3]=expected(segment*256 + ((offset + 3 + consumed++) & 255));
  return 2;
 }
-'''
-checks = r'''
+"""
+checks = r"""
 int main(void)
 {
  struct i2c_client client={.addr=0x4c};
@@ -104,10 +109,41 @@ int main(void)
  }
  puts("PASS: EDID FIFO side effects, early data, empty polls, segments, timeout/error/short transfers");
 }
-'''
-parts=[prelude]+[function(source,n) for n in ('it66121_ddc_snapshot','it66121_ddc_write','it66121_ddc_collect','it66121_wait_ddc_ready','it66121_clear_ddc_fifo','it66121_abort_ddc_ops','it66121_get_edid_block')]+[checks]
-with tempfile.TemporaryDirectory(prefix='fl2000-edid-') as temp:
-    c=Path(temp)/'test.c'; exe=Path(temp)/'test'
-    c.write_text('\n\n'.join(parts))
-    subprocess.run(['cc','-std=gnu11','-Wall','-Wextra','-Werror','-fsanitize=address,undefined','-fno-omit-frame-pointer','-no-pie',str(c),'-o',str(exe)],check=True)
-    subprocess.run([str(exe)],check=True)
+"""
+parts = (
+    [prelude]
+    + [
+        function(source, n)
+        for n in (
+            "it66121_ddc_snapshot",
+            "it66121_ddc_write",
+            "it66121_ddc_collect",
+            "it66121_wait_ddc_ready",
+            "it66121_clear_ddc_fifo",
+            "it66121_abort_ddc_ops",
+            "it66121_get_edid_block",
+        )
+    ]
+    + [checks]
+)
+with tempfile.TemporaryDirectory(prefix="fl2000-edid-") as temp:
+    c = Path(temp) / "test.c"
+    exe = Path(temp) / "test"
+    c.write_text("\n\n".join(parts))
+    subprocess.run(
+        [
+            "cc",
+            "-std=gnu11",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            "-fsanitize=address,undefined",
+            "-fno-omit-frame-pointer",
+            "-no-pie",
+            str(c),
+            "-o",
+            str(exe),
+        ],
+        check=True,
+    )
+    subprocess.run([str(exe)], check=True)
