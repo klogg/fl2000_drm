@@ -41,11 +41,13 @@ jobs:
             echo 'enabled=false' >> "$GITHUB_OUTPUT"
             echo 'SonarCloud skipped: SONAR_TOKEN is not configured.' >> "$GITHUB_STEP_SUMMARY"
           fi
-      - name: Install compiler and Linux 7.0 headers
+      - name: Install build and analysis dependencies
         if: steps.configuration.outputs.enabled == 'true'
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential ca-certificates git linux-headers-generic python3
+          apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git gnupg \
+            linux-headers-generic python3 unzip
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.configuration.outputs.enabled == 'true'
         with:
