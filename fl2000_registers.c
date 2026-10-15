@@ -395,9 +395,7 @@ int fl2000_check_interrupt(struct usb_device *usb_dev)
 			return ret;
 	}
 
-	/* TODO: Reset LBUF using regmap_field if (status.lbuf_halt) */
-
-	/* TODO: Don't know how to recover if (status.vga_error) */
+	/* LBUF halt and VGA error recovery remain unsupported; see docs/DEVELOPMENT.md. */
 
 	ret = sink_event ? 1 : 0;
 	return ret;
