@@ -490,12 +490,6 @@ out:
 	return ret;
 }
 
-int fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned int height,
-			      unsigned int width, unsigned int pitch, u32 format)
-{
-	return fl2000_streaming_update(usb_dev, src, height, width, pitch, format, NULL);
-}
-
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);

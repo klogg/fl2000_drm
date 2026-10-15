@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 #define _GNU_SOURCE
+#include <drm.h>
+#include <drm_fourcc.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -10,8 +12,6 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
-#include <drm.h>
-#include <drm_fourcc.h>
 static void check(int result, const char *what)
 {
 	if (result < 0) {
@@ -45,7 +45,7 @@ static void report_profile(const char *format)
 		if (!file)
 			continue;
 		while (fgets(buffer, sizeof(buffer), file))
-			if (strstr(buffer, "fl2000_streaming_compress"))
+			if (strstr(buffer, "fl2000_streaming_update"))
 				printf("PROFILE %s CPU%d %s", format, cpu, buffer);
 		fclose(file);
 	}
@@ -101,7 +101,7 @@ int main(int argc, char **argv)
 	const char *names[] = { "XRGB8888", "RGB888", "RGB565" };
 	int filter = open("/sys/kernel/debug/tracing/set_ftrace_filter", O_WRONLY | O_TRUNC);
 	if (filter >= 0) {
-		const char *name = "fl2000_streaming_compress\n";
+		const char *name = "fl2000_streaming_update\n";
 		if (write(filter, name, strlen(name)) != (ssize_t)strlen(name))
 			perror("filter");
 		close(filter);

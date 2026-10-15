@@ -112,8 +112,6 @@ int fl2000_streaming_create(struct usb_interface *interface);
 void fl2000_streaming_destroy(struct usb_interface *interface);
 /* ... and interface */
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_pix);
-int fl2000_streaming_compress(struct usb_device *usb_dev, void *src, unsigned int height,
-			      unsigned int width, unsigned int pitch, u32 format);
 int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int height,
 			    unsigned int width, unsigned int pitch, u32 format,
 			    const struct drm_rect *damage);
