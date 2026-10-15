@@ -16,7 +16,7 @@ if [ ! -f /fl2000-test-guest ]; then
     printf '%s\n' 'Refusing module loading outside the prepared test guest; use scripts/emulate.sh.' >&2
     exit 1
 fi
-repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 module_dir=${1:-$repo_dir}
 for module in it66121 fl2000; do
     if [ ! -r "$module_dir/$module.ko" ]; then

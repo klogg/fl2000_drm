@@ -10,7 +10,7 @@ if [ "$#" -ne 0 ]; then
     printf '%s\n' 'Usage: sign.sh (configure paths through environment variables)' >&2
     exit 2
 fi
-repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 module_dir=${MODULE_DIR:-$repo_dir}
 kernel_dir=${KSRC:-/lib/modules/${KVER:-$(uname -r)}/build}
 sign_file=${SIGN_CMD:-$kernel_dir/scripts/sign-file}

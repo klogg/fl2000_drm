@@ -13,7 +13,7 @@ kernel_tool() {
         printf 'Invalid KERNEL_TOOLS_TAG: %s\n' "$tag" >&2
         return 1
     fi
-    cache_dir=$repo_dir/.cache/kernel-tools/$tag
+    cache_dir=${repo_dir:?caller must set repo_dir}/.cache/kernel-tools/$tag
     mkdir -p "$cache_dir/$(dirname -- "$resource")" || return
     if [[ ! -s "$cache_dir/$resource" ]]; then
         temporary=$(mktemp "$cache_dir/$resource.XXXXXX") || return
