@@ -32,6 +32,8 @@ static void fl2000_destroy_interface(struct usb_interface *interface)
 	case FL2000_USBIF_INTERRUPT:
 		fl2000_interrupt_destroy(interface);
 		break;
+	default:
+		break;
 	}
 }
 

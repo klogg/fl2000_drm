@@ -43,7 +43,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 		if (msgs[0].len != 1 || !msgs[1].buf || (msgs[1].len != 1 && msgs[1].len != 4) ||
 		    msgs[1].flags != I2C_M_RD || msgs[1].addr != msgs[0].addr)
 			return -EOPNOTSUPP;
-	} else if ((msgs[0].len != 2 && msgs[0].len != 5)) {
+	} else if (msgs[0].len != 2 && msgs[0].len != 5) {
 		return -EOPNOTSUPP;
 	}
 	addr = msgs[0].addr;

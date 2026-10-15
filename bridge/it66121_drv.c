@@ -185,7 +185,9 @@ static int it66121_ddc_snapshot(struct it66121_ctx *priv, u8 *word)
 	};
 	int ret = i2c_transfer(priv->adapter, msgs, ARRAY_SIZE(msgs));
 
-	return ret == ARRAY_SIZE(msgs) ? 0 : ret < 0 ? ret : -EIO;
+	if (ret < 0)
+		return ret;
+	return ret == ARRAY_SIZE(msgs) ? 0 : -EIO;
 }
 
 static int it66121_ddc_write(struct it66121_ctx *priv, u8 reg, u8 a, u8 b, u8 c, u8 d)
@@ -198,7 +200,9 @@ static int it66121_ddc_write(struct it66121_ctx *priv, u8 reg, u8 a, u8 b, u8 c,
 	};
 	int ret = i2c_transfer(priv->adapter, &msg, 1);
 
-	return ret == 1 ? 0 : ret < 0 ? ret : -EIO;
+	if (ret < 0)
+		return ret;
+	return ret == 1 ? 0 : -EIO;
 }
 
 static int it66121_ddc_collect(struct it66121_ctx *priv, u8 *buf, size_t len)
@@ -648,9 +652,11 @@ static enum drm_connector_status it66121_bridge_detect(struct drm_bridge *bridge
 		return connector_status_disconnected;
 	mutex_lock(&ctx->lock);
 	ret = regmap_read(ctx->regmap, IT66121_SYS_STATUS_REG, &value);
-	status = ret				       ? connector_status_unknown :
-		 (value & IT66121_SYS_STATUS_HPDETECT) ? connector_status_connected :
-							 connector_status_disconnected;
+	if (ret)
+		status = connector_status_unknown;
+	else
+		status = value & IT66121_SYS_STATUS_HPDETECT ? connector_status_connected :
+							       connector_status_disconnected;
 	mutex_unlock(&ctx->lock);
 	drm_dev_exit(idx);
 	return status;

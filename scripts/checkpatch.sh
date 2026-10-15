@@ -30,6 +30,8 @@ for file in *.[ch] bridge/*.[ch] frame/*.[ch]; do
             # USB descriptor field names are defined by the kernel ABI.
             options+=(--ignore CAMELCASE)
             ;;
+        *)
+            ;;
     esac
     if ! perl "$checker" --strict --no-summary --no-tree "${options[@]}" "$@" -f "$file"; then
         status=1

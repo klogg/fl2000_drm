@@ -517,7 +517,7 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, int pixels, u32 bytes_
 		ret = fl2000_alloc_frame(usb_dev, &stream->frames[i], size);
 		if (ret)
 			break;
-		needs_sg |= !stream->frames[i].dma_sgt;
+		needs_sg = needs_sg || !stream->frames[i].dma_sgt;
 	}
 	if (!ret && needs_sg) {
 		unsigned int pages = DIV_ROUND_UP(size, PAGE_SIZE);

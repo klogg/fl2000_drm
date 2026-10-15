@@ -29,12 +29,10 @@ if [ ! -d /sys/module/it66121 ]; then
     insmod "$module_dir/it66121.ko"
     loaded_bridge=1
 fi
-if [ ! -d /sys/module/fl2000 ]; then
-    if ! insmod "$module_dir/fl2000.ko"; then
-        if [ "$loaded_bridge" -eq 1 ]; then
-            rmmod it66121 || true
-        fi
-        exit 1
+if [ ! -d /sys/module/fl2000 ] && ! insmod "$module_dir/fl2000.ko"; then
+    if [ "$loaded_bridge" -eq 1 ]; then
+        rmmod it66121 || true
     fi
+    exit 1
 fi
 printf '%s\n' 'FL2000 and IT66121 loaded in the test guest.'

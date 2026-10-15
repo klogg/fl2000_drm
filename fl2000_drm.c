@@ -293,7 +293,10 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 
 	/* Prefer the original timing, then try -1, +1, ... -10, +10. */
 	for (int attempt = 0; attempt <= max_h_adjustment * 2; attempt++) {
-		int d = attempt ? ((attempt + 1) / 2) * (attempt & 1 ? -1 : 1) : 0;
+		int d = (attempt + 1) / 2;
+
+		if (attempt & 1)
+			d = -d;
 
 		if (mode->htotal + d < mode->hsync_end || mode->htotal + d > 4095)
 			continue;
