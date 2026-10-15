@@ -153,6 +153,7 @@ int fl2000_drm_suspend(struct usb_device *usb_dev);
 int fl2000_drm_resume(struct usb_device *usb_dev);
 
 struct fl2000_device {
+	struct usb_interface *interfaces[FL2000_USBIF_INTERRUPT + 1];
 	unsigned long active_interfaces;
 	bool master_registered;
 	bool suspended;

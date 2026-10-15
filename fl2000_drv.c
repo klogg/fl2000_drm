@@ -5,14 +5,12 @@
  */
 #include "fl2000.h"
 
-#define FL2000_ALL_IFS GENMASK(FL2000_USBIF_INTERRUPT, FL2000_USBIF_AVCONTROL)
+static struct usb_driver fl2000_driver;
 /* USB probes for different interfaces and different drivers may run concurrently. */
 static DEFINE_MUTEX(fl2000_device_lock);
 
 static const struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_NUMBER(0x1d5c, 0x2000, FL2000_USBIF_AVCONTROL) },
-	{ USB_DEVICE_INTERFACE_NUMBER(0x1d5c, 0x2000, FL2000_USBIF_STREAMING) },
-	{ USB_DEVICE_INTERFACE_NUMBER(0x1d5c, 0x2000, FL2000_USBIF_INTERRUPT) },
 	{}
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
@@ -57,14 +55,52 @@ static int fl2000_control_init(struct usb_device *usb_dev)
 	return ret;
 }
 
+/* Clear every callback's data before synchronous sibling disconnects. */
+static void fl2000_release_interfaces(struct fl2000_device *device, struct usb_interface *origin)
+{
+	struct usb_interface *interfaces[FL2000_USBIF_INTERRUPT + 1];
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(interfaces); i++) {
+		interfaces[i] = device->interfaces[i];
+		device->interfaces[i] = NULL;
+		if (interfaces[i])
+			usb_set_intfdata(interfaces[i], NULL);
+	}
+	for (i = ARRAY_SIZE(interfaces); i-- > 0;)
+		if (interfaces[i] && interfaces[i] != origin)
+			usb_driver_release_interface(&fl2000_driver, interfaces[i]);
+}
+
+static void fl2000_cleanup(struct usb_device *usb_dev, struct fl2000_device *device)
+{
+	unsigned int i;
+
+	if (device->master_registered) {
+		fl2000_drm_cleanup(usb_dev);
+		device->master_registered = false;
+	}
+	if (device->active_interfaces & BIT(FL2000_USBIF_INTERRUPT))
+		fl2000_disable_interrupt(usb_dev);
+	if (device->active_interfaces & BIT(FL2000_USBIF_STREAMING))
+		fl2000_streaming_disable(usb_dev);
+	for (i = ARRAY_SIZE(device->interfaces); i-- > 0;)
+		if (device->active_interfaces & BIT(i))
+			fl2000_destroy_interface(device->interfaces[i]);
+	device->active_interfaces = 0;
+	device->suspended = false;
+}
+
 static int fl2000_probe(struct usb_interface *interface, const struct usb_device_id *id)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct fl2000_device *device;
-	unsigned int ifnum = interface->cur_altsetting->desc.bInterfaceNumber;
+	struct usb_interface *sibling;
+	unsigned int i;
 	int ret;
 
-	if (usb_dev->speed < USB_SPEED_HIGH)
+	if (usb_dev->speed < USB_SPEED_HIGH ||
+	    interface->cur_altsetting->desc.bInterfaceNumber != FL2000_USBIF_AVCONTROL)
 		return -ENODEV;
 	mutex_lock(&fl2000_device_lock);
 	device = dev_get_drvdata(&usb_dev->dev);
@@ -76,39 +112,41 @@ static int fl2000_probe(struct usb_interface *interface, const struct usb_device
 		}
 		dev_set_drvdata(&usb_dev->dev, device);
 	}
-	/* Configure the bulk endpoint before any interface may need it. */
-	if (!device->active_interfaces || ifnum == FL2000_USBIF_AVCONTROL) {
-		ret = usb_set_interface(usb_dev, FL2000_USBIF_AVCONTROL, 1);
-		if (ret)
-			goto out;
-	}
-	switch (ifnum) {
-	case FL2000_USBIF_AVCONTROL:
-		ret = fl2000_control_init(usb_dev);
-		break;
-	case FL2000_USBIF_STREAMING:
-		ret = fl2000_streaming_create(interface);
-		break;
-	case FL2000_USBIF_INTERRUPT:
-		ret = fl2000_interrupt_create(interface);
-		break;
-	default:
-		ret = -ENODEV;
-	}
-	if (ret)
-		goto out;
-	device->active_interfaces |= BIT(ifnum);
+	device->interfaces[FL2000_USBIF_AVCONTROL] = interface;
 	usb_set_intfdata(interface, device);
-	if (device->active_interfaces == FL2000_ALL_IFS) {
-		ret = fl2000_drm_init(usb_dev);
-		if (ret) {
-			device->active_interfaces &= ~BIT(ifnum);
-			usb_set_intfdata(interface, NULL);
-			fl2000_destroy_interface(interface);
-		} else {
-			device->master_registered = true;
-		}
+	/* Own the complete device before changing endpoints or hardware state. */
+	for (i = FL2000_USBIF_STREAMING; i <= FL2000_USBIF_INTERRUPT; i++) {
+		sibling = usb_ifnum_to_if(usb_dev, i);
+		ret = usb_driver_claim_interface(&fl2000_driver, sibling, device);
+		if (ret)
+			goto release;
+		device->interfaces[i] = sibling;
 	}
+	ret = usb_set_interface(usb_dev, FL2000_USBIF_AVCONTROL, 1);
+	if (ret)
+		goto release;
+	ret = fl2000_control_init(usb_dev);
+	if (ret)
+		goto release;
+	device->active_interfaces |= BIT(FL2000_USBIF_AVCONTROL);
+	ret = fl2000_streaming_create(device->interfaces[FL2000_USBIF_STREAMING]);
+	if (ret)
+		goto cleanup;
+	device->active_interfaces |= BIT(FL2000_USBIF_STREAMING);
+	ret = fl2000_interrupt_create(device->interfaces[FL2000_USBIF_INTERRUPT]);
+	if (ret)
+		goto cleanup;
+	device->active_interfaces |= BIT(FL2000_USBIF_INTERRUPT);
+	ret = fl2000_drm_init(usb_dev);
+	if (ret)
+		goto cleanup;
+	device->master_registered = true;
+	goto out;
+
+cleanup:
+	fl2000_cleanup(usb_dev, device);
+release:
+	fl2000_release_interfaces(device, interface);
 out:
 	mutex_unlock(&fl2000_device_lock);
 	return ret;
@@ -122,17 +160,8 @@ static void fl2000_disconnect(struct usb_interface *interface)
 	if (!device)
 		return;
 	mutex_lock(&fl2000_device_lock);
-	/* Stop the complete pipeline on the first interface disconnect. */
-	if (device->master_registered) {
-		fl2000_drm_cleanup(usb_dev);
-		device->master_registered = false;
-	}
-	fl2000_disable_interrupt(usb_dev);
-	fl2000_streaming_disable(usb_dev);
-	device->active_interfaces &= ~BIT(interface->cur_altsetting->desc.bInterfaceNumber);
-	fl2000_destroy_interface(interface);
-	usb_set_intfdata(interface, NULL);
-	device->suspended = false;
+	fl2000_cleanup(usb_dev, device);
+	fl2000_release_interfaces(device, interface);
 	mutex_unlock(&fl2000_device_lock);
 }
 

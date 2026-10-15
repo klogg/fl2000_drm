@@ -147,6 +147,7 @@ Run hardware-free regressions with Python 3 and an ASan/UBSan-capable C compiler
 python3 tests/test_logic.py
 python3 tests/test_edid.py
 python3 tests/test_bridge.py
+python3 tests/test_driver.py
 python3 tests/test_interrupt.py
 python3 tests/test_tools.py
 ```
