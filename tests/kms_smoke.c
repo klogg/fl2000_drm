@@ -4,7 +4,9 @@
 #include <drm_fourcc.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,6 +52,105 @@ static void report_profile(const char *format)
 		fclose(file);
 	}
 }
+/* Test atomic validation and completion through the real DRM ioctl path. */
+static uint32_t property_id(int fd, uint32_t object, uint32_t type, const char *name)
+{
+	uint32_t ids[64];
+	uint64_t values[64];
+	struct drm_mode_obj_get_properties props = {
+		.obj_id = object,
+		.obj_type = type,
+	};
+
+	check(ioctl(fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &props), "property count");
+	if (props.count_props > 64)
+		exit(1);
+	props.props_ptr = (uintptr_t)ids;
+	props.prop_values_ptr = (uintptr_t)values;
+	check(ioctl(fd, DRM_IOCTL_MODE_OBJ_GETPROPERTIES, &props), "properties");
+	for (unsigned int i = 0; i < props.count_props; i++) {
+		struct drm_mode_get_property prop = { .prop_id = ids[i] };
+
+		check(ioctl(fd, DRM_IOCTL_MODE_GETPROPERTY, &prop), "property name");
+		if (!strcmp(prop.name, name))
+			return ids[i];
+	}
+	fprintf(stderr, "Missing property: %s\n", name);
+	exit(1);
+}
+
+static int atomic_property(int fd, uint32_t object, uint32_t property, uint64_t value,
+			   uint32_t flags, uint64_t cookie)
+{
+	uint32_t count = 1;
+	struct drm_mode_atomic request = {
+		.flags = flags,
+		.count_objs = 1,
+		.objs_ptr = (uintptr_t)&object,
+		.count_props_ptr = (uintptr_t)&count,
+		.props_ptr = (uintptr_t)&property,
+		.prop_values_ptr = (uintptr_t)&value,
+		.user_data = cookie,
+	};
+
+	return ioctl(fd, DRM_IOCTL_MODE_ATOMIC, &request);
+}
+
+static void atomic_checks(int fd, uint32_t crtc, uint32_t fb, unsigned int width,
+			  unsigned int height)
+{
+	uint32_t planes[16];
+	struct drm_mode_get_plane_res resources = { 0 };
+
+	check(ioctl(fd, DRM_IOCTL_MODE_GETPLANERESOURCES, &resources), "plane count");
+	if (resources.count_planes != 1)
+		exit(1);
+	resources.plane_id_ptr = (uintptr_t)planes;
+	check(ioctl(fd, DRM_IOCTL_MODE_GETPLANERESOURCES, &resources), "planes");
+	uint32_t plane = planes[0];
+	uint32_t fb_property = property_id(fd, plane, DRM_MODE_OBJECT_PLANE, "FB_ID");
+	uint32_t active = property_id(fd, crtc, DRM_MODE_OBJECT_CRTC, "ACTIVE");
+	check(atomic_property(fd, plane, fb_property, fb, DRM_MODE_ATOMIC_TEST_ONLY, 0),
+	      "atomic framebuffer validation");
+	/* These requests must fail without changing the active display. */
+	const char *names[] = { "SRC_X", "SRC_W", "CRTC_X", "CRTC_W", "CRTC_H" };
+	const uint64_t invalid[] = { 1, (uint64_t)(width - 1) << 16, 1, width - 1, height - 1 };
+	const int errors[] = { ENOSPC, ERANGE, EINVAL, ERANGE, ERANGE };
+	for (unsigned int i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+		uint32_t prop = property_id(fd, plane, DRM_MODE_OBJECT_PLANE, names[i]);
+
+		errno = 0;
+		if (atomic_property(fd, plane, prop, invalid[i], DRM_MODE_ATOMIC_TEST_ONLY, 0) !=
+			    -1 ||
+		    errno != errors[i]) {
+			fprintf(stderr, "Invalid %s: expected errno %d, got %d\n", names[i],
+				errors[i], errno);
+			exit(1);
+		}
+	}
+	/* Both plane flips and CRTC-only commits need software completion events. */
+	for (uint64_t cookie = 1; cookie <= 8; cookie++) {
+		bool crtc_only = cookie & 1;
+		check(atomic_property(fd, crtc_only ? crtc : plane,
+				      crtc_only ? active : fb_property, crtc_only ? 1 : fb,
+				      DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT, cookie),
+		      "atomic page flip");
+		struct pollfd ready = { .fd = fd, .events = POLLIN };
+		if (poll(&ready, 1, 3000) != 1 || !(ready.revents & POLLIN)) {
+			fprintf(stderr, "Atomic page-flip event timed out\n");
+			exit(1);
+		}
+		struct drm_event_vblank event;
+		ssize_t size = read(fd, &event, sizeof(event));
+		if (size != sizeof(event) || event.base.type != DRM_EVENT_FLIP_COMPLETE ||
+		    event.base.length != sizeof(event) || event.user_data != cookie) {
+			fprintf(stderr, "Invalid atomic page-flip event\n");
+			exit(1);
+		}
+	}
+	puts("KMS_ATOMIC_PASS: geometry validation, plane flips, CRTC-only commits, events");
+}
+
 int main(int argc, char **argv)
 {
 	setbuf(stdout, NULL);
@@ -67,6 +168,8 @@ int main(int argc, char **argv)
 		return result < 0 && error == ENODEV ? 0 : 1;
 	}
 	check(ioctl(fd, DRM_IOCTL_SET_MASTER, 0), "DRM master");
+	struct drm_set_client_cap cap = { .capability = DRM_CLIENT_CAP_ATOMIC, .value = 1 };
+	check(ioctl(fd, DRM_IOCTL_SET_CLIENT_CAP, &cap), "atomic client capability");
 	struct drm_mode_card_res resources = { 0 };
 	check(ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES, &resources), "resources count");
 	uint32_t crtcs[16] = { 0 }, connectors[16] = { 0 };
@@ -151,6 +254,7 @@ int main(int argc, char **argv)
 		check(ioctl(fd, DRM_IOCTL_MODE_SETCRTC, &active), "set mode");
 		printf("KMS_ACTIVE %s %ux%u pitch=%u fb=%u\n", names[n], dumb.width, dumb.height,
 		       dumb.pitch, fb.fb_id);
+		atomic_checks(fd, crtcs[0], fb.fb_id, dumb.width, dumb.height);
 		sleep(1);
 		profile(1);
 		struct drm_clip_rect clip = { .x2 = dumb.width, .y2 = dumb.height };

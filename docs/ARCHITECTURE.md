@@ -24,6 +24,15 @@ avoids requiring `CONFIG_DRM_BRIDGE_CONNECTOR`, which is unavailable in the
 tested distribution kernels. The USB-created bridge needs no Device Tree graph,
 regulator devices, or separate reset GPIO; the FL2000 driver owns power/reset.
 
+## Atomic display pipeline
+
+The display pipeline uses an explicit primary plane, CRTC, and TMDS encoder.
+CRTC-only atomic commits include the primary plane in validation and updates.
+Plane checks enforce fullscreen output without scaling or positioning, and
+GEM shadow-plane state retains framebuffer mappings from preparation through
+cleanup. Update and enable callbacks read the state belonging to their commit.
+The encoder attaches the IT66121 bridge through the existing component path.
+
 ## Frames and transport
 
 The driver accepts linear XRGB8888, RGB888 and RGB565 framebuffers. XRGB8888 is

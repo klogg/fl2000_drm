@@ -126,7 +126,9 @@ static unsigned int fl2000_frame_bytes_pix(enum usb_device_speed speed,
 
 struct fl2000_drm_if {
 	struct drm_device drm;
-	struct drm_simple_display_pipe pipe;
+	struct drm_plane plane;
+	struct drm_crtc crtc;
+	struct drm_encoder encoder;
 	struct usb_device *usb_dev;
 	struct fl2000_bridge bridge;
 };
@@ -327,15 +329,10 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 	return -EINVAL;
 }
 
-static struct fl2000_drm_if *fl2000_pipe_device(struct drm_simple_display_pipe *pipe)
+static enum drm_mode_status fl2000_crtc_mode_valid(struct drm_crtc *crtc,
+						   const struct drm_display_mode *mode)
 {
-	return container_of(pipe->crtc.dev, struct fl2000_drm_if, drm);
-}
-
-static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_pipe *pipe,
-						      const struct drm_display_mode *mode)
-{
-	const struct fl2000_drm_if *drm_if = fl2000_pipe_device(pipe);
+	const struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
 	struct drm_display_mode adjusted;
 	struct fl2000_pll pll;
 
@@ -346,7 +343,7 @@ static enum drm_mode_status fl2000_display_mode_valid(struct drm_simple_display_
 		       MODE_CLOCK_HIGH;
 }
 
-static int fl2000_display_check(struct drm_simple_display_pipe *pipe, struct drm_plane_state *plane,
+static int fl2000_display_check(const struct fl2000_drm_if *drm_if, struct drm_plane_state *plane,
 				struct drm_crtc_state *crtc)
 {
 	struct fl2000_pll pll;
@@ -366,18 +363,18 @@ static int fl2000_display_check(struct drm_simple_display_pipe *pipe, struct drm
 		if (ret)
 			return ret;
 	}
-	if (!plane->fb || !fl2000_frame_bytes_pix(fl2000_pipe_device(pipe)->usb_dev->speed,
-						  &crtc->adjusted_mode, plane->fb->format->format))
+	if (!plane->fb || !fl2000_frame_bytes_pix(drm_if->usb_dev->speed, &crtc->adjusted_mode,
+						  plane->fb->format->format))
 		return -EINVAL;
 	return 0;
 }
 
-static int fl2000_prepare_fb(struct drm_simple_display_pipe *pipe, struct drm_plane_state *state)
+static int fl2000_prepare_fb(struct drm_plane *plane, struct drm_plane_state *state)
 {
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
 	int ret;
 
-	ret = drm_gem_plane_helper_prepare_fb(&pipe->plane, state);
+	ret = drm_gem_plane_helper_prepare_fb(plane, state);
 	if (ret || !state->fb)
 		return ret;
 	ret = drm_gem_fb_vmap(state->fb, shadow->map, shadow->data);
@@ -390,19 +387,18 @@ static int fl2000_prepare_fb(struct drm_simple_display_pipe *pipe, struct drm_pl
 	return 0;
 }
 
-static void fl2000_cleanup_fb(struct drm_simple_display_pipe *pipe, struct drm_plane_state *state)
+static void fl2000_cleanup_fb(struct drm_plane *plane, struct drm_plane_state *state)
 {
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
 
-	UNUSED(pipe);
+	UNUSED(plane);
 	if (state->fb)
 		drm_gem_fb_vunmap(state->fb, shadow->map);
 }
 
-static int fl2000_copy_frame(struct drm_simple_display_pipe *pipe, struct drm_plane_state *state,
+static int fl2000_copy_frame(struct fl2000_drm_if *drm_if, struct drm_plane_state *state,
 			     const struct drm_rect *damage)
 {
-	struct fl2000_drm_if *drm_if = fl2000_pipe_device(pipe);
 	struct drm_framebuffer *fb = state->fb;
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
 	struct drm_rect visible;
@@ -487,71 +483,148 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_
 	return ret;
 }
 
-static void fl2000_display_enable(struct drm_simple_display_pipe *pipe, struct drm_crtc_state *crtc,
-				  struct drm_plane_state *plane)
+static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_state *state)
 {
-	struct fl2000_drm_if *drm_if = fl2000_pipe_device(pipe);
+	int ret;
+
+	ret = drm_crtc_helper_atomic_check(crtc, state);
+	if (ret)
+		return ret;
+	/* CRTC-only commits must also validate and update the primary plane. */
+	return drm_atomic_add_affected_planes(state, crtc);
+}
+
+static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_state *state)
+{
+	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
+	struct drm_plane_state *new_plane = drm_atomic_get_new_plane_state(state, plane);
+	struct drm_crtc_state *crtc = drm_atomic_get_new_crtc_state(state, &drm_if->crtc);
+	int ret;
+
+	ret = drm_atomic_helper_check_plane_state(new_plane, crtc, DRM_PLANE_NO_SCALING,
+						  DRM_PLANE_NO_SCALING, false, false);
+	if (ret || !new_plane->visible)
+		return ret;
+	return fl2000_display_check(drm_if, new_plane, crtc);
+}
+
+static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_state *state)
+{
+	struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
+	struct drm_plane_state *plane = drm_atomic_get_new_plane_state(state, &drm_if->plane);
+	const struct drm_crtc_state *crtc_state = drm_atomic_get_new_crtc_state(state, crtc);
 	int idx;
 	int ret;
 
 	if (!drm_dev_enter(&drm_if->drm, &idx))
 		return;
-	ret = fl2000_configure_mode(drm_if, &crtc->adjusted_mode, plane->fb->format->format);
+	ret = fl2000_configure_mode(drm_if, &crtc_state->adjusted_mode, plane->fb->format->format);
 	if (!ret)
-		ret = fl2000_copy_frame(pipe, plane, NULL);
+		ret = fl2000_copy_frame(drm_if, plane, NULL);
 	if (!ret)
 		ret = fl2000_streaming_enable(drm_if->usb_dev);
 	if (ret) {
 		fl2000_streaming_disable(drm_if->usb_dev);
 		dev_err(&drm_if->usb_dev->dev, "Display enable failed: %d\n", ret);
 	}
+
 	drm_dev_exit(idx);
 }
 
-static void fl2000_display_disable(struct drm_simple_display_pipe *pipe)
+static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc, struct drm_atomic_state *state)
 {
-	fl2000_streaming_disable(fl2000_pipe_device(pipe)->usb_dev);
+	struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
+
+	fl2000_streaming_disable(drm_if->usb_dev);
 }
 
-static void fl2000_display_update(struct drm_simple_display_pipe *pipe,
-				  struct drm_plane_state *old_state)
+static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomic_state *state)
 {
-	const struct drm_crtc_state *crtc = pipe->crtc.state;
+	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
+	const struct drm_crtc_state *crtc = drm_atomic_get_new_crtc_state(state, &drm_if->crtc);
+	struct drm_plane_state *old_plane = drm_atomic_get_old_plane_state(state, plane);
+	struct drm_plane_state *new_plane = drm_atomic_get_new_plane_state(state, plane);
 	struct drm_rect damage;
 	int idx;
 	int ret;
 
 	/* The enable callback configures and copies the first frame on modesets. */
-	if (!crtc->active || crtc->mode_changed || !pipe->plane.state->fb)
+	if (!crtc->active || crtc->mode_changed || !new_plane->fb)
 		return;
-	if (!drm_dev_enter(pipe->crtc.dev, &idx))
+	if (!drm_dev_enter(plane->dev, &idx))
 		return;
-	if (old_state->fb != pipe->plane.state->fb ||
-	    drm_atomic_helper_damage_merged(old_state, pipe->plane.state, &damage)) {
+	if (old_plane->fb != new_plane->fb ||
+	    drm_atomic_helper_damage_merged(old_plane, new_plane, &damage)) {
 		/* New framebuffers must rebuild each buffer, even with explicit clips. */
-		ret = fl2000_copy_frame(pipe, pipe->plane.state,
-					old_state->fb != pipe->plane.state->fb ? NULL : &damage);
+		ret = fl2000_copy_frame(drm_if, new_plane,
+					old_plane->fb != new_plane->fb ? NULL : &damage);
 		if (!ret)
-			ret = fl2000_streaming_enable(fl2000_pipe_device(pipe)->usb_dev);
+			ret = fl2000_streaming_enable(drm_if->usb_dev);
 		if (ret)
-			dev_err_ratelimited(pipe->crtc.dev->dev, "Frame conversion failed: %d\n",
-					    ret);
+			dev_err_ratelimited(plane->dev->dev, "Frame conversion failed: %d\n", ret);
 	}
 	drm_dev_exit(idx);
 }
 
-static const struct drm_simple_display_pipe_funcs fl2000_display_funcs = {
-	.mode_valid = fl2000_display_mode_valid,
-	.check = fl2000_display_check,
-	.enable = fl2000_display_enable,
-	.disable = fl2000_display_disable,
-	.update = fl2000_display_update,
+static const struct drm_crtc_funcs fl2000_crtc_funcs = {
+	.reset = drm_atomic_helper_crtc_reset,
+	.destroy = drm_crtc_cleanup,
+	.set_config = drm_atomic_helper_set_config,
+	.page_flip = drm_atomic_helper_page_flip,
+	.atomic_duplicate_state = drm_atomic_helper_crtc_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_crtc_destroy_state,
+};
+
+static const struct drm_crtc_helper_funcs fl2000_crtc_helper_funcs = {
+	.mode_valid = fl2000_crtc_mode_valid,
+	.atomic_check = fl2000_crtc_atomic_check,
+	.atomic_enable = fl2000_crtc_atomic_enable,
+	.atomic_disable = fl2000_crtc_atomic_disable,
+};
+
+static const struct drm_plane_funcs fl2000_plane_funcs = {
+	.update_plane = drm_atomic_helper_update_plane,
+	.disable_plane = drm_atomic_helper_disable_plane,
+	.destroy = drm_plane_cleanup,
+	DRM_GEM_SHADOW_PLANE_FUNCS,
+};
+
+static const struct drm_plane_helper_funcs fl2000_plane_helper_funcs = {
 	.prepare_fb = fl2000_prepare_fb,
 	.cleanup_fb = fl2000_cleanup_fb,
-	.reset_plane = drm_gem_simple_kms_reset_shadow_plane,
-	.duplicate_plane_state = drm_gem_simple_kms_duplicate_shadow_plane_state,
-	.destroy_plane_state = drm_gem_simple_kms_destroy_shadow_plane_state,
+	.atomic_check = fl2000_plane_atomic_check,
+	.atomic_update = fl2000_plane_atomic_update,
 };
+
+static const struct drm_encoder_funcs fl2000_encoder_funcs = {
+	.destroy = drm_encoder_cleanup,
+};
+
+static int fl2000_pipeline_init(struct fl2000_drm_if *drm_if)
+{
+	static const u64 modifiers[] = { DRM_FORMAT_MOD_LINEAR, DRM_FORMAT_MOD_INVALID };
+	struct drm_device *drm = &drm_if->drm;
+	int ret;
+
+	ret = drm_universal_plane_init(drm, &drm_if->plane, 0, &fl2000_plane_funcs,
+				       fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats),
+				       modifiers, DRM_PLANE_TYPE_PRIMARY, NULL);
+	if (ret)
+		return ret;
+	drm_plane_helper_add(&drm_if->plane, &fl2000_plane_helper_funcs);
+	drm_plane_enable_fb_damage_clips(&drm_if->plane);
+	ret = drm_crtc_init_with_planes(drm, &drm_if->crtc, &drm_if->plane, NULL,
+					&fl2000_crtc_funcs, NULL);
+	if (ret)
+		return ret;
+	drm_crtc_helper_add(&drm_if->crtc, &fl2000_crtc_helper_funcs);
+	ret = drm_encoder_init(drm, &drm_if->encoder, &fl2000_encoder_funcs, DRM_MODE_ENCODER_TMDS,
+			       NULL);
+	if (ret)
+		return ret;
+	drm_if->encoder.possible_crtcs = drm_crtc_mask(&drm_if->crtc);
+	return 0;
+}
 
 void fl2000_drm_hotplug(const struct usb_device *usb_dev)
 {
@@ -596,7 +669,6 @@ void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
 
 static int fl2000_drm_bind(struct device *master)
 {
-	static const u64 modifiers[] = { DRM_FORMAT_MOD_LINEAR, DRM_FORMAT_MOD_INVALID };
 	struct usb_device *usb_dev = to_usb_device(master);
 	struct fl2000_device *device = dev_get_drvdata(master);
 	struct fl2000_drm_if *drm_if;
@@ -625,29 +697,26 @@ static int fl2000_drm_bind(struct device *master)
 		drm_dev_set_dma_dev(drm, dma_dev);
 		put_device(dma_dev);
 	}
-	ret = drm_simple_display_pipe_init(drm, &drm_if->pipe, &fl2000_display_funcs,
-					   fl2000_pixel_formats, ARRAY_SIZE(fl2000_pixel_formats),
-					   modifiers, NULL);
+	ret = fl2000_pipeline_init(drm_if);
 	if (ret)
 		goto put;
 	ret = component_bind_all(master, &drm_if->bridge);
 	if (ret)
 		goto put;
-	ret = drm_bridge_attach(&drm_if->pipe.encoder, drm_if->bridge.bridge, NULL,
+	ret = drm_bridge_attach(&drm_if->encoder, drm_if->bridge.bridge, NULL,
 				DRM_BRIDGE_ATTACH_NO_CONNECTOR);
 	if (ret)
 		goto unbind;
-	connector = fl2000_bridge_connector_init(drm, &drm_if->pipe.encoder, drm_if->bridge.bridge);
+	connector = fl2000_bridge_connector_init(drm, &drm_if->encoder, drm_if->bridge.bridge);
 	if (IS_ERR(connector)) {
 		ret = PTR_ERR_OR_ZERO(connector);
 		goto detach_encoder;
 	}
-	ret = drm_connector_attach_encoder(connector, &drm_if->pipe.encoder);
+	ret = drm_connector_attach_encoder(connector, &drm_if->encoder);
 	if (ret)
 		goto detach_encoder;
 	*drm_if->bridge.connector = connector;
 	drm_mode_config_reset(drm);
-	drm_plane_enable_fb_damage_clips(&drm_if->pipe.plane);
 	drm_kms_helper_poll_init(drm);
 	WRITE_ONCE(device->drm, drm);
 	ret = fl2000_enable_interrupts(usb_dev);
@@ -672,7 +741,7 @@ detach:
 	drm_kms_helper_poll_fini(drm);
 	WRITE_ONCE(device->drm, NULL);
 detach_encoder:
-	drm_encoder_cleanup(&drm_if->pipe.encoder);
+	drm_encoder_cleanup(&drm_if->encoder);
 unbind:
 	component_unbind_all(master, &drm_if->bridge);
 put:
@@ -696,7 +765,7 @@ static void fl2000_drm_unbind(struct device *master)
 	drm_atomic_helper_shutdown(drm);
 	fl2000_streaming_disable(usb_dev);
 	/* Encoder cleanup owns bridge detachment; do it before its I2C driver can go away. */
-	drm_encoder_cleanup(&drm_if->pipe.encoder);
+	drm_encoder_cleanup(&drm_if->encoder);
 	component_unbind_all(master, &drm_if->bridge);
 	WRITE_ONCE(device->drm, NULL);
 	drm_dev_put(drm);

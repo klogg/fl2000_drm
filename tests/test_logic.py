@@ -30,6 +30,7 @@ prelude = r"""
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,10 +94,9 @@ static void put_unaligned_le16(u16 value, u8 *p) { p[0]=value; p[1]=value>>8; }
 static void put_unaligned_le32(u32 value, u8 *p) { p[0]=value; p[1]=value>>8; p[2]=value>>16; p[3]=value>>24; }
 struct drm_format_info { u32 format; unsigned int cpp[1]; };
 struct drm_framebuffer { const struct drm_format_info *format; unsigned int pitches[1]; };
-struct drm_plane { int unused; };
-struct drm_simple_display_pipe { struct drm_plane plane; };
+struct drm_plane { struct drm_device *dev; struct drm_plane_state *state; };
 struct drm_crtc;
-struct drm_plane_state { u32 src_x,src_y,src_w,src_h; struct drm_framebuffer *fb; struct drm_crtc *crtc; };
+struct drm_plane_state { u32 src_x,src_y,src_w,src_h; struct drm_framebuffer *fb; struct drm_crtc *crtc; bool visible; };
 struct drm_crtc_state { struct drm_display_mode mode,adjusted_mode; bool no_vblank,mode_changed,active; };
 struct iosys_map { bool is_iomem; void *vaddr; };
 struct drm_shadow_plane_state { struct drm_plane_state base; struct iosys_map map[1],data[1]; };
@@ -138,11 +138,9 @@ static int regmap_write_bits(struct regmap *map, unsigned int reg, u32 mask, u32
 }
 
 struct drm_device { bool unplugged; };
-struct fl2000_drm_if { struct drm_device drm; struct usb_device *usb_dev; };
+struct drm_crtc { struct drm_device *dev; struct drm_crtc_state *state; };
+struct fl2000_drm_if { struct drm_device drm; struct usb_device *usb_dev; struct drm_crtc crtc; };
 static struct fl2000_drm_if test_drm_if;
-static struct fl2000_drm_if *fl2000_pipe_device(struct drm_simple_display_pipe *pipe)
-{ (void)pipe; return &test_drm_if; }
-struct drm_crtc { struct drm_crtc_state *state; };
 struct drm_atomic_state { struct drm_plane plane; struct drm_plane_state *old_plane,*new_plane; struct drm_crtc_state *crtc; int get_error; bool allow_modeset; };
 #define IS_ERR(p) ((uintptr_t)(p)>=(uintptr_t)-4095)
 #define PTR_ERR(p) ((intptr_t)(p))
@@ -153,11 +151,34 @@ static struct drm_crtc_state *drm_atomic_get_crtc_state(struct drm_atomic_state 
 { (void)crtc; return state->get_error ? (struct drm_crtc_state *)(intptr_t)state->get_error : state->crtc; }
 static int drm_atomic_helper_check(struct drm_device *drm,struct drm_atomic_state *state)
 { (void)drm; return state->crtc->mode_changed && !state->allow_modeset ? -EINVAL : 0; }
+#define container_of(p,t,m) ((t *)((char *)(p)-offsetof(t,m)))
+#define DRM_PLANE_NO_SCALING 0x10000
+static int primary_check_result,affected_result,affected_calls,plane_check_result;
+static bool plane_visible;
+static int drm_crtc_helper_atomic_check(struct drm_crtc *crtc,struct drm_atomic_state *state)
+{ (void)crtc;(void)state;return primary_check_result; }
+static int drm_atomic_add_affected_planes(struct drm_atomic_state *state,struct drm_crtc *crtc)
+{ (void)crtc;(void)state;affected_calls++;return affected_result; }
+static struct drm_plane_state *drm_atomic_get_new_plane_state(struct drm_atomic_state *state,struct drm_plane *plane)
+{ (void)plane;return state->new_plane; }
+static struct drm_plane_state *drm_atomic_get_old_plane_state(struct drm_atomic_state *state,struct drm_plane *plane)
+{ (void)plane;return state->old_plane; }
+static bool damage_merged;
+static struct drm_rect merged_damage;
+static bool drm_atomic_helper_damage_merged(struct drm_plane_state *old,struct drm_plane_state *new,struct drm_rect *rect)
+{ (void)old;(void)new;*rect=merged_damage;return damage_merged; }
+static struct drm_crtc_state *drm_atomic_get_new_crtc_state(struct drm_atomic_state *state,struct drm_crtc *crtc)
+{ (void)crtc;return state->crtc; }
+static int drm_atomic_helper_check_plane_state(struct drm_plane_state *plane,struct drm_crtc_state *crtc,int min_scale,int max_scale,bool position,bool disabled)
+{
+ (void)crtc;assert(min_scale==DRM_PLANE_NO_SCALING && max_scale==DRM_PLANE_NO_SCALING);
+ assert(!position && !disabled);plane->visible=plane_visible;return plane_check_result;
+}
 static bool drm_dev_enter(struct drm_device *drm,int *idx) { *idx=0;return !drm->unplugged; }
 static void drm_dev_exit(int idx) { (void)idx; }
-static int cpu_access_result,cpu_access_count;
+static int cpu_access_result,cpu_access_count,cpu_access_calls;
 static int drm_gem_fb_begin_cpu_access(struct drm_framebuffer *fb,int dir)
-{ (void)fb;assert(dir==DMA_FROM_DEVICE);if(cpu_access_result)return cpu_access_result;cpu_access_count++;return 0; }
+{ (void)fb;assert(dir==DMA_FROM_DEVICE);if(cpu_access_result)return cpu_access_result;cpu_access_count++;cpu_access_calls++;return 0; }
 static void drm_gem_fb_end_cpu_access(struct drm_framebuffer *fb,int dir)
 { (void)fb;assert(dir==DMA_FROM_DEVICE && cpu_access_count==1);cpu_access_count--; }
 
@@ -408,23 +429,48 @@ static void test_native_crop(void)
  struct drm_framebuffer fb={.format=&rgb,.pitches={19}};
  struct drm_shadow_plane_state state={.base={.fb=&fb,.src_x=2U<<16,.src_y=1U<<16,.src_w=2U<<16,.src_h=2U<<16},.data={{.vaddr=storage+5}}};
  for(unsigned int i=0;i<12;i++)expected[i^4]=storage[5+19+6+(i/6)*19+(i%6)];
- struct drm_simple_display_pipe pipe={0};
- assert(!fl2000_copy_frame(&pipe,&state.base,NULL));
+ assert(!fl2000_copy_frame(&test_drm_if,&state.base,NULL));
  assert(!memcmp(destination,expected,16) && !cpu_access_count);
  stream.frames[1].vaddr=second;
- assert(!fl2000_copy_frame(&pipe,&state.base,NULL));
+ assert(!fl2000_copy_frame(&test_drm_if,&state.base,NULL));
  storage[5+19+6]^=0x7f;expected[4]=storage[5+19+6];
  struct drm_rect crop_damage={2,1,3,2};
- assert(!fl2000_copy_frame(&pipe,&state.base,&crop_damage));
+ assert(!fl2000_copy_frame(&test_drm_if,&state.base,&crop_damage));
  assert(!memcmp(destination,expected,16));
  assert(fl2000_streaming_update(&usb,storage,2,2,19,DRM_FORMAT_RGB565,NULL)==-EINVAL);
  assert(fl2000_streaming_update(&usb,storage,2,2,5,DRM_FORMAT_RGB888,NULL)==-EINVAL);
  assert(fl2000_streaming_update(&usb,storage,2,2,19,0,NULL)==-EINVAL);
  cpu_access_result=-EIO;
- assert(fl2000_copy_frame(&pipe,&state.base,NULL)==-EIO && !cpu_access_count);
+ assert(fl2000_copy_frame(&test_drm_if,&state.base,NULL)==-EIO && !cpu_access_count);
  cpu_access_result=0;test_drm_if.drm.unplugged=true;
- assert(fl2000_copy_frame(&pipe,&state.base,NULL)==-ENODEV && !cpu_access_count);
+ assert(fl2000_copy_frame(&test_drm_if,&state.base,NULL)==-ENODEV && !cpu_access_count);
  test_drm_if.drm.unplugged=false;
+ /* Use this commit's CRTC state even if the live pointer has advanced. */
+ struct drm_crtc_state active={.active=true},later={.active=false};
+ test_drm_if.crtc.state=&later;
+ struct drm_plane plane={.dev=&test_drm_if.drm};
+ struct drm_atomic_state atomic={.crtc=&active,.new_plane=&state.base,.old_plane=&state.base};
+ stream.enabled=true;int accesses=cpu_access_calls;
+ damage_merged=false;
+ fl2000_plane_atomic_update(&plane,&atomic);
+ assert(cpu_access_calls==accesses);
+ merged_damage=crop_damage;damage_merged=true;
+ fl2000_plane_atomic_update(&plane,&atomic);
+ assert(cpu_access_calls==++accesses && !memcmp(stream.latest->vaddr,expected,16));
+ active.mode_changed=true;
+ fl2000_plane_atomic_update(&plane,&atomic);
+ assert(cpu_access_calls==accesses);
+ active.mode_changed=false;active.active=false;
+ fl2000_plane_atomic_update(&plane,&atomic);
+ assert(cpu_access_calls==accesses);
+ active.active=true;damage_merged=false;
+ struct drm_plane_state detached={0};atomic.old_plane=&detached;
+ fl2000_plane_atomic_update(&plane,&atomic);
+ assert(cpu_access_calls==++accesses && !memcmp(stream.latest->vaddr,expected,16));
+ state.base.fb=NULL;
+ fl2000_plane_atomic_update(&plane,&atomic);
+ assert(cpu_access_calls==accesses);
+ test_drm_if.crtc.state=NULL;
 }
 
 static void test_partial_damage(void)
@@ -633,48 +679,66 @@ static void test_frame_allocation(void)
 
 static void test_atomic_state(void)
 {
- struct drm_simple_display_pipe pipe={0};
+ struct drm_plane plane={0};
  struct drm_crtc_state crtc={ .mode={.clock=40000,.hdisplay=800,.hsync_start=840,.hsync_end=968,.htotal=1056,.vdisplay=600,.vsync_start=601,.vsync_end=605,.vtotal=628}, .mode_changed=true };
  struct usb_device usb={.speed=USB_SPEED_SUPER};test_drm_if.usb_dev=&usb;
  const struct drm_format_info xrgb={DRM_FORMAT_XRGB8888,{4}};
  struct drm_framebuffer fb={.format=&xrgb};
  struct drm_shadow_plane_state old={.base={.fb=&fb,.src_w=800U<<16,.src_h=600U<<16}}, new=old;
  int calls=mode_calls;
- assert(!fl2000_display_check(&pipe,&old.base,&crtc));
+ assert(!fl2000_display_check(&test_drm_if,&old.base,&crtc));
  assert(mode_calls==calls+1 && crtc.no_vblank);
  calls=mode_calls; crtc.mode_changed=false;
  struct drm_display_mode adjusted=crtc.adjusted_mode;
- for(int i=0;i<100;i++)assert(!fl2000_display_check(&pipe,&old.base,&crtc));
+ for(int i=0;i<100;i++)assert(!fl2000_display_check(&test_drm_if,&old.base,&crtc));
  assert(mode_calls==calls && !memcmp(&adjusted,&crtc.adjusted_mode,sizeof(adjusted)));
  old.base.src_x=1;
- assert(fl2000_display_check(&pipe,&old.base,&crtc)==-EINVAL);
+ assert(fl2000_display_check(&test_drm_if,&old.base,&crtc)==-EINVAL);
  old.base.src_x=0;
  const struct drm_format_info rgb888={DRM_FORMAT_RGB888,{3}},rgb565={DRM_FORMAT_RGB565,{2}};
  usb.speed=USB_SPEED_HIGH;
  crtc.mode=(struct drm_display_mode){.clock=25175,.hdisplay=640,.hsync_start=656,.hsync_end=752,.htotal=800,.vdisplay=480,.vsync_start=490,.vsync_end=492,.vtotal=525};
  crtc.mode_changed=true;old.base.src_w=640U<<16;old.base.src_h=480U<<16;
  fb.format=&rgb888;
- assert(fl2000_display_check(&pipe,&old.base,&crtc)==-EINVAL);
+ assert(fl2000_display_check(&test_drm_if,&old.base,&crtc)==-EINVAL);
  fb.format=&rgb565;
- assert(!fl2000_display_check(&pipe,&old.base,&crtc));
+ assert(!fl2000_display_check(&test_drm_if,&old.base,&crtc));
  crtc.mode_changed=false;fb.format=&rgb888;
- assert(fl2000_display_check(&pipe,&old.base,&crtc)==-EINVAL);
+ assert(fl2000_display_check(&test_drm_if,&old.base,&crtc)==-EINVAL);
  fb.format=&xrgb;usb.speed=USB_SPEED_SUPER;
- assert(!fl2000_prepare_fb(&pipe,&old.base));
- assert(!fl2000_prepare_fb(&pipe,&new.base));
- fl2000_cleanup_fb(&pipe,&old.base);
+ /* CRTC-only changes must pull in planes; failures must propagate unchanged. */
+ struct drm_atomic_state atomic={.crtc=&crtc,.new_plane=&old.base};
+ primary_check_result=-EINVAL;
+ assert(fl2000_crtc_atomic_check(&test_drm_if.crtc,&atomic)==-EINVAL && !affected_calls);
+ primary_check_result=0;affected_result=-EDEADLK;
+ assert(fl2000_crtc_atomic_check(&test_drm_if.crtc,&atomic)==-EDEADLK && affected_calls==1);
+ affected_result=0;
+ assert(!fl2000_crtc_atomic_check(&test_drm_if.crtc,&atomic) && affected_calls==2);
+ plane.dev=&test_drm_if.drm;
+ plane_check_result=-ERANGE;
+ assert(fl2000_plane_atomic_check(&plane,&atomic)==-ERANGE);
+ plane_check_result=0;plane_visible=false;old.base.fb=NULL;
+ assert(!fl2000_plane_atomic_check(&plane,&atomic));
+ old.base.fb=&fb;plane_visible=true;crtc.no_vblank=false;
+ assert(!fl2000_plane_atomic_check(&plane,&atomic) && crtc.no_vblank);
+ old.base.src_w-=1;
+ assert(fl2000_plane_atomic_check(&plane,&atomic)==-EINVAL);
+ old.base.src_w+=1;
+ assert(!fl2000_prepare_fb(&plane,&old.base));
+ assert(!fl2000_prepare_fb(&plane,&new.base));
+ fl2000_cleanup_fb(&plane,&old.base);
  assert(map_refs==1 && map_creations==1 && !map_removals);
- fl2000_cleanup_fb(&pipe,&new.base);
+ fl2000_cleanup_fb(&plane,&new.base);
  assert(!map_refs && map_removals==1);
  prepare_result=-ENOMEM;
- assert(fl2000_prepare_fb(&pipe,&new.base)==-ENOMEM && !map_refs);
+ assert(fl2000_prepare_fb(&plane,&new.base)==-ENOMEM && !map_refs);
  prepare_result=0;map_result=-ENOMEM;
- assert(fl2000_prepare_fb(&pipe,&new.base)==-ENOMEM && !map_refs);
+ assert(fl2000_prepare_fb(&plane,&new.base)==-ENOMEM && !map_refs);
  map_result=0;map_iomem=true;
- assert(fl2000_prepare_fb(&pipe,&new.base)==-EOPNOTSUPP && !map_refs);
+ assert(fl2000_prepare_fb(&plane,&new.base)==-EOPNOTSUPP && !map_refs);
  map_iomem=false;new.base.fb=NULL;
- assert(!fl2000_prepare_fb(&pipe,&new.base));
- fl2000_cleanup_fb(&pipe,&new.base);
+ assert(!fl2000_prepare_fb(&plane,&new.base));
+ fl2000_cleanup_fb(&plane,&new.base);
 }
 
 static void test_register_io(void)
@@ -813,6 +877,8 @@ parts += [
         "fl2000_mode_calc",
         "fl2000_atomic_check",
         "fl2000_display_check",
+        "fl2000_crtc_atomic_check",
+        "fl2000_plane_atomic_check",
         "fl2000_prepare_fb",
         "fl2000_cleanup_fb",
     )
@@ -851,6 +917,7 @@ parts += [
     )
 ]
 parts.append(function(drm, "fl2000_copy_frame"))
+parts.append(function(drm, "fl2000_plane_atomic_update"))
 parts += [
     function(i2c, name)
     for name in (

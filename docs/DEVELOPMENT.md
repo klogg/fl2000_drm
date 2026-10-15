@@ -12,6 +12,12 @@ module-version checks, and newc overlay creation. The compressed base is copied
 unchanged, with four-byte alignment before the overlay and 512-byte archive
 padding. Launchers only load modules inside their guests.
 
+`tests/kms_smoke.c` checks all three framebuffer formats in a hardware guest.
+It exercises atomic geometry rejection, nonblocking plane and CRTC-only commits,
+software flip-completion events, and dirty-framebuffer updates. These events do
+not confirm physical presentation. Its `--hold` mode checks that an open DRM
+handle returns `ENODEV` after device unbind or removal.
+
 `tests/compile_commands.py` merges backend compilation databases. It retains
 the default build's command for shared sources and adds optional-backend
 sources. This covers both implementations, rather than claiming that every
