@@ -17,7 +17,8 @@ kernel_tool() {
     mkdir -p "$cache_dir/$(dirname -- "$resource")" || return
     if [[ ! -s "$cache_dir/$resource" ]]; then
         temporary=$(mktemp "$cache_dir/$resource.XXXXXX") || return
-        if ! curl --fail --location --silent --show-error \
+        if ! curl --fail --location --proto '=https' --proto-redir '=https' \
+            --silent --show-error \
             "https://raw.githubusercontent.com/torvalds/linux/$tag/$resource" -o "$temporary"; then
             rm -f -- "$temporary"
             return 1
