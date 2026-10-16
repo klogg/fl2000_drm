@@ -159,20 +159,32 @@ recovery are not implemented. See the
 
 ## Performance
 
-A matched i3-6100T QEMU/KVM run at 800x480 with 60 full-frame updates/s measured
-the following update-process CPU, as a percentage of one core. Values are
-medians of two 10-second trials:
+The current codebase (`f9e99ef`) was measured on an i3-6100T under QEMU/KVM at
+800x480 and 60 updates/s. All backends ran in the same guest, with order reversed
+on the second pass. Values are median update-process CPU as a percentage of one
+core, from two 10-second trials per case.
+
+Full-frame updates:
 
 | Input | Portable | SSSE3 | BMI2 |
 | --- | ---: | ---: | ---: |
-| XRGB8888 | 10.84% | 5.31% | 5.54% |
-| RGB888 | 4.02% | 4.02% | 4.02% |
-| RGB565 | 2.94% | 2.96% | 2.92% |
+| XRGB8888 | 10.65% | 5.32% | 5.46% |
+| RGB888 | 3.83% | 3.95% | 3.96% |
+| RGB565 | 2.92% | 2.79% | 2.87% |
 
+64x64 damage updates:
+
+| Input | Portable | SSSE3 | BMI2 |
+| --- | ---: | ---: | ---: |
+| XRGB8888 | 1.39% | 1.40% | 1.30% |
+| RGB888 | 1.20% | 1.20% | 1.27% |
+| RGB565 | 1.14% | 1.03% | 1.09% |
+
+Native RGB888/RGB565 reordering remains portable in all three builds.
 These figures include synchronous ioctl work, but exclude asynchronous driver
 work and host passthrough overhead. They are not total driver CPU utilization.
 See [profiling methodology and historical results](docs/PROFILING.md) and the
-[raw backend data](tests/cpu_profile_backend_results.json).
+[current raw data](tests/cpu_profile_current_results.json).
 
 ## Tests and CI
 

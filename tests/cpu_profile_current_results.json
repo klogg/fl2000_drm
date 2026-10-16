@@ -1,0 +1,1467 @@
+{
+  "measured_utc": "2026-10-16T16:32:32.107208+00:00",
+  "driver_commit": "f9e99ef20c36263ea441b54f610b72fdec6b55bf",
+  "cpu": "Intel Core i3-6100T @ 3.20 GHz",
+  "kernel": "7.0.0-38-generic",
+  "qemu": "11.1.2 with FL2000 duplicate-endpoint patch",
+  "guest_vcpus": 1,
+  "backend": "SSSE3 (auto); portable native RGB888/RGB565 reordering",
+  "mode": "800x480",
+  "workload": "60 DIRTYFB updates/s; three 10-second untraced full-frame and 64x64 damage trials per format",
+  "frames_per_untraced_window": 600,
+  "module_sha256": {
+    "fl2000": "d3c0e679b2831d601db091a6e95dfa2352f7a8f0d2d23781fe206fd5cf565def",
+    "it66121": "b063097611d29aef4848c4704df1adf17cb2064840a1744f86d6d848e7bd9fb6"
+  },
+  "no_driver_idle": {
+    "wall_seconds": 10.0,
+    "process_cpu_seconds": 0.000221,
+    "process_cpu_percent": 0.00221,
+    "guest_busy_percent": 0.0,
+    "irq_percent": 0.0,
+    "softirq_percent": 0.0,
+    "steal_percent": 0.0,
+    "qemu_host_cpu_percent": 11.690668682450413,
+    "qemu_guest_cpu_percent": 0.3996809805965953
+  },
+  "summary": {
+    "XRGB8888": {
+      "full_60hz": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.524316,
+          "process_cpu_percent": 5.2431600000000005,
+          "guest_busy_percent": 4.8,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.5,
+          "steal_percent": 0.0,
+          "qemu_host_cpu_percent": 23.7568503614194,
+          "qemu_guest_cpu_percent": 6.089922671837066
+        },
+        "min_process_cpu_percent": 5.20172,
+        "max_process_cpu_percent": 5.27425,
+        "trials": [
+          {
+            "run": "trial-1",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.520172,
+            "process_cpu_percent": 5.20172,
+            "guest_busy_percent": 4.8,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.5,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 23.7568503614194,
+            "qemu_guest_cpu_percent": 5.689665842860947
+          },
+          {
+            "run": "trial-2",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.527425,
+            "process_cpu_percent": 5.27425,
+            "guest_busy_percent": 4.8,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.5,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 23.760681899954456,
+            "qemu_guest_cpu_percent": 6.089922671837066
+          },
+          {
+            "run": "trial-3",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.524316,
+            "process_cpu_percent": 5.2431600000000005,
+            "guest_busy_percent": 4.9,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.4,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 22.960388886331938,
+            "qemu_guest_cpu_percent": 6.6884611103662595
+          }
+        ]
+      },
+      "small_60hz": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.129692,
+          "process_cpu_percent": 1.29692,
+          "guest_busy_percent": 0.6,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.4,
+          "steal_percent": 0.0,
+          "qemu_host_cpu_percent": 23.656882738416957,
+          "qemu_guest_cpu_percent": 2.1959975537771013
+        },
+        "min_process_cpu_percent": 1.2776399999999999,
+        "max_process_cpu_percent": 1.3739599999999998,
+        "trials": [
+          {
+            "run": "trial-1",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.137396,
+            "process_cpu_percent": 1.3739599999999998,
+            "guest_busy_percent": 0.5,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.4,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 23.161637930341037,
+            "qemu_guest_cpu_percent": 3.1947086800470395
+          },
+          {
+            "run": "trial-2",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.127764,
+            "process_cpu_percent": 1.2776399999999999,
+            "guest_busy_percent": 0.8,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.6,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 24.65462657199708,
+            "qemu_guest_cpu_percent": 1.5970608305747096
+          },
+          {
+            "run": "trial-3",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.129692,
+            "process_cpu_percent": 1.29692,
+            "guest_busy_percent": 0.6,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.4,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 23.656882738416957,
+            "qemu_guest_cpu_percent": 2.1959975537771013
+          }
+        ]
+      },
+      "static": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.000271,
+          "process_cpu_percent": 0.0027099999999999997,
+          "guest_busy_percent": 0.1,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.1,
+          "steal_percent": 0.0,
+          "qemu_host_cpu_percent": 22.76223596188364,
+          "qemu_guest_cpu_percent": 1.297846787300383
+        },
+        "min_process_cpu_percent": 0.0027099999999999997,
+        "max_process_cpu_percent": 0.0027099999999999997,
+        "trials": [
+          {
+            "run": "static",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.000271,
+            "process_cpu_percent": 0.0027099999999999997,
+            "guest_busy_percent": 0.1,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.1,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 22.76223596188364,
+            "qemu_guest_cpu_percent": 1.297846787300383
+          }
+        ]
+      },
+      "small_damage_cpu_reduction_percent": 75.26453512767111
+    },
+    "RGB888": {
+      "full_60hz": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.397434,
+          "process_cpu_percent": 3.97434,
+          "guest_busy_percent": 4.5,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.7,
+          "steal_percent": 0.0,
+          "qemu_host_cpu_percent": 23.191192219425304,
+          "qemu_guest_cpu_percent": 5.190968757228255
+        },
+        "min_process_cpu_percent": 3.8541599999999994,
+        "max_process_cpu_percent": 4.02639,
+        "trials": [
+          {
+            "run": "trial-1",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.402639,
+            "process_cpu_percent": 4.02639,
+            "guest_busy_percent": 4.6,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.7,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 23.459185729781538,
+            "qemu_guest_cpu_percent": 5.190968757228255
+          },
+          {
+            "run": "trial-2",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.385416,
+            "process_cpu_percent": 3.8541599999999994,
+            "guest_busy_percent": 2.9,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.7,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 23.064780352561364,
+            "qemu_guest_cpu_percent": 5.192071767676151
+          },
+          {
+            "run": "trial-3",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.397434,
+            "process_cpu_percent": 3.97434,
+            "guest_busy_percent": 4.5,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.8,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 23.191192219425304,
+            "qemu_guest_cpu_percent": 5.098063806856423
+          }
+        ]
+      },
+      "small_60hz": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.120898,
+          "process_cpu_percent": 1.20898,
+          "guest_busy_percent": 1.4,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.5,
+          "steal_percent": 0.1,
+          "qemu_host_cpu_percent": 22.358570829281074,
+          "qemu_guest_cpu_percent": 3.094266498695148
+        },
+        "min_process_cpu_percent": 1.14761,
+        "max_process_cpu_percent": 1.30302,
+        "trials": [
+          {
+            "run": "trial-1",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.114761,
+            "process_cpu_percent": 1.14761,
+            "guest_busy_percent": 0.6,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.5,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 23.760346080436392,
+            "qemu_guest_cpu_percent": 2.1963345116369775
+          },
+          {
+            "run": "trial-2",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.130302,
+            "process_cpu_percent": 1.30302,
+            "guest_busy_percent": 2.4,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.6,
+            "steal_percent": 0.1,
+            "qemu_host_cpu_percent": 22.358570829281074,
+            "qemu_guest_cpu_percent": 3.094266498695148
+          },
+          {
+            "run": "trial-3",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.120898,
+            "process_cpu_percent": 1.20898,
+            "guest_busy_percent": 1.4,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.4,
+            "steal_percent": 0.1,
+            "qemu_host_cpu_percent": 21.26463681116464,
+            "qemu_guest_cpu_percent": 4.392694928127907
+          }
+        ]
+      },
+      "static": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.000224,
+          "process_cpu_percent": 0.00224,
+          "guest_busy_percent": 0.1,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.0,
+          "steal_percent": 0.1,
+          "qemu_host_cpu_percent": 22.961150261859828,
+          "qemu_guest_cpu_percent": 1.197973057140513
+        },
+        "min_process_cpu_percent": 0.00224,
+        "max_process_cpu_percent": 0.00224,
+        "trials": [
+          {
+            "run": "static",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.000224,
+            "process_cpu_percent": 0.00224,
+            "guest_busy_percent": 0.1,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.0,
+            "steal_percent": 0.1,
+            "qemu_host_cpu_percent": 22.961150261859828,
+            "qemu_guest_cpu_percent": 1.197973057140513
+          }
+        ]
+      },
+      "small_damage_cpu_reduction_percent": 69.58035799654786
+    },
+    "RGB565": {
+      "full_60hz": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.282024,
+          "process_cpu_percent": 2.82024,
+          "guest_busy_percent": 2.9,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.6,
+          "steal_percent": 0.0,
+          "qemu_host_cpu_percent": 19.6688338574911,
+          "qemu_guest_cpu_percent": 5.990507773855159
+        },
+        "min_process_cpu_percent": 2.74953,
+        "max_process_cpu_percent": 3.00898,
+        "trials": [
+          {
+            "run": "trial-1",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.282024,
+            "process_cpu_percent": 2.82024,
+            "guest_busy_percent": 3.0,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.6,
+            "steal_percent": 0.1,
+            "qemu_host_cpu_percent": 19.6688338574911,
+            "qemu_guest_cpu_percent": 5.990507773855159
+          },
+          {
+            "run": "trial-2",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.274953,
+            "process_cpu_percent": 2.74953,
+            "guest_busy_percent": 2.5,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.6,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 18.569316130731103,
+            "qemu_guest_cpu_percent": 6.688947208381634
+          },
+          {
+            "run": "trial-3",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.300898,
+            "process_cpu_percent": 3.00898,
+            "guest_busy_percent": 2.9,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.6,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 21.064512834298863,
+            "qemu_guest_cpu_percent": 4.991590719028166
+          }
+        ]
+      },
+      "small_60hz": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.111226,
+          "process_cpu_percent": 1.11226,
+          "guest_busy_percent": 2.0,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.6,
+          "steal_percent": 0.0,
+          "qemu_host_cpu_percent": 21.963588674843958,
+          "qemu_guest_cpu_percent": 1.8968553855547052
+        },
+        "min_process_cpu_percent": 1.0262499999999999,
+        "max_process_cpu_percent": 1.1540599999999999,
+        "trials": [
+          {
+            "run": "trial-1",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.111226,
+            "process_cpu_percent": 1.11226,
+            "guest_busy_percent": 2.3,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.7,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 20.765756519935568,
+            "qemu_guest_cpu_percent": 3.19473177229778
+          },
+          {
+            "run": "trial-2",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.102625,
+            "process_cpu_percent": 1.0262499999999999,
+            "guest_busy_percent": 0.6,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.5,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 21.963588674843958,
+            "qemu_guest_cpu_percent": 1.8968553855547052
+          },
+          {
+            "run": "trial-3",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.115406,
+            "process_cpu_percent": 1.1540599999999999,
+            "guest_busy_percent": 2.0,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.6,
+            "steal_percent": 0.1,
+            "qemu_host_cpu_percent": 22.459601956629943,
+            "qemu_guest_cpu_percent": 1.696947703389818
+          }
+        ]
+      },
+      "static": {
+        "median": {
+          "wall_seconds": 10.0,
+          "process_cpu_seconds": 0.000225,
+          "process_cpu_percent": 0.00225,
+          "guest_busy_percent": 0.3,
+          "irq_percent": 0.0,
+          "softirq_percent": 0.3,
+          "steal_percent": 0.0,
+          "qemu_host_cpu_percent": 19.783080745719754,
+          "qemu_guest_cpu_percent": 2.2980346320785574
+        },
+        "min_process_cpu_percent": 0.00225,
+        "max_process_cpu_percent": 0.00225,
+        "trials": [
+          {
+            "run": "static",
+            "wall_seconds": 10.0,
+            "process_cpu_seconds": 0.000225,
+            "process_cpu_percent": 0.00225,
+            "guest_busy_percent": 0.3,
+            "irq_percent": 0.0,
+            "softirq_percent": 0.3,
+            "steal_percent": 0.0,
+            "qemu_host_cpu_percent": 19.783080745719754,
+            "qemu_guest_cpu_percent": 2.2980346320785574
+          }
+        ]
+      },
+      "small_damage_cpu_reduction_percent": 60.56151249539046
+    }
+  },
+  "kernel_samples": [
+    {
+      "format": "XRGB8888",
+      "phase": "full_60hz",
+      "preparation": 817,
+      "fl2000_usb": 2,
+      "usb_xhci": 1,
+      "fl2000_control": 36,
+      "other_kernel": 120,
+      "unknown": 0,
+      "lost": 0,
+      "total_samples": 976,
+      "preparation_share_percent": 83.70901639344262
+    },
+    {
+      "format": "RGB888",
+      "phase": "full_60hz",
+      "preparation": 571,
+      "fl2000_usb": 2,
+      "usb_xhci": 0,
+      "fl2000_control": 45,
+      "other_kernel": 131,
+      "unknown": 0,
+      "lost": 0,
+      "total_samples": 749,
+      "preparation_share_percent": 76.23497997329773
+    },
+    {
+      "format": "RGB565",
+      "phase": "full_60hz",
+      "preparation": 307,
+      "fl2000_usb": 3,
+      "usb_xhci": 0,
+      "fl2000_control": 50,
+      "other_kernel": 100,
+      "unknown": 0,
+      "lost": 0,
+      "total_samples": 460,
+      "preparation_share_percent": 66.73913043478261
+    }
+  ],
+  "function_profiles": {
+    "XRGB8888": [
+      {
+        "name": "xhci_irq",
+        "calls": 660,
+        "inclusive_wall_us": 446581.8,
+        "mean_inclusive_wall_us": 676.639
+      },
+      {
+        "name": "fl2000_plane_atomic_update",
+        "calls": 300,
+        "inclusive_wall_us": 292909.9,
+        "mean_inclusive_wall_us": 976.366
+      },
+      {
+        "name": "fl2000_copy_frame",
+        "calls": 300,
+        "inclusive_wall_us": 291620.6,
+        "mean_inclusive_wall_us": 972.068
+      },
+      {
+        "name": "fl2000_streaming_update",
+        "calls": 300,
+        "inclusive_wall_us": 290979.1,
+        "mean_inclusive_wall_us": 969.93
+      },
+      {
+        "name": "fl2000_convert_line",
+        "calls": 28800,
+        "inclusive_wall_us": 274725.1,
+        "mean_inclusive_wall_us": 9.539
+      },
+      {
+        "name": "fl2000_frame_convert",
+        "calls": 57600,
+        "inclusive_wall_us": 236988.4,
+        "mean_inclusive_wall_us": 4.114
+      },
+      {
+        "name": "fl2000_ssse3_convert",
+        "calls": 28800,
+        "inclusive_wall_us": 195542.9,
+        "mean_inclusive_wall_us": 6.789
+      },
+      {
+        "name": "__usb_hcd_giveback_urb",
+        "calls": 330,
+        "inclusive_wall_us": 58308.91,
+        "mean_inclusive_wall_us": 176.693
+      },
+      {
+        "name": "fl2000_data_completion",
+        "calls": 330,
+        "inclusive_wall_us": 56677.52,
+        "mean_inclusive_wall_us": 171.75
+      },
+      {
+        "name": "fl2000_submit_transfer",
+        "calls": 330,
+        "inclusive_wall_us": 55777.24,
+        "mean_inclusive_wall_us": 169.021
+      },
+      {
+        "name": "usb_submit_urb",
+        "calls": 330,
+        "inclusive_wall_us": 55396.0,
+        "mean_inclusive_wall_us": 167.866
+      },
+      {
+        "name": "xhci_urb_enqueue",
+        "calls": 330,
+        "inclusive_wall_us": 54088.51,
+        "mean_inclusive_wall_us": 163.904
+      },
+      {
+        "name": "fl2000_atomic_check",
+        "calls": 324,
+        "inclusive_wall_us": 2834.369,
+        "mean_inclusive_wall_us": 8.748
+      },
+      {
+        "name": "fl2000_plane_destroy_state",
+        "calls": 300,
+        "inclusive_wall_us": 1547.957,
+        "mean_inclusive_wall_us": 5.159
+      },
+      {
+        "name": "fl2000_prepare_fb",
+        "calls": 300,
+        "inclusive_wall_us": 881.498,
+        "mean_inclusive_wall_us": 2.938
+      },
+      {
+        "name": "fl2000_plane_atomic_check",
+        "calls": 300,
+        "inclusive_wall_us": 877.177,
+        "mean_inclusive_wall_us": 2.923
+      },
+      {
+        "name": "fl2000_cleanup_fb",
+        "calls": 300,
+        "inclusive_wall_us": 634.837,
+        "mean_inclusive_wall_us": 2.116
+      },
+      {
+        "name": "fl2000_plane_duplicate_state",
+        "calls": 300,
+        "inclusive_wall_us": 559.436,
+        "mean_inclusive_wall_us": 1.864
+      },
+      {
+        "name": "fl2000_crtc_atomic_check",
+        "calls": 300,
+        "inclusive_wall_us": 330.179,
+        "mean_inclusive_wall_us": 1.1
+      },
+      {
+        "name": "usb_hcd_unmap_urb_for_dma",
+        "calls": 330,
+        "inclusive_wall_us": 236.449,
+        "mean_inclusive_wall_us": 0.716
+      },
+      {
+        "name": "fl2000_streaming_free_buffers",
+        "calls": 600,
+        "inclusive_wall_us": 171.326,
+        "mean_inclusive_wall_us": 0.285
+      },
+      {
+        "name": "fl2000_streaming_enable",
+        "calls": 300,
+        "inclusive_wall_us": 149.634,
+        "mean_inclusive_wall_us": 0.498
+      },
+      {
+        "name": "usb_hcd_map_urb_for_dma",
+        "calls": 330,
+        "inclusive_wall_us": 144.675,
+        "mean_inclusive_wall_us": 0.438
+      },
+      {
+        "name": "fl2000_frame_bytes_pix.isra.0",
+        "calls": 300,
+        "inclusive_wall_us": 143.26,
+        "mean_inclusive_wall_us": 0.477
+      }
+    ],
+    "RGB888": [
+      {
+        "name": "xhci_irq",
+        "calls": 658,
+        "inclusive_wall_us": 447511.9,
+        "mean_inclusive_wall_us": 680.109
+      },
+      {
+        "name": "fl2000_plane_atomic_update",
+        "calls": 300,
+        "inclusive_wall_us": 146476.0,
+        "mean_inclusive_wall_us": 488.253
+      },
+      {
+        "name": "fl2000_copy_frame",
+        "calls": 300,
+        "inclusive_wall_us": 145176.0,
+        "mean_inclusive_wall_us": 483.92
+      },
+      {
+        "name": "fl2000_streaming_update",
+        "calls": 300,
+        "inclusive_wall_us": 144591.0,
+        "mean_inclusive_wall_us": 481.97
+      },
+      {
+        "name": "fl2000_reorder_line",
+        "calls": 300,
+        "inclusive_wall_us": 143802.7,
+        "mean_inclusive_wall_us": 479.342
+      },
+      {
+        "name": "__usb_hcd_giveback_urb",
+        "calls": 330,
+        "inclusive_wall_us": 58224.47,
+        "mean_inclusive_wall_us": 176.437
+      },
+      {
+        "name": "fl2000_data_completion",
+        "calls": 330,
+        "inclusive_wall_us": 56535.22,
+        "mean_inclusive_wall_us": 171.318
+      },
+      {
+        "name": "fl2000_submit_transfer",
+        "calls": 330,
+        "inclusive_wall_us": 55826.7,
+        "mean_inclusive_wall_us": 169.171
+      },
+      {
+        "name": "usb_submit_urb",
+        "calls": 330,
+        "inclusive_wall_us": 55428.11,
+        "mean_inclusive_wall_us": 167.963
+      },
+      {
+        "name": "xhci_urb_enqueue",
+        "calls": 330,
+        "inclusive_wall_us": 54194.46,
+        "mean_inclusive_wall_us": 164.225
+      },
+      {
+        "name": "fl2000_atomic_check",
+        "calls": 324,
+        "inclusive_wall_us": 4823.383,
+        "mean_inclusive_wall_us": 14.886
+      },
+      {
+        "name": "fl2000_prepare_fb",
+        "calls": 300,
+        "inclusive_wall_us": 2595.977,
+        "mean_inclusive_wall_us": 8.653
+      },
+      {
+        "name": "fl2000_crtc_atomic_check",
+        "calls": 300,
+        "inclusive_wall_us": 1924.683,
+        "mean_inclusive_wall_us": 6.415
+      },
+      {
+        "name": "fl2000_frame_reorder",
+        "calls": 5400,
+        "inclusive_wall_us": 1524.356,
+        "mean_inclusive_wall_us": 0.282
+      },
+      {
+        "name": "fl2000_plane_destroy_state",
+        "calls": 300,
+        "inclusive_wall_us": 1401.768,
+        "mean_inclusive_wall_us": 4.672
+      },
+      {
+        "name": "fl2000_plane_atomic_check",
+        "calls": 300,
+        "inclusive_wall_us": 945.603,
+        "mean_inclusive_wall_us": 3.152
+      },
+      {
+        "name": "fl2000_cleanup_fb",
+        "calls": 300,
+        "inclusive_wall_us": 640.799,
+        "mean_inclusive_wall_us": 2.135
+      },
+      {
+        "name": "fl2000_plane_duplicate_state",
+        "calls": 300,
+        "inclusive_wall_us": 573.967,
+        "mean_inclusive_wall_us": 1.913
+      },
+      {
+        "name": "usb_hcd_unmap_urb_for_dma",
+        "calls": 330,
+        "inclusive_wall_us": 268.08,
+        "mean_inclusive_wall_us": 0.812
+      },
+      {
+        "name": "fl2000_streaming_enable",
+        "calls": 300,
+        "inclusive_wall_us": 190.631,
+        "mean_inclusive_wall_us": 0.635
+      },
+      {
+        "name": "fl2000_streaming_free_buffers",
+        "calls": 600,
+        "inclusive_wall_us": 177.772,
+        "mean_inclusive_wall_us": 0.296
+      },
+      {
+        "name": "fl2000_frame_bytes_pix.isra.0",
+        "calls": 300,
+        "inclusive_wall_us": 139.862,
+        "mean_inclusive_wall_us": 0.466
+      },
+      {
+        "name": "usb_hcd_map_urb_for_dma",
+        "calls": 330,
+        "inclusive_wall_us": 106.264,
+        "mean_inclusive_wall_us": 0.322
+      }
+    ],
+    "RGB565": [
+      {
+        "name": "xhci_irq",
+        "calls": 660,
+        "inclusive_wall_us": 354831.3,
+        "mean_inclusive_wall_us": 537.623
+      },
+      {
+        "name": "fl2000_plane_atomic_update",
+        "calls": 300,
+        "inclusive_wall_us": 97032.03,
+        "mean_inclusive_wall_us": 323.44
+      },
+      {
+        "name": "fl2000_copy_frame",
+        "calls": 300,
+        "inclusive_wall_us": 95814.25,
+        "mean_inclusive_wall_us": 319.38
+      },
+      {
+        "name": "fl2000_streaming_update",
+        "calls": 300,
+        "inclusive_wall_us": 95214.06,
+        "mean_inclusive_wall_us": 317.38
+      },
+      {
+        "name": "fl2000_reorder_line",
+        "calls": 300,
+        "inclusive_wall_us": 94446.78,
+        "mean_inclusive_wall_us": 314.822
+      },
+      {
+        "name": "__usb_hcd_giveback_urb",
+        "calls": 330,
+        "inclusive_wall_us": 55443.04,
+        "mean_inclusive_wall_us": 168.009
+      },
+      {
+        "name": "fl2000_data_completion",
+        "calls": 330,
+        "inclusive_wall_us": 53810.56,
+        "mean_inclusive_wall_us": 163.062
+      },
+      {
+        "name": "fl2000_submit_transfer",
+        "calls": 330,
+        "inclusive_wall_us": 53026.99,
+        "mean_inclusive_wall_us": 160.687
+      },
+      {
+        "name": "usb_submit_urb",
+        "calls": 330,
+        "inclusive_wall_us": 52680.12,
+        "mean_inclusive_wall_us": 159.636
+      },
+      {
+        "name": "xhci_urb_enqueue",
+        "calls": 330,
+        "inclusive_wall_us": 51492.22,
+        "mean_inclusive_wall_us": 156.037
+      },
+      {
+        "name": "fl2000_plane_destroy_state",
+        "calls": 300,
+        "inclusive_wall_us": 2861.473,
+        "mean_inclusive_wall_us": 9.538
+      },
+      {
+        "name": "fl2000_atomic_check",
+        "calls": 325,
+        "inclusive_wall_us": 2849.339,
+        "mean_inclusive_wall_us": 8.767
+      },
+      {
+        "name": "fl2000_streaming_free_buffers",
+        "calls": 600,
+        "inclusive_wall_us": 1669.516,
+        "mean_inclusive_wall_us": 2.782
+      },
+      {
+        "name": "fl2000_frame_reorder",
+        "calls": 3600,
+        "inclusive_wall_us": 1051.505,
+        "mean_inclusive_wall_us": 0.292
+      },
+      {
+        "name": "fl2000_prepare_fb",
+        "calls": 300,
+        "inclusive_wall_us": 933.694,
+        "mean_inclusive_wall_us": 3.112
+      },
+      {
+        "name": "fl2000_plane_atomic_check",
+        "calls": 300,
+        "inclusive_wall_us": 894.127,
+        "mean_inclusive_wall_us": 2.98
+      },
+      {
+        "name": "fl2000_cleanup_fb",
+        "calls": 300,
+        "inclusive_wall_us": 682.005,
+        "mean_inclusive_wall_us": 2.273
+      },
+      {
+        "name": "fl2000_plane_duplicate_state",
+        "calls": 300,
+        "inclusive_wall_us": 568.574,
+        "mean_inclusive_wall_us": 1.895
+      },
+      {
+        "name": "fl2000_crtc_atomic_check",
+        "calls": 300,
+        "inclusive_wall_us": 284.094,
+        "mean_inclusive_wall_us": 0.946
+      },
+      {
+        "name": "usb_hcd_unmap_urb_for_dma",
+        "calls": 330,
+        "inclusive_wall_us": 234.062,
+        "mean_inclusive_wall_us": 0.709
+      },
+      {
+        "name": "fl2000_streaming_enable",
+        "calls": 300,
+        "inclusive_wall_us": 163.904,
+        "mean_inclusive_wall_us": 0.546
+      },
+      {
+        "name": "fl2000_frame_bytes_pix.isra.0",
+        "calls": 300,
+        "inclusive_wall_us": 144.573,
+        "mean_inclusive_wall_us": 0.481
+      },
+      {
+        "name": "usb_hcd_map_urb_for_dma",
+        "calls": 330,
+        "inclusive_wall_us": 104.344,
+        "mean_inclusive_wall_us": 0.316
+      }
+    ]
+  },
+  "profiled_payload_estimates": {
+    "XRGB8888": {
+      "source": "function-profile completion count, not an untraced USB bandwidth measurement",
+      "window_seconds": 5.0,
+      "completed_frame_urbs": 330,
+      "frame_payload_bytes": 1152000,
+      "completed_frame_urbs_per_second": 66.0,
+      "estimated_payload_MB_per_second": 76.032
+    },
+    "RGB888": {
+      "source": "function-profile completion count, not an untraced USB bandwidth measurement",
+      "window_seconds": 5.0,
+      "completed_frame_urbs": 330,
+      "frame_payload_bytes": 1152000,
+      "completed_frame_urbs_per_second": 66.0,
+      "estimated_payload_MB_per_second": 76.032
+    },
+    "RGB565": {
+      "source": "function-profile completion count, not an untraced USB bandwidth measurement",
+      "window_seconds": 5.0,
+      "completed_frame_urbs": 330,
+      "frame_payload_bytes": 768000,
+      "completed_frame_urbs_per_second": 66.0,
+      "estimated_payload_MB_per_second": 50.688
+    }
+  },
+  "historical_comparison": {
+    "XRGB8888": {
+      "historical_process_cpu_percent": 5.306139999999999,
+      "current_process_cpu_percent": 5.2431600000000005,
+      "relative_change_percent": -1.1869268432419533
+    },
+    "RGB888": {
+      "historical_process_cpu_percent": 4.01586,
+      "current_process_cpu_percent": 3.97434,
+      "relative_change_percent": -1.0339005841837112
+    },
+    "RGB565": {
+      "historical_process_cpu_percent": 2.9578100000000003,
+      "current_process_cpu_percent": 2.82024,
+      "relative_change_percent": -4.651076303075596
+    }
+  },
+  "comparison_note": "Historical runs were not repeated in the same VM; small percentage differences are not causal evidence of a speedup.",
+  "fpu_state_checks": [
+    "XRGB8888 SSE+AVX",
+    "RGB888 SSE+AVX",
+    "RGB565 SSE+AVX"
+  ],
+  "validation": {
+    "guest_completed": true,
+    "module_unload": true,
+    "dependency_unload": true,
+    "kernel_faults": false,
+    "workload_windows": 40,
+    "completed_format_suites": 7
+  },
+  "raw_artifacts": {
+    "guest_log": ".qemu-build/performance-current/run/guest.log",
+    "qemu_windows": ".qemu-build/performance-current/run/results.json",
+    "environment": ".qemu-build/performance-current/environment.json"
+  },
+  "limitations": [
+    "Update-process CPU includes userspace and synchronous DRM/ioctl work; it excludes independent asynchronous tasks and QEMU host execution.",
+    "Kernel samples and ftrace windows are diagnostic and excluded from the untraced CPU summary.",
+    "Ftrace durations are inclusive elapsed time; nested function durations must not be summed as CPU time.",
+    "USB payload estimates use profiled completion counts and known whole-frame payload sizes; they exclude protocol overhead and are not displayed-frame rates.",
+    "Guest /proc/stat and QEMU guest-time accounting are noisy; QEMU host accounting excludes host USB IRQ work outside the QEMU process.",
+    "One 800x480 device and synthetic updates were measured; compositor rendering, kmscube, higher resolutions, and other hardware were not measured.",
+    "The synthetic workload changes one source byte per update and marks the full frame or a 64x64 rectangle dirty; it does not measure rendering the changed pixels."
+  ],
+  "periodic_control_calls_in_profiled_windows": {
+    "XRGB8888": 0,
+    "RGB888": 0,
+    "RGB565": 0
+  },
+  "matched_backend_comparison": {
+    "driver_commit": "f9e99ef20c36263ea441b54f610b72fdec6b55bf",
+    "measured_utc": "2026-10-16T16:54:36.893870+00:00",
+    "cpu": "Intel Core i3-6100T @ 3.20 GHz",
+    "kernel": "7.0.0-38-generic",
+    "mode": "800x480",
+    "update_rate_hz": 60,
+    "frames_per_window": 600,
+    "trials_per_case": 2,
+    "duration_seconds_per_window": 10,
+    "backend_order": [
+      "portable",
+      "ssse3",
+      "bmi2",
+      "bmi2",
+      "ssse3",
+      "portable"
+    ],
+    "summary": {
+      "portable": {
+        "XRGB8888": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 10.65208,
+            "min": 10.515239999999999,
+            "max": 10.788920000000001,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 1.051524,
+                "process_cpu_percent_one_core": 10.515239999999999,
+                "guest_busy_percent": 10.8,
+                "qemu_host_cpu_percent_one_core": 26.25613090202862
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 1.078892,
+                "process_cpu_percent_one_core": 10.788920000000001,
+                "guest_busy_percent": 9.6,
+                "qemu_host_cpu_percent_one_core": 26.050888874715607
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.389305,
+            "min": 1.3381699999999999,
+            "max": 1.4404400000000002,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.133817,
+                "process_cpu_percent_one_core": 1.3381699999999999,
+                "guest_busy_percent": 2.3,
+                "qemu_host_cpu_percent_one_core": 27.149796775933087
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.144044,
+                "process_cpu_percent_one_core": 1.4404400000000002,
+                "guest_busy_percent": 2.4,
+                "qemu_host_cpu_percent_one_core": 25.954498050828352
+              }
+            ]
+          }
+        },
+        "RGB888": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 3.8305,
+            "min": 3.73097,
+            "max": 3.93003,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.373097,
+                "process_cpu_percent_one_core": 3.73097,
+                "guest_busy_percent": 2.8,
+                "qemu_host_cpu_percent_one_core": 26.651874254909018
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.393003,
+                "process_cpu_percent_one_core": 3.93003,
+                "guest_busy_percent": 2.9,
+                "qemu_host_cpu_percent_one_core": 26.652428203497447
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.2000700000000002,
+            "min": 1.18042,
+            "max": 1.2197200000000001,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.118042,
+                "process_cpu_percent_one_core": 1.18042,
+                "guest_busy_percent": 0.5,
+                "qemu_host_cpu_percent_one_core": 23.060427853812
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.121972,
+                "process_cpu_percent_one_core": 1.2197200000000001,
+                "guest_busy_percent": 0.6,
+                "qemu_host_cpu_percent_one_core": 26.753506982385648
+              }
+            ]
+          }
+        },
+        "RGB565": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 2.921705,
+            "min": 2.8999300000000003,
+            "max": 2.94348,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.289993,
+                "process_cpu_percent_one_core": 2.8999300000000003,
+                "guest_busy_percent": 2.8,
+                "qemu_host_cpu_percent_one_core": 23.955528649982366
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.294348,
+                "process_cpu_percent_one_core": 2.94348,
+                "guest_busy_percent": 2.7,
+                "qemu_host_cpu_percent_one_core": 25.459902791734166
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.144555,
+            "min": 1.12387,
+            "max": 1.16524,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.116524,
+                "process_cpu_percent_one_core": 1.16524,
+                "guest_busy_percent": 0.6,
+                "qemu_host_cpu_percent_one_core": 23.65718755692714
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.112387,
+                "process_cpu_percent_one_core": 1.12387,
+                "guest_busy_percent": 0.5,
+                "qemu_host_cpu_percent_one_core": 24.759354308615336
+              }
+            ]
+          }
+        }
+      },
+      "ssse3": {
+        "XRGB8888": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 5.31921,
+            "min": 5.27053,
+            "max": 5.36789,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.527053,
+                "process_cpu_percent_one_core": 5.27053,
+                "guest_busy_percent": 5.6,
+                "qemu_host_cpu_percent_one_core": 27.249734170259245
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.536789,
+                "process_cpu_percent_one_core": 5.36789,
+                "guest_busy_percent": 4.9,
+                "qemu_host_cpu_percent_one_core": 23.45758531958164
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.396375,
+            "min": 1.3635199999999998,
+            "max": 1.42923,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.142923,
+                "process_cpu_percent_one_core": 1.42923,
+                "guest_busy_percent": 1.3,
+                "qemu_host_cpu_percent_one_core": 25.457477230193557
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.136352,
+                "process_cpu_percent_one_core": 1.3635199999999998,
+                "guest_busy_percent": 0.6,
+                "qemu_host_cpu_percent_one_core": 25.67859128595627
+              }
+            ]
+          }
+        },
+        "RGB888": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 3.9535849999999995,
+            "min": 3.87491,
+            "max": 4.032259999999999,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.387491,
+                "process_cpu_percent_one_core": 3.87491,
+                "guest_busy_percent": 2.8,
+                "qemu_host_cpu_percent_one_core": 22.963384089535957
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.403226,
+                "process_cpu_percent_one_core": 4.032259999999999,
+                "guest_busy_percent": 4.0,
+                "qemu_host_cpu_percent_one_core": 27.05614202083823
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.199280393960604,
+            "min": 1.192120787921208,
+            "max": 1.2064400000000002,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.001,
+                "process_cpu_seconds": 0.119224,
+                "process_cpu_percent_one_core": 1.192120787921208,
+                "guest_busy_percent": 0.5,
+                "qemu_host_cpu_percent_one_core": 25.35526433035034
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.120644,
+                "process_cpu_percent_one_core": 1.2064400000000002,
+                "guest_busy_percent": 0.6,
+                "qemu_host_cpu_percent_one_core": 26.256180013556403
+              }
+            ]
+          }
+        },
+        "RGB565": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 2.7854199999999993,
+            "min": 2.7786699999999995,
+            "max": 2.7921699999999996,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.279217,
+                "process_cpu_percent_one_core": 2.7921699999999996,
+                "guest_busy_percent": 1.3,
+                "qemu_host_cpu_percent_one_core": 24.559741894577705
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.277867,
+                "process_cpu_percent_one_core": 2.7786699999999995,
+                "guest_busy_percent": 2.5,
+                "qemu_host_cpu_percent_one_core": 24.261675732966328
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.02576,
+            "min": 1.01088,
+            "max": 1.04064,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.101088,
+                "process_cpu_percent_one_core": 1.01088,
+                "guest_busy_percent": 0.9,
+                "qemu_host_cpu_percent_one_core": 25.060020546340276
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.104064,
+                "process_cpu_percent_one_core": 1.04064,
+                "guest_busy_percent": 0.7,
+                "qemu_host_cpu_percent_one_core": 25.25720785436309
+              }
+            ]
+          }
+        }
+      },
+      "bmi2": {
+        "XRGB8888": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 5.455629999999999,
+            "min": 5.380509999999999,
+            "max": 5.530749999999999,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.538051,
+                "process_cpu_percent_one_core": 5.380509999999999,
+                "guest_busy_percent": 4.8,
+                "qemu_host_cpu_percent_one_core": 26.550551689661877
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.553075,
+                "process_cpu_percent_one_core": 5.530749999999999,
+                "guest_busy_percent": 5.7,
+                "qemu_host_cpu_percent_one_core": 25.580809000821432
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.298555,
+            "min": 1.2695,
+            "max": 1.32761,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.132761,
+                "process_cpu_percent_one_core": 1.32761,
+                "guest_busy_percent": 2.0,
+                "qemu_host_cpu_percent_one_core": 25.35751262037846
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.12695,
+                "process_cpu_percent_one_core": 1.2695,
+                "guest_busy_percent": 0.6,
+                "qemu_host_cpu_percent_one_core": 22.36119120677711
+              }
+            ]
+          }
+        },
+        "RGB888": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 3.964745502449755,
+            "min": 3.88995100489951,
+            "max": 4.03954,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.001,
+                "process_cpu_seconds": 0.389034,
+                "process_cpu_percent_one_core": 3.88995100489951,
+                "guest_busy_percent": 4.399,
+                "qemu_host_cpu_percent_one_core": 25.67599187690636
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.403954,
+                "process_cpu_percent_one_core": 4.03954,
+                "guest_busy_percent": 4.6,
+                "qemu_host_cpu_percent_one_core": 26.451329001806332
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.2693,
+            "min": 1.2520700000000002,
+            "max": 1.28653,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.125207,
+                "process_cpu_percent_one_core": 1.2520700000000002,
+                "guest_busy_percent": 2.3,
+                "qemu_host_cpu_percent_one_core": 25.17695414661929
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.128653,
+                "process_cpu_percent_one_core": 1.28653,
+                "guest_busy_percent": 2.1,
+                "qemu_host_cpu_percent_one_core": 26.35426193594885
+              }
+            ]
+          }
+        },
+        "RGB565": {
+          "full_60hz": {
+            "median_process_cpu_percent_one_core": 2.87324,
+            "min": 2.80803,
+            "max": 2.9384500000000005,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.280803,
+                "process_cpu_percent_one_core": 2.80803,
+                "guest_busy_percent": 2.8,
+                "qemu_host_cpu_percent_one_core": 25.554374249141762
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.293845,
+                "process_cpu_percent_one_core": 2.9384500000000005,
+                "guest_busy_percent": 2.8,
+                "qemu_host_cpu_percent_one_core": 25.65359185450519
+              }
+            ]
+          },
+          "small_60hz": {
+            "median_process_cpu_percent_one_core": 1.087155,
+            "min": 1.07582,
+            "max": 1.09849,
+            "trials": [
+              {
+                "run": "trial-1",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.109849,
+                "process_cpu_percent_one_core": 1.09849,
+                "guest_busy_percent": 2.3,
+                "qemu_host_cpu_percent_one_core": 22.764574252155672
+              },
+              {
+                "run": "trial-2",
+                "wall_seconds": 10.0,
+                "process_cpu_seconds": 0.107582,
+                "process_cpu_percent_one_core": 1.07582,
+                "guest_busy_percent": 1.2,
+                "qemu_host_cpu_percent_one_core": 24.561184763588194
+              }
+            ]
+          }
+        }
+      }
+    },
+    "module_sha256": {
+      "portable": "29716750379f0c1cba9206322d47419925bc4acac01138858b81279f71b98967",
+      "ssse3": "d3c0e679b2831d601db091a6e95dfa2352f7a8f0d2d23781fe206fd5cf565def",
+      "bmi2": "07f5ed50ec408103a7d89d73b59e6e02d74a59ca126f811ae569ef7d01d6f2b9"
+    },
+    "bridge_sha256": "b063097611d29aef4848c4704df1adf17cb2064840a1744f86d6d848e7bd9fb6",
+    "raw_results": ".qemu-build/performance-current/backend-comparison/results.json",
+    "guest_log": ".qemu-build/performance-current/backend-comparison/guest.log",
+    "validation": {
+      "workload_windows": 37,
+      "completed_format_suites": 6,
+      "kernel_faults": false,
+      "clean_shutdown": true
+    },
+    "limitations": [
+      "Matched untraced synthetic DIRTYFB measurements, not compositor or application rendering costs.",
+      "Process CPU includes synchronous DRM/ioctl work and benchmark userspace, excluding separate asynchronous tasks and QEMU host work.",
+      "Native RGB888/RGB565 use portable reordering in every backend.",
+      "Two trials quantify observed variation, not statistical confidence intervals."
+    ]
+  }
+}
