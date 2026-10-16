@@ -45,7 +45,7 @@ typedef uint32_t __le32;
 #define USB_CTRL_GET_TIMEOUT 1000
 #define USB_CTRL_SET_TIMEOUT 1000
 #define dev_dbg(...) ((void)0)
-/* Opaque USB callback contexts retain the native ABI in the storage-order test. */
+/* Opaque USB/I2C contexts retain the native ABI in the storage-order test. */
 #ifdef TEST_BIG_ENDIAN_STORAGE
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define NATIVE_STORAGE __attribute__((scalar_storage_order("little-endian")))
@@ -57,7 +57,7 @@ typedef uint32_t __le32;
 #endif
 struct device { int unused; } NATIVE_STORAGE;
 struct usb_device { struct device dev; } NATIVE_STORAGE;
-struct i2c_adapter { int unused; };
+struct i2c_adapter { int unused; } NATIVE_STORAGE;
 struct regmap { u32 regs[0x10000/4]; };
 struct op { char type; unsigned int reg; u32 mask,value; };
 static struct regmap map;
