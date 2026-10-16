@@ -39,7 +39,11 @@ CRTC-only atomic commits include the primary plane in validation and updates.
 Plane checks enforce fullscreen output without scaling or positioning, and
 GEM shadow-plane state retains framebuffer mappings from preparation through
 cleanup. Update and enable callbacks read the state belonging to their commit.
-The encoder attaches the IT66121 bridge through the existing component path.
+PLL clock quantization and horizontal-total adjustment run in the CRTC
+`mode_fixup` callback during modeset checking. They preserve bridge timing
+adjustments and refresh derived CRTC timings. Plane validation only reads the
+resulting mode when checking geometry and USB bandwidth. The encoder attaches
+the IT66121 bridge through the existing component path.
 
 ## Frames and transport
 

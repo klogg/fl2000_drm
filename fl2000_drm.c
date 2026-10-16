@@ -316,6 +316,10 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 
 		/* To keep precision use clock multiplied by 10^6 */
 		ppm_err = fl2000_pll_calc(clock_mil_adjusted, pll, &clock_calculated);
+		/* The quantized clock must still satisfy the bridge input limits. */
+		if (clock_calculated < FL2000_MIN_PIXCLOCK ||
+		    clock_calculated > FL2000_MAX_PIXCLOCK)
+			continue;
 
 		/* Stop searching as soon as the first valid option found */
 		if (ppm_err < FL2000_PPM_ERR_MAX) {
@@ -323,6 +327,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 				drm_mode_copy(adjusted_mode, mode);
 				adjusted_mode->htotal += d;
 				adjusted_mode->clock = clock_calculated / 1000;
+				drm_mode_set_crtcinfo(adjusted_mode, 0);
 			}
 
 			return 0;
@@ -347,26 +352,30 @@ static enum drm_mode_status fl2000_crtc_mode_valid(struct drm_crtc *crtc,
 		       MODE_CLOCK_HIGH;
 }
 
-static int fl2000_display_check(const struct fl2000_drm_if *drm_if,
-				const struct drm_plane_state *plane, struct drm_crtc_state *crtc)
+/* Resolve PLL constraints during modeset checking, before plane validation. */
+static bool fl2000_crtc_mode_fixup(struct drm_crtc *crtc __always_unused,
+				   const struct drm_display_mode *mode __always_unused,
+				   struct drm_display_mode *adjusted_mode)
 {
+	struct drm_display_mode adjusted = {};
 	struct fl2000_pll pll;
-	int ret;
 
-	/* The adapter has no scanout IRQ. Use DRM's software completion events,
-	 * rather than misrepresenting USB transfer completion as physical vblank.
-	 */
-	crtc->no_vblank = true;
+	/* Preserve any timing changes already made by the bridge chain. */
+	if (fl2000_mode_calc(adjusted_mode, &adjusted, &pll))
+		return false;
+	drm_mode_copy(adjusted_mode, &adjusted);
+	return true;
+}
+
+static int fl2000_display_check(const struct fl2000_drm_if *drm_if,
+				const struct drm_plane_state *plane,
+				const struct drm_crtc_state *crtc)
+{
 	if ((plane->src_x | plane->src_y | plane->src_w | plane->src_h) & 0xffff)
 		return -EINVAL;
 	if ((int)(plane->src_w >> 16) != crtc->mode.hdisplay ||
 	    (int)(plane->src_h >> 16) != crtc->mode.vdisplay)
 		return -EINVAL;
-	if (crtc->mode_changed) {
-		ret = fl2000_mode_calc(&crtc->mode, &crtc->adjusted_mode, &pll);
-		if (ret)
-			return ret;
-	}
 	if (!plane->fb || !fl2000_frame_bytes_pix(drm_if->usb_dev->speed, &crtc->adjusted_mode,
 						  plane->fb->format->format))
 		return -EINVAL;
@@ -563,6 +572,8 @@ static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_sta
 	ret = drm_crtc_helper_atomic_check(crtc, state);
 	if (ret)
 		return ret;
+	/* USB completion is not a physical vblank; use software flip events. */
+	drm_atomic_get_new_crtc_state(state, crtc)->no_vblank = true;
 	/* CRTC-only commits must also validate and update the primary plane. */
 	return drm_atomic_add_affected_planes(state, crtc);
 }
@@ -654,6 +665,7 @@ static const struct drm_crtc_funcs fl2000_crtc_funcs = {
 
 static const struct drm_crtc_helper_funcs fl2000_crtc_helper_funcs = {
 	.mode_valid = fl2000_crtc_mode_valid,
+	.mode_fixup = fl2000_crtc_mode_fixup,
 	.atomic_check = fl2000_crtc_atomic_check,
 	.atomic_enable = fl2000_crtc_atomic_enable,
 	.atomic_disable = fl2000_crtc_atomic_disable,

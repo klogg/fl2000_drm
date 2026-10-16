@@ -82,9 +82,13 @@ struct drm_display_mode {
  int vdisplay, vsync_start, vsync_end, vtotal;
  unsigned int flags;
  int vscan;
+ int crtc_clock,crtc_htotal;
+ struct { void *next,*prev; } head;
 };
 static void drm_mode_copy(struct drm_display_mode *dst, const struct drm_display_mode *src)
-{ *dst = *src; }
+{ typeof(dst->head) head=dst->head;*dst = *src;dst->head=head; }
+static void drm_mode_set_crtcinfo(struct drm_display_mode *mode,int flags)
+{ assert(!flags);mode->crtc_clock=mode->clock;mode->crtc_htotal=mode->htotal; }
 static u64 div_u64(u64 dividend, u32 divisor) { return dividend / divisor; }
 static u64 div64_u64(u64 dividend, u64 divisor) { return dividend / divisor; }
 static u32 get_unaligned_le32(const u8 *p)
@@ -552,7 +556,7 @@ static void test_modes(void)
   .clock = 148500, .hdisplay = 1920, .hsync_start = 2008,
   .hsync_end = 2052, .htotal = 2200, .vdisplay = 1080,
   .vsync_start = 1084, .vsync_end = 1089, .vtotal = 1125,
- }, adjusted;
+ }, adjusted={0};
  assert(fl2000_get_bytes_pix(USB_SPEED_HIGH, 148500000) == 0);
  assert(fl2000_get_bytes_pix(USB_SPEED_SUPER, 148500000) == 3);
  assert(fl2000_get_bytes_pix(USB_SPEED_HIGH, 20000000) == 2);
@@ -571,6 +575,24 @@ static void test_modes(void)
   }
  }
  assert(found_adjustment);
+ struct drm_display_mode bridge_adjusted=adjusted,request=mode;
+ bridge_adjusted.htotal+=2;
+ bridge_adjusted.head.next=bridge_adjusted.head.prev=&bridge_adjusted;
+ struct drm_display_mode expected={0};expected.head=bridge_adjusted.head;
+ assert(!fl2000_mode_calc(&bridge_adjusted,&expected,&pll));
+ assert(fl2000_crtc_mode_fixup(NULL,&request,&bridge_adjusted));
+ assert(!memcmp(&bridge_adjusted,&expected,sizeof(expected)));
+ assert(!memcmp(&request,&mode,sizeof(mode)));
+ struct drm_display_mode invalid={.clock=0},before=invalid;
+ assert(!fl2000_crtc_mode_fixup(NULL,&mode,&invalid));
+ assert(!memcmp(&invalid,&before,sizeof(invalid)));
+ for(int clock=25000;clock<=148500;clock+=500) {
+  struct drm_display_mode boundary=mode;boundary.clock=clock;
+  if(!fl2000_mode_calc(&boundary,&adjusted,&pll)) {
+   assert(adjusted.clock>=25000 && adjusted.clock<=148500);
+   assert(adjusted.crtc_clock==adjusted.clock && adjusted.crtc_htotal==adjusted.htotal);
+  }
+ }
  mode.clock = 0;
  assert(fl2000_mode_calc(&mode, &adjusted, &pll) == -EINVAL);
  mode.clock = 148500; mode.flags = DRM_MODE_FLAG_INTERLACE;
@@ -823,8 +845,13 @@ static void test_atomic_state(void)
  struct drm_framebuffer fb={.format=&xrgb};
  struct fl2000_plane_state old={.shadow={.base={.fb=&fb,.src_w=800U<<16,.src_h=600U<<16}}}, new=old;
  int calls=mode_calls;
+ crtc.adjusted_mode=crtc.mode;
+ assert(fl2000_crtc_mode_fixup(&test_drm_if.crtc,&crtc.mode,&crtc.adjusted_mode));
+ assert(mode_calls==calls+1);
+ assert(crtc.adjusted_mode.crtc_clock==crtc.adjusted_mode.clock);
+ assert(crtc.adjusted_mode.crtc_htotal==crtc.adjusted_mode.htotal);
  assert(!fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc));
- assert(mode_calls==calls+1 && crtc.no_vblank);
+ assert(mode_calls==calls+1 && !crtc.no_vblank);
  calls=mode_calls; crtc.mode_changed=false;
  struct drm_display_mode adjusted=crtc.adjusted_mode;
  for(int i=0;i<100;i++)assert(!fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc));
@@ -835,6 +862,8 @@ static void test_atomic_state(void)
  const struct drm_format_info rgb888={DRM_FORMAT_RGB888,{3}},rgb565={DRM_FORMAT_RGB565,{2}};
  usb.speed=USB_SPEED_HIGH;
  crtc.mode=(struct drm_display_mode){.clock=25175,.hdisplay=640,.hsync_start=656,.hsync_end=752,.htotal=800,.vdisplay=480,.vsync_start=490,.vsync_end=492,.vtotal=525};
+ crtc.adjusted_mode=crtc.mode;
+ assert(fl2000_crtc_mode_fixup(&test_drm_if.crtc,&crtc.mode,&crtc.adjusted_mode));
  crtc.mode_changed=true;old.shadow.base.src_w=640U<<16;old.shadow.base.src_h=480U<<16;
  fb.format=&rgb888;
  assert(fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc)==-EINVAL);
@@ -850,14 +879,14 @@ static void test_atomic_state(void)
  primary_check_result=0;affected_result=-EDEADLK;
  assert(fl2000_crtc_atomic_check(&test_drm_if.crtc,&atomic)==-EDEADLK && affected_calls==1);
  affected_result=0;
- assert(!fl2000_crtc_atomic_check(&test_drm_if.crtc,&atomic) && affected_calls==2);
+ assert(!fl2000_crtc_atomic_check(&test_drm_if.crtc,&atomic) && affected_calls==2 && crtc.no_vblank);
  plane.dev=&test_drm_if.drm;
  plane_check_result=-ERANGE;
  assert(fl2000_plane_atomic_check(&plane,&atomic)==-ERANGE);
  plane_check_result=0;plane_visible=false;old.shadow.base.fb=NULL;
  assert(!fl2000_plane_atomic_check(&plane,&atomic));
  old.shadow.base.fb=&fb;plane_visible=true;crtc.no_vblank=false;
- assert(!fl2000_plane_atomic_check(&plane,&atomic) && crtc.no_vblank);
+ assert(!fl2000_plane_atomic_check(&plane,&atomic) && !crtc.no_vblank);
  old.shadow.base.src_w-=1;
  assert(fl2000_plane_atomic_check(&plane,&atomic)==-EINVAL);
  old.shadow.base.src_w+=1;
@@ -1012,6 +1041,7 @@ parts += [
         "fl2000_pll_get_divisor",
         "fl2000_pll_calc",
         "fl2000_mode_calc",
+        "fl2000_crtc_mode_fixup",
         "fl2000_atomic_check",
         "fl2000_display_check",
         "fl2000_crtc_atomic_check",
@@ -1027,7 +1057,12 @@ parts = [
 ]
 parts += [
     structure(stream, name)
-    for name in ("fl2000_frame", "fl2000_transfer", "fl2000_stream_buffers", "fl2000_stream")
+    for name in (
+        "fl2000_frame",
+        "fl2000_transfer",
+        "fl2000_stream_buffers",
+        "fl2000_stream",
+    )
 ]
 parts += [
     function(stream, name)
@@ -1056,9 +1091,14 @@ parts += [
     )
 ]
 parts.append(structure(drm, "fl2000_plane_state"))
-parts += [function(drm, name) for name in (
-    "fl2000_plane_state", "fl2000_prepare_fb", "fl2000_cleanup_fb",
-)]
+parts += [
+    function(drm, name)
+    for name in (
+        "fl2000_plane_state",
+        "fl2000_prepare_fb",
+        "fl2000_cleanup_fb",
+    )
+]
 parts.append(function(drm, "fl2000_copy_frame"))
 parts.append(function(drm, "fl2000_plane_atomic_update"))
 parts += [
