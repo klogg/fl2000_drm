@@ -26,3 +26,10 @@ def function(source, name):
 
 def structure(source, name):
     return re.search(r"struct " + name + r" \{.*?\n\};", source, re.DOTALL)[0]
+
+
+def register_header(source):
+    """Use real register definitions with the harness's types and bit helpers."""
+    return re.sub(
+        r"^#include <linux/(?:bits|types)\.h>\n", "", source, flags=re.MULTILINE
+    )

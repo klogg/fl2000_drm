@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from source_helpers import function, structure
+from source_helpers import function, register_header, structure
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -1029,7 +1029,7 @@ parts = [
     prelude,
     defines,
     '#include "tests/register_helpers.h"',
-    '#include "fl2000_registers.h"',
+    register_header((ROOT / "fl2000_registers.h").read_text()),
     '#include "bridge/it66121_registers.h"',
     structure(header, "fl2000_pll"),
 ]
