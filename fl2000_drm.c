@@ -7,6 +7,7 @@
 #include "fl2000.h"
 #include <drm/drm_atomic.h>
 #include "bridge/it66121.h"
+#include <drm/drm_bridge_connector.h>
 
 #define DRM_DRIVER_NAME "fl2000_drm"
 #define DRM_DRIVER_DESC "USB-HDMI"
@@ -715,9 +716,14 @@ int fl2000_drm_hotplug(const struct usb_device *usb_dev)
 		ret = drm_if->bridge.interrupt ? drm_if->bridge.interrupt(drm_if->bridge.bridge) :
 						 0;
 		if (!ret) {
-			/* Update cached status even without periodic polling. */
-			if (!drm_helper_hpd_irq_event(drm))
-				drm_kms_helper_hotplug_event(drm);
+			enum drm_connector_status status;
+
+			/* Recovery can follow an acknowledgment that already cleared HPD. */
+			status = drm_bridge_detect(drm_if->bridge.bridge, drm_if->connector);
+			if (status == connector_status_unknown)
+				ret = -EIO;
+			else if (status != READ_ONCE(drm_if->connector->status))
+				drm_bridge_hpd_notify(drm_if->bridge.bridge, status);
 		}
 		drm_dev_exit(idx);
 	}
@@ -735,7 +741,7 @@ void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
 		struct drm_connector *connector;
 
 		mutex_lock(&drm->mode_config.mutex);
-		connector = drm_if->bridge.connector ? *drm_if->bridge.connector : NULL;
+		connector = drm_if->connector;
 		if (connector)
 			connector->polled = polling ? DRM_CONNECTOR_POLL_CONNECT |
 							      DRM_CONNECTOR_POLL_DISCONNECT :
@@ -745,6 +751,11 @@ void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
 			drm_kms_helper_poll_enable(drm);
 		drm_dev_exit(idx);
 	}
+}
+
+static void fl2000_bridge_module_put(struct drm_device *drm __always_unused, void *owner)
+{
+	module_put(owner);
 }
 
 static int fl2000_drm_bind(struct device *master)
@@ -783,11 +794,19 @@ static int fl2000_drm_bind(struct device *master)
 	ret = component_bind_all(master, &drm_if->bridge);
 	if (ret)
 		goto put;
+	/* The helper retains bridge callbacks until the last DRM file is closed. */
+	if (!try_module_get(drm_if->bridge.owner)) {
+		ret = -ENODEV;
+		goto unbind;
+	}
+	ret = drmm_add_action_or_reset(drm, fl2000_bridge_module_put, drm_if->bridge.owner);
+	if (ret)
+		goto unbind;
 	ret = drm_bridge_attach(&drm_if->encoder, drm_if->bridge.bridge, NULL,
 				DRM_BRIDGE_ATTACH_NO_CONNECTOR);
 	if (ret)
 		goto unbind;
-	connector = fl2000_bridge_connector_init(drm, &drm_if->encoder, drm_if->bridge.bridge);
+	connector = drm_bridge_connector_init(drm, &drm_if->encoder);
 	if (IS_ERR(connector)) {
 		ret = PTR_ERR_OR_ZERO(connector);
 		goto detach_encoder;
@@ -822,7 +841,6 @@ detach:
 	WRITE_ONCE(device->drm, NULL);
 detach_encoder:
 	drm_encoder_cleanup(&drm_if->encoder);
-	fl2000_bridge_connector_detach(drm_if->connector);
 unbind:
 	component_unbind_all(master, &drm_if->bridge);
 put:
@@ -847,7 +865,6 @@ static void fl2000_drm_unbind(struct device *master)
 	fl2000_streaming_disable(usb_dev);
 	/* Encoder cleanup owns bridge detachment; do it before its I2C driver can go away. */
 	drm_encoder_cleanup(&drm_if->encoder);
-	fl2000_bridge_connector_detach(drm_if->connector);
 	component_unbind_all(master, &drm_if->bridge);
 	WRITE_ONCE(device->drm, NULL);
 	drm_dev_put(drm);

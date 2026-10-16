@@ -35,13 +35,14 @@ jobs:
       - name: Install compiler and Linux 7.0 headers
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends build-essential linux-headers-generic
+          apt-get install -y --no-install-recommends build-essential ca-certificates curl linux-headers-generic libdw1t64
       - name: Build against the installed 7.0 headers
         env:
           FRAME_BACKEND: ${{ matrix.backend }}
         run: |
           ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
           test -n "$ksrc"
+          scripts/fetch-bridge-connector.sh
           make -C "$ksrc" M="$GITHUB_WORKSPACE" \
             FL2000_FRAME_BACKEND="$FRAME_BACKEND" W=1 KCFLAGS=-Werror modules
       - name: Save modules
@@ -76,7 +77,6 @@ jobs:
           python3 tests/test_registers.py
           python3 tests/test_edid.py
           python3 tests/test_bridge.py
-          python3 tests/test_connector.py
           python3 tests/test_driver.py
           python3 tests/test_drm.py
           python3 tests/test_interrupt.py

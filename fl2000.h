@@ -42,11 +42,6 @@
 
 #include "fl2000_registers.h"
 
-void fl2000_bridge_connector_detach(struct drm_connector *connector);
-struct drm_connector *fl2000_bridge_connector_init(struct drm_device *drm,
-						   struct drm_encoder *encoder,
-						   struct drm_bridge *bridge);
-
 /* Known USB interfaces of FL2000 */
 enum fl2000_interface {
 	FL2000_USBIF_AVCONTROL = 0,

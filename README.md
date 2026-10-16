@@ -16,7 +16,21 @@ visual output was not independently confirmed.
 ## Build
 
 Install a C compiler, Make, and headers matching the target Linux 7.0 kernel.
-Build against the running kernel, or select an installed header tree:
+The kernel header build tools also need their runtime libraries (including
+libdw for gendwarfksyms on the tested Ubuntu headers).
+Build against the running kernel, or select an installed header tree.
+For distribution kernels lacking `CONFIG_DRM_BRIDGE_CONNECTOR` or its HDMI
+helpers, first run `scripts/fetch-bridge-connector.sh` (requires curl). It
+fetches checksum-pinned, unmodified Linux 7.0 helper sources into the ignored
+`.qemu-build/upstream/` directory. External builds compile only missing helpers.
+Alternatively, set `FL2000_HELPER_SOURCE_DIR` to the matching kernel source
+`drivers/gpu/drm/display/` directory. In-tree builds use Kconfig-selected helpers.
+
+```sh
+scripts/fetch-bridge-connector.sh
+```
+
+Build the modules:
 
 ```sh
 make
@@ -63,11 +77,19 @@ The tested QEMU 11.1.2 needs the included
 
 Supply your own `base-initramfs.cpio.gz`; it is **not included**. Its init must
 provide a root shell, mounted `/proc`, `/sys`, and `/dev`, and module tools.
+The launchers append installed module dependencies and load them inside the
+guest before the driver. Matching dependency modules must be available on the
+host. Compressed `.zst`
+modules require Python 3.14 or the zstd command.
 DRM, shmem, I2C, component, and USB host-controller dependencies must already
 be built into the guest kernel or loaded by the base init. The unattended
 smoke test and kernel benchmark replace `/init`, so their dependencies must
 be built into the kernel. Merely including module files is insufficient:
 `/fl2000-startup` uses `insmod`.
+
+The bridge callback module stays referenced until the DRM device and its open
+files are released. Unload `fl2000` first and close outstanding DRM files before
+unloading `it66121`.
 
 Set `BASE_INITRAMFS` for a different base image. The launchers append an aligned
 cpio overlay without decompressing the base. They share `--qemu`, `--cpu`,

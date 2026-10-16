@@ -23,7 +23,7 @@ done
 cd "$repo_dir"
 shopt -s nullglob
 status=0
-for file in *.[ch] bridge/*.[ch] frame/*.[ch]; do
+for file in *.[ch] bridge/*.[ch] frame/*.[ch] compat/*.[ch]; do
     [[ $file == *.mod.c ]] && continue
     if ! "$formatter" "${mode[@]}" "$@" "$file"; then
         status=1

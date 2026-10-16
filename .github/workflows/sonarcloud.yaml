@@ -47,7 +47,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             build-essential ca-certificates curl git gnupg \
-            linux-headers-generic python3 unzip
+            linux-headers-generic libdw1t64 python3 unzip
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.configuration.outputs.enabled == 'true'
         with:
@@ -64,6 +64,7 @@ jobs:
         run: |
           ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
           test -n "$ksrc"
+          scripts/fetch-bridge-connector.sh
           mkdir -p "$BUILD_WRAPPER_OUT_DIR"
           for backend in auto bmi2; do
             make -C "$ksrc" M="$GITHUB_WORKSPACE" clean

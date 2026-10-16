@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0
 """Shared configuration and newc overlays for isolated KVM tests."""
 
+import gzip
+import lzma
 import os
 import shutil
 import subprocess
@@ -95,3 +97,67 @@ def write_initramfs(base, entries, boot, *, payload=None):
         shutil.copyfileobj(source, output)
         output.write(b"\0" * (-output.tell() % 4))
         output.write(archive)
+
+
+def dependency_overlay(modules, kernel):
+    """Read installed dependency modules for guest-only loading, in load order."""
+    entries = []
+    commands = ["#!/bin/sh", "set -eu"]
+    unload = []
+    visited = set()
+
+    def visit(module):
+        dependencies = subprocess.check_output(
+            ["modinfo", "-F", "depends", str(module)], text=True
+        ).strip()
+        for name in filter(None, dependencies.split(",")):
+            name = name.replace("-", "_")
+            if name in visited:
+                continue
+            visited.add(name)
+            filename = subprocess.check_output(
+                ["modinfo", "-k", kernel, "-F", "filename", name], text=True
+            ).strip()
+            if filename == "(builtin)":
+                continue
+            path = Path(filename)
+            visit(path)
+            data = path.read_bytes()
+            if path.suffix == ".zst":
+                try:
+                    from compression import zstd
+                except ImportError:
+                    data = subprocess.check_output(
+                        ["zstd", "--decompress", "--stdout", str(path)]
+                    )
+                else:
+                    data = zstd.decompress(data)
+            elif path.suffix == ".xz":
+                data = lzma.decompress(data)
+            elif path.suffix == ".gz":
+                data = gzip.decompress(data)
+            target = f"fl2000-dep-{name}.ko"
+            entries.append((target, data, 0o100644))
+            commands.append(
+                f"if [ ! -d /sys/module/{name} ]; then\n"
+                f" insmod /{target}\n : > /{target}.loaded\nfi"
+            )
+            unload.insert(
+                0,
+                f"if [ -f /{target}.loaded ]; then\n"
+                f" rmmod {name}\n rm -f /{target}.loaded\nfi",
+            )
+
+    for module in modules:
+        visit(module)
+    entries.append(
+        ("fl2000-load-deps", ("\n".join(commands) + "\n").encode(), 0o100755)
+    )
+    entries.append(
+        (
+            "fl2000-unload-deps",
+            ("\n".join(["#!/bin/sh", "set -eu", *unload]) + "\n").encode(),
+            0o100755,
+        )
+    )
+    return entries

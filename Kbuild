@@ -5,7 +5,6 @@ fl2000-y := \
 	fl2000_interrupt.o \
 	fl2000_streaming.o \
 	fl2000_i2c.o \
-	fl2000_connector.o \
 	fl2000_drm.o
 
 it66121-y := \
@@ -55,3 +54,23 @@ else ifneq ($(fl2000_frame_backend),generic)
 $(error Unknown FL2000_FRAME_BACKEND $(FL2000_FRAME_BACKEND))
 endif
 
+# External builds may reuse unmodified sources for helpers absent from the kernel.
+ifneq ($(KBUILD_EXTMOD),)
+FL2000_HELPER_SOURCE_DIR ?= $(src)/.qemu-build/upstream
+ifeq ($(CONFIG_DRM_BRIDGE_CONNECTOR),)
+fl2000-y += compat/bridge_connector.o
+endif
+ifeq ($(CONFIG_DRM_DISPLAY_HDMI_STATE_HELPER),)
+fl2000-y += compat/hdmi_state.o
+endif
+ifeq ($(CONFIG_DRM_DISPLAY_HDMI_AUDIO_HELPER),)
+fl2000-y += compat/hdmi_audio.o
+endif
+ifeq ($(CONFIG_DRM_DISPLAY_HDMI_CEC_HELPER),)
+fl2000-y += compat/hdmi_cec.o
+endif
+CFLAGS_compat/bridge_connector.o += -DFL2000_HELPER_SOURCE='"$(abspath $(FL2000_HELPER_SOURCE_DIR))/drm_bridge_connector.c"'
+CFLAGS_compat/hdmi_state.o += -DFL2000_HELPER_SOURCE='"$(abspath $(FL2000_HELPER_SOURCE_DIR))/drm_hdmi_state_helper.c"'
+CFLAGS_compat/hdmi_audio.o += -DFL2000_HELPER_SOURCE='"$(abspath $(FL2000_HELPER_SOURCE_DIR))/drm_hdmi_audio_helper.c"'
+CFLAGS_compat/hdmi_cec.o += -DFL2000_HELPER_SOURCE='"$(abspath $(FL2000_HELPER_SOURCE_DIR))/drm_hdmi_cec_helper.c"'
+endif

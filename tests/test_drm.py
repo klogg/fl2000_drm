@@ -18,6 +18,7 @@ prelude = r"""
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#define __always_unused __attribute__((__unused__))
 #define FL20000_MAX_WIDTH 4000
 #define FL20000_MAX_HEIGHT 4000
 #define FL2000_USBIF_AVCONTROL 0
@@ -35,11 +36,13 @@ struct usb_interface { int unused; };
 struct drm_plane { int unused; };
 struct drm_crtc { int unused; };
 struct drm_encoder { int unused; };
-struct drm_connector { bool detached; };
+enum drm_connector_status { connector_status_disconnected, connector_status_connected, connector_status_unknown };
+struct drm_connector { enum drm_connector_status status; };
 struct drm_mode_config { const void *funcs; int min_width,max_width,min_height,max_height; };
 struct drm_device { struct drm_mode_config mode_config; bool registered,unplugged; };
 struct fl2000_device { struct drm_device *drm; };
-struct fl2000_bridge { void *bridge; struct drm_connector **connector; int (*interrupt)(void *); };
+struct module { int refs; };
+struct fl2000_bridge { struct module *owner; void *bridge; struct drm_connector **connector; int (*interrupt)(void *); };
 #define to_usb_device(d) ((struct usb_device *)(d))
 #define dev_get_drvdata(d) ((struct fl2000_device *)(d)->data)
 static int fl2000_drm_driver,fl2000_mode_config_funcs;
@@ -47,13 +50,22 @@ static int fl2000_drm_driver,fl2000_mode_config_funcs;
 mocks = r"""
 static int failure,step,unregistered,unplugged,shutdowns,stops,poll_fini,encoder_cleanup,unbound,released;
 static bool bound,attached,polling;
+static struct module provider;
+static bool reject_provider;
+static void (*release_owner)(struct drm_device *,void *);
+static void *owner_data;
+static bool try_module_get(struct module *m) { if(reject_provider)return false;m->refs++;return true; }
+static void module_put(struct module *m) { assert(m->refs);m->refs--; }
 static struct drm_connector *bridge_connector;
 static int bridge_irq_error,bridge_irq_calls,hpd_calls,hotplug_events;
-static bool hpd_changed;
+static enum drm_connector_status detected=connector_status_connected;
 static bool drm_dev_enter(struct drm_device *d,int *idx) { *idx=0;return !d->unplugged; }
 static void drm_dev_exit(int idx) { assert(!idx); }
-static bool drm_helper_hpd_irq_event(struct drm_device *d) { (void)d;hpd_calls++;return hpd_changed; }
-static void drm_kms_helper_hotplug_event(struct drm_device *d) { (void)d;hotplug_events++; }
+static enum drm_connector_status drm_bridge_detect(void *b,struct drm_connector *c)
+{ assert(b && c);hpd_calls++;return detected; }
+static void drm_bridge_hpd_notify(void *b,enum drm_connector_status status)
+{ assert(b && status==detected);hotplug_events++; }
+
 static int bridge_irq(void *bridge) { assert(bridge);bridge_irq_calls++;return bridge_irq_error; }
 static int operation(void) { return ++step==failure?-EIO:0; }
 static void *__drm_dev_alloc(struct device *d,void *driver,size_t size,size_t offset)
@@ -65,13 +77,15 @@ static void drm_dev_set_dma_dev(struct drm_device *d,struct device *dma) { (void
 static void put_device(struct device *d) { (void)d; }
 static int fl2000_pipeline_init(struct fl2000_drm_if *d) { (void)d;return operation(); }
 static int component_bind_all(struct device *d,struct fl2000_bridge *b)
-{ (void)d;int ret=operation();if(!ret){bound=true;b->bridge=b;b->connector=&bridge_connector;}return ret; }
+{ (void)d;int ret=operation();if(!ret){bound=true;b->owner=&provider;b->bridge=b;b->connector=&bridge_connector;}return ret; }
 static int drm_bridge_attach(struct drm_encoder *e,void *b,void *prev,int flags)
 { (void)e;(void)b;assert(bound && !prev && flags==1);int ret=operation();if(!ret)attached=true;return ret; }
-static struct drm_connector *fl2000_bridge_connector_init(struct drm_device *d,struct drm_encoder *e,void *b)
-{ (void)d;(void)e;(void)b;return operation()?ERR_PTR(-EIO):calloc(1,sizeof(struct drm_connector)); }
+static struct drm_connector *drm_bridge_connector_init(struct drm_device *d,struct drm_encoder *e)
+{ (void)d;(void)e;return operation()?ERR_PTR(-EIO):calloc(1,sizeof(struct drm_connector)); }
 static int drm_connector_attach_encoder(struct drm_connector *c,struct drm_encoder *e)
 { (void)c;(void)e;return operation(); }
+static int drmm_add_action_or_reset(struct drm_device *d,void (*action)(struct drm_device *,void *),void *owner)
+{ int r=operation();if(r)action(d,owner);else { release_owner=action;owner_data=owner; } return r; }
 static void drm_mode_config_reset(struct drm_device *d) { (void)d; }
 static void drm_kms_helper_poll_init(struct drm_device *d) { (void)d;assert(!polling);polling=true; }
 static int fl2000_enable_interrupts(struct usb_device *u) { (void)u;return operation(); }
@@ -89,44 +103,51 @@ static void fl2000_streaming_disable(struct usb_device *u) { (void)u;stops++; }
 static void drm_kms_helper_poll_fini(struct drm_device *d)
 { (void)d;assert(polling);polling=false;poll_fini++; }
 static void drm_encoder_cleanup(struct drm_encoder *e) { (void)e;attached=false;encoder_cleanup++; }
-static void fl2000_bridge_connector_detach(struct drm_connector *c)
-{ assert(!attached);if(c){assert(!c->detached);c->detached=true;} }
 static void component_unbind_all(struct device *d,struct fl2000_bridge *b)
 { (void)d;(void)b;assert(bound && !attached);bound=false;bridge_connector=NULL;unbound++; }
 static void drm_dev_put(struct drm_device *d)
 {
  struct fl2000_drm_if *output=(void *)d;
  assert(!d->registered && !bound && !attached && !polling);
- if(output->connector){assert(output->connector->detached);free(output->connector);}
+ if(output->connector){assert(provider.refs);free(output->connector);}
+ if(release_owner){release_owner(d,owner_data);release_owner=NULL;}
+ assert(!provider.refs);
  free(output);released++;
 }
 """
 checks = r"""
 int main(void)
 {
- for(failure=1;failure<=10;failure++) {
+ for(failure=1;failure<=11;failure++) {
   struct fl2000_device device={0};struct usb_device usb={.dev={.data=&device}};
   step=unregistered=unplugged=shutdowns=stops=poll_fini=encoder_cleanup=unbound=released=0;
   assert(fl2000_drm_bind(&usb.dev)==-EIO);
   assert(step==failure && !device.drm && !bound && !attached && !polling);
   assert(released==(failure>1));
   assert(unbound==(failure>4));
-  assert(poll_fini==(failure>7));
-  assert(unregistered==(failure==10));
-  assert(unplugged==(failure==10) && shutdowns==(failure==10) && stops==(failure==10));
+  assert(poll_fini==(failure>8));
+  assert(unregistered==(failure==11));
+  assert(unplugged==(failure==11) && shutdowns==(failure==11) && stops==(failure==11));
  }
+ failure=0;step=0;reject_provider=true;
+ struct fl2000_device failed_device={0};struct usb_device failed_usb={.dev={.data=&failed_device}};
+ assert(fl2000_drm_bind(&failed_usb.dev)==-ENODEV && !provider.refs && !bound);
+ reject_provider=false;
  struct fl2000_drm_if output={0};
  struct fl2000_device device={0};struct usb_device usb={.dev={.data=&device}};
  assert(fl2000_drm_hotplug(&usb)==-ENODEV);
+ struct drm_connector connector={0};output.connector=&connector;
  device.drm=&output.drm;output.bridge.interrupt=bridge_irq;output.bridge.bridge=&output;
  bridge_irq_error=-EIO;
  assert(fl2000_drm_hotplug(&usb)==-EIO && bridge_irq_calls==1 && !hpd_calls && !hotplug_events);
  bridge_irq_error=0;
  assert(!fl2000_drm_hotplug(&usb) && bridge_irq_calls==2 && hpd_calls==1 && hotplug_events==1);
- hpd_changed=true;
+ connector.status=detected;
  assert(!fl2000_drm_hotplug(&usb) && hpd_calls==2 && hotplug_events==1);
+ detected=connector_status_unknown;
+ assert(fl2000_drm_hotplug(&usb)==-EIO && hotplug_events==1);
  output.drm.unplugged=true;
- assert(fl2000_drm_hotplug(&usb)==-ENODEV && bridge_irq_calls==3);
+ assert(fl2000_drm_hotplug(&usb)==-ENODEV && bridge_irq_calls==4);
  puts("PASS: bridge acknowledgement error propagation, all DRM bind failure stages, single unregister on interrupt-start failure, preserved errno, balanced teardown");
  return 0;
 }
@@ -135,14 +156,17 @@ with tempfile.TemporaryDirectory(prefix="fl2000-drm-") as temp:
     c = Path(temp) / "test.c"
     exe = Path(temp) / "test"
     c.write_text(
-        "\n".join([
-            prelude,
-            structure(source, "fl2000_drm_if"),
-            mocks,
-            function(source, "fl2000_drm_bind"),
-            function(source, "fl2000_drm_hotplug"),
-            checks,
-        ])
+        "\n".join(
+            [
+                prelude,
+                structure(source, "fl2000_drm_if"),
+                mocks,
+                function(source, "fl2000_bridge_module_put"),
+                function(source, "fl2000_drm_bind"),
+                function(source, "fl2000_drm_hotplug"),
+                checks,
+            ]
+        )
     )
     subprocess.run(
         [

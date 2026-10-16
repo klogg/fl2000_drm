@@ -18,11 +18,19 @@ connector status before notifying clients. Endpoint errors enable
 connect/disconnect polling as a fallback; successful interrupt restart restores
 HPD-only detection.
 
-The local connector wrapper in `fl2000_connector.c` forwards detection, EDID,
-and mode validation to bridge callbacks and retains a bridge reference. It
-avoids requiring `CONFIG_DRM_BRIDGE_CONNECTOR`, which is unavailable in the
-tested distribution kernels. The USB-created bridge needs no Device Tree graph,
-regulator devices, or separate reset GPIO; the FL2000 driver owns power/reset.
+`drm_bridge_connector_init()` supplies connector detection, EDID handling,
+and HPD delivery. In-tree Kconfig selects its helpers. External builds can
+compile missing helpers from checksum-pinned, unmodified kernel sources.
+The connector retains bridge references until the final DRM device release;
+a DRM-managed module reference keeps the bridge callbacks available until then.
+Detection and EDID callbacks check the requesting connector's unplug state,
+even after the bridge has been detached or attached to a replacement DRM device.
+The USB-created bridge needs no Device Tree graph, regulator devices, or separate
+reset GPIO; the FL2000 driver owns power/reset.
+
+Each adapter owns its lifecycle mutex and explicit streaming, interrupt, and
+I2C resource pointers. USB core parent-device locking serializes initial state
+publication. Independent adapters do not share a lifecycle lock.
 
 ## Atomic display pipeline
 
@@ -55,8 +63,9 @@ synchronization. If that allocation fails, the driver falls back to page-based
 scatter-gather, with separate mapping metadata for each URB. Repeated frames
 avoid rebuilding unchanged scatter-gather entries. Both paths reuse unchanged
 pixels without a copy. Five buffers allow three distinct in-flight frames, the
-newest frame and a free conversion destination. A host controller with USB
-scatter-gather support is required. Queue errors stop transmission; a later
+newest frame and a free conversion destination. Controller scatter-gather
+support is required only for the page-based fallback; contiguous DMA allocations
+also work on controllers without it. Queue errors stop transmission; a later
 framebuffer update or modeset can drain the old queue and clear the endpoint
 halt before restarting it.
 
@@ -78,8 +87,9 @@ packed conversion and 64-bit reordering routines.
 
 ## CPU backends
 
-Frame preparation selects a backend at build time with
-`FL2000_FRAME_BACKEND=auto` (default), `ssse3`, `bmi2`, or `generic`. Auto
+In-tree builds select the frame backend through Kconfig. External builds select
+it at build time with `FL2000_FRAME_BACKEND=auto` (default), `ssse3`, `bmi2`,
+or `generic`. Auto
 builds the SSSE3 backend for x86-64 target kernels and the portable backend
 elsewhere; selection uses the target kernel configuration, so cross builds do
 not inspect the build host CPU. For example, `make FL2000_FRAME_BACKEND=generic`
@@ -97,7 +107,8 @@ protection; it checks CPU BMI2 support and falls back to portable code when
 unavailable. Contiguous XRGB8888 rows are grouped into bounded spans of up to
 4096 pixels, reducing per-row dispatch and FPU transitions while preserving
 padding and crops. New backends implement the two prefix-processing functions in
-`fl2000_frame.h`, add their objects and target selection to the Makefile, and
+`fl2000_frame.h`, add their objects to Kbuild and their architecture selection
+to Kconfig, and
 define `FL2000_FRAME_ACCELERATED`. Returning zero uses the existing portable
 code. Backend implementations must preserve complete wire words, arbitrary
 source alignment, and bounded protected sections. `tests/test_logic.py` runs

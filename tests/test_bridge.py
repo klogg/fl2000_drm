@@ -22,6 +22,7 @@ prelude = r"""
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#define READ_ONCE(x) (x)
 #define __always_unused __attribute__((__unused__))
 typedef uint8_t u8;
 typedef uint32_t u32;
@@ -43,7 +44,7 @@ struct i2c_client;
 struct i2c_adapter;
 struct drm_display_mode { unsigned int clock, flags; };
 struct drm_display_info { bool is_hdmi; };
-struct drm_connector { struct drm_display_info display_info; };
+struct drm_connector { void *dev; struct drm_display_info display_info; };
 struct drm_crtc_state { struct drm_display_mode mode, adjusted_mode; };
 struct drm_encoder { void *crtc; };
 struct drm_bridge { struct drm_encoder *encoder; void *dev; };
@@ -78,7 +79,7 @@ static int regmap_bulk_write(struct regmap *map,unsigned int r,const u8 *v,unsig
 {
  for(unsigned int i=0;i<n;i++){int ret=regmap_write(map,r+i,v[i]);if(ret)return ret;}return 0;
 }
-static bool drm_dev_enter(void *dev,int *idx){(void)dev;*idx=0;return !unplugged;}
+static bool drm_dev_enter(void *dev,int *idx){assert(dev==(void *)1);*idx=0;return !unplugged;}
 static void drm_dev_exit(int idx){(void)idx;}
 static void drm_bridge_hpd_notify(struct drm_bridge *b,enum drm_connector_status s)
 {(void)b;notifications++;notified_status=s;}
@@ -97,7 +98,7 @@ int main(void)
 {
  struct regmap map={0};
  struct drm_encoder encoder={.crtc=&map};
- struct drm_connector connector={.display_info={.is_hdmi=true}};
+ struct drm_connector connector={.dev=(void *)1,.display_info={.is_hdmi=true}};
  struct it66121_ctx ctx={.regmap=&map,.bridge={.encoder=&encoder},.connector=&connector,.bus_width=24,.id=ID_IT66121};
  struct drm_crtc_state crtc={.adjusted_mode={.clock=32000}};
  struct drm_atomic_state state={.connector=&connector,.crtc=&crtc};
@@ -136,9 +137,17 @@ int main(void)
  assert(writes==0 && map.values[IT66121_INT_STATUS1_REG]==1);
  fault_reg=IT66121_SYS_STATUS_REG;
  assert(it66121_bridge_detect(&ctx.bridge,&connector)==connector_status_unknown);
+ /* A detached bridge must use the old connector's unplugged DRM device. */
+ ctx.bridge.dev=NULL;
  fault_reg=-1;unplugged=true;
  assert(it66121_bridge_detect(&ctx.bridge,&connector)==connector_status_disconnected);
- unplugged=false;
+ it66121_bridge_hpd_enable(&ctx.bridge);
+ it66121_bridge_hpd_disable(&ctx.bridge);
+ unplugged=false;ctx.bridge.dev=(void *)1;
+ it66121_bridge_hpd_enable(&ctx.bridge);
+ assert(!(map.values[IT66121_INT_MASK1_REG]&IT66121_INT_MASK1_HPD));
+ it66121_bridge_hpd_disable(&ctx.bridge);
+ assert(map.values[IT66121_INT_MASK1_REG]&IT66121_INT_MASK1_HPD);
  /* The interrupt path owns acknowledgment and only notifies real HPD events. */
  assert(!it66121_bridge_interrupt(&ctx.bridge));
  assert(notifications==1 && notified_status==connector_status_connected);
@@ -188,6 +197,8 @@ names = (
     "it66121_bridge_disable",
     "it66121_bridge_mode_valid",
     "it66121_bridge_detect",
+    "it66121_bridge_hpd_enable",
+    "it66121_bridge_hpd_disable",
     "it66121_bridge_interrupt",
 )
 parts = [

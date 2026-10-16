@@ -28,6 +28,7 @@
 /* Component handoff from the USB-attached bridge to the FL2000 DRM master. */
 struct fl2000_bridge {
 	struct drm_bridge *bridge;
+	struct module *owner;
 	struct drm_connector **connector;
 	/* Return zero after status processing, or a negative errno for retry. */
 	int (*interrupt)(struct drm_bridge *bridge);

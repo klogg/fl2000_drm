@@ -11,6 +11,7 @@ from qemu_utils import (
     OUTPUT,
     add_qemu_arguments,
     check_modules,
+    dependency_overlay,
     qemu_command,
     write_initramfs,
 )
@@ -35,6 +36,7 @@ mount -t sysfs none /sys
 mount -t devtmpfs none /dev
 fail() { echo "FL2000_QEMU_FAIL: $*"; dmesg; /usr/lib/klibc/bin/poweroff -f; while :; do :; done; }
 echo "FL2000_QEMU_KERNEL: $(uname -r)"
+/fl2000-load-deps || fail "dependency load"
 i=1
 while [ "$i" -le 100 ]; do
  if [ $((i % 2)) -eq 0 ]; then
@@ -61,6 +63,7 @@ while [ "$i" -le 100 ]; do
  [ ! -d /sys/bus/i2c/drivers/it66121 ] || fail "I2C driver remains"
  i=$((i + 1))
 done
+/fl2000-unload-deps || fail "dependency unload"
 echo "FL2000_QEMU_PASS: 100 load/unload cycles, alternating load/unload order"
 echo "FL2000_QEMU_TAINT: $(cat /proc/sys/kernel/tainted)"
 echo "FL2000_QEMU_MODULES_BEGIN"
@@ -78,6 +81,7 @@ entries += [
     (name, (source / name).read_bytes(), 0o100644)
     for name in ("fl2000.ko", "it66121.ko")
 ]
+entries += dependency_overlay([source / "fl2000.ko", source / "it66121.ko"], kernel)
 write_initramfs(
     args.base, entries, p / f"boot-{kernel}.cpio", payload=p / f"payload-{kernel}.cpio"
 )

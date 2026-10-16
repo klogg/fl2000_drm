@@ -3,7 +3,9 @@
 """Hardware-free checks of build cleanup, QEMU overlays and analysis input."""
 
 import argparse
+import gzip
 import json
+import lzma
 import os
 import subprocess
 import tempfile
@@ -16,12 +18,59 @@ from qemu_utils import (
     ROOT,
     add_qemu_arguments,
     cpio_archive,
+    dependency_overlay,
     qemu_command,
     write_initramfs,
 )
 
 
 class ToolTests(unittest.TestCase):
+    def test_dependency_overlay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "first.ko.gz").write_bytes(gzip.compress(b"first module"))
+            (root / "second.ko.xz").write_bytes(lzma.compress(b"second module"))
+            dependencies = {
+                "driver.ko": "first,builtin,second",
+                "first.ko.gz": "second",
+                "second.ko.xz": "",
+            }
+
+            def info(command, **_kwargs):
+                if "depends" in command:
+                    return dependencies[Path(command[-1]).name] + "\n"
+                return (
+                    "(builtin)\n"
+                    if command[-1] == "builtin"
+                    else str(
+                        root
+                        / (
+                            command[-1]
+                            + (".ko.gz" if command[-1] == "first" else ".ko.xz")
+                        )
+                    )
+                    + "\n"
+                )
+
+            with patch("qemu_utils.subprocess.check_output", side_effect=info):
+                entries = dependency_overlay([Path("driver.ko")], "test-kernel")
+            self.assertEqual(
+                [(name, data) for name, data, _mode in entries[:2]],
+                [
+                    ("fl2000-dep-second.ko", b"second module"),
+                    ("fl2000-dep-first.ko", b"first module"),
+                ],
+            )
+            load = entries[-2][1].decode()
+            unload = entries[-1][1].decode()
+            self.assertLess(
+                load.index("insmod /fl2000-dep-second"),
+                load.index("insmod /fl2000-dep-first"),
+            )
+            self.assertLess(unload.index("rmmod first"), unload.index("rmmod second"))
+            self.assertIn("/sys/module/first", load)
+            self.assertIn("fl2000-dep-first.ko.loaded", unload)
+
     def test_clean_stays_in_repository(self):
         with tempfile.TemporaryDirectory() as directory:
             headers = Path(directory) / "headers"

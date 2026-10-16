@@ -24,6 +24,9 @@ for module in it66121 fl2000; do
         exit 1
     fi
 done
+if [ -x /fl2000-load-deps ]; then
+    /fl2000-load-deps
+fi
 loaded_bridge=0
 if [ ! -d /sys/module/it66121 ]; then
     insmod "$module_dir/it66121.ko"

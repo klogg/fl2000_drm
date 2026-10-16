@@ -12,6 +12,7 @@ from qemu_utils import (
     ROOT,
     add_qemu_arguments,
     check_modules,
+    dependency_overlay,
     qemu_command,
     write_initramfs,
 )
@@ -46,6 +47,9 @@ check_modules(
 )
 if args.kms_test:
     entries.append(("kms-smoke", args.kms_test.read_bytes(), 0o100755))
+entries += dependency_overlay(
+    [args.modules / "fl2000.ko", args.modules / "it66121.ko"], args.kernel
+)
 write_initramfs(args.base, entries, run / "boot.cpio", payload=run / "payload.cpio")
 print(f"Guest log: {run / 'guest.log'}", flush=True)
 print("Inside the guest: /fl2000-startup", flush=True)

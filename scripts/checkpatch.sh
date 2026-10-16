@@ -5,7 +5,7 @@ repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 source "$repo_dir/scripts/kernel-tools.sh"
 if [[ ${1:-} == --help ]]; then
     printf '%s\n' 'Usage: checkpatch.sh [checkpatch-options]' \
-        'Checks production C/headers in the repository, bridge and frame folders.' \
+        'Checks production C/headers in the repository, bridge, frame and compat folders.' \
         'Overrides: CHECKPATCH, KSRC, KVER, KERNEL_TOOLS_TAG.'
     exit 0
 fi
@@ -18,7 +18,7 @@ fi
 cd "$repo_dir"
 shopt -s nullglob
 status=0
-for file in *.[ch] bridge/*.[ch] frame/*.[ch]; do
+for file in *.[ch] bridge/*.[ch] frame/*.[ch] compat/*.[ch]; do
     [[ $file == *.mod.c ]] && continue
     options=()
     case "$file" in

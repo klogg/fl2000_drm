@@ -429,21 +429,33 @@ static void it66121_bridge_hpd_enable(struct drm_bridge *bridge)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	int ret;
+	int idx;
+	struct drm_device *drm = READ_ONCE(bridge->dev);
+
+	if (!drm || !drm_dev_enter(drm, &idx))
+		return;
 
 	ret = regmap_write_bits(ctx->regmap, IT66121_INT_MASK1_REG, IT66121_INT_MASK1_HPD, 0);
 	if (ret)
 		dev_err(ctx->dev, "failed to enable HPD IRQ\n");
+	drm_dev_exit(idx);
 }
 
 static void it66121_bridge_hpd_disable(struct drm_bridge *bridge)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	int ret;
+	int idx;
+	struct drm_device *drm = READ_ONCE(bridge->dev);
+
+	if (!drm || !drm_dev_enter(drm, &idx))
+		return;
 
 	ret = regmap_write_bits(ctx->regmap, IT66121_INT_MASK1_REG, IT66121_INT_MASK1_HPD,
 				IT66121_INT_MASK1_HPD);
 	if (ret)
 		dev_err(ctx->dev, "failed to disable HPD IRQ\n");
+	drm_dev_exit(idx);
 }
 
 static int it66121_restore_interrupts(struct it66121_ctx *ctx)
@@ -599,8 +611,8 @@ it66121_bridge_mode_valid(struct drm_bridge *bridge,
 	return MODE_OK;
 }
 
-static enum drm_connector_status
-it66121_bridge_detect(struct drm_bridge *bridge, struct drm_connector *connector __always_unused)
+static enum drm_connector_status it66121_bridge_detect(struct drm_bridge *bridge,
+						       struct drm_connector *connector)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 
@@ -609,7 +621,7 @@ it66121_bridge_detect(struct drm_bridge *bridge, struct drm_connector *connector
 	int idx;
 	int ret;
 
-	if (!drm_dev_enter(bridge->dev, &idx))
+	if (!drm_dev_enter(connector->dev, &idx))
 		return connector_status_disconnected;
 	mutex_lock(&ctx->lock);
 	ret = regmap_read(ctx->regmap, IT66121_SYS_STATUS_REG, &value);
@@ -630,7 +642,7 @@ static const struct drm_edid *it66121_bridge_edid_read(struct drm_bridge *bridge
 	const struct drm_edid *edid;
 	int idx;
 
-	if (!drm_dev_enter(bridge->dev, &idx))
+	if (!drm_dev_enter(connector->dev, &idx))
 		return NULL;
 	mutex_lock(&ctx->lock);
 	edid = drm_edid_read_custom(connector, it66121_get_edid_block, ctx);
@@ -699,6 +711,7 @@ static int it66121_bind(struct device *comp, struct device *master __always_unus
 	struct it66121_ctx *ctx = dev_get_drvdata(comp);
 
 	binding->bridge = &ctx->bridge;
+	binding->owner = THIS_MODULE;
 	binding->connector = &ctx->connector;
 	binding->interrupt = it66121_bridge_interrupt;
 	return 0;
@@ -712,6 +725,7 @@ static void it66121_unbind(struct device *comp __always_unused,
 	binding->interrupt = NULL;
 	binding->connector = NULL;
 	binding->bridge = NULL;
+	binding->owner = NULL;
 }
 
 static const struct component_ops it66121_component_ops = {
@@ -751,8 +765,8 @@ static int it66121_probe(struct i2c_client *client)
 	if (bytes[0] != 0x54 || bytes[1] != 0x49 || bytes[2] != 0x12 || (bytes[3] & 0x0f) != 0x06)
 		return -ENODEV;
 	ctx->bridge.type = DRM_MODE_CONNECTOR_HDMIA;
-	/* The USB worker acknowledges HPD and updates the DRM connector. */
-	ctx->bridge.ops = DRM_BRIDGE_OP_DETECT | DRM_BRIDGE_OP_EDID;
+	/* The USB worker acknowledges HPD; the connector helper delivers events. */
+	ctx->bridge.ops = DRM_BRIDGE_OP_DETECT | DRM_BRIDGE_OP_EDID | DRM_BRIDGE_OP_HPD;
 	drm_bridge_add(&ctx->bridge);
 	i2c_set_clientdata(client, ctx);
 	ret = component_add(ctx->dev, &it66121_component_ops);
