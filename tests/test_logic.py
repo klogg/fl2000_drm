@@ -268,6 +268,7 @@ typedef u32 __le32;
 #define USB_DIR_IN 0x80
 #define USB_DIR_OUT 0
 #define USB_TYPE_VENDOR 0x40
+#define FL2000_MONITOR_DETECT_MDELAY 750
 #define CONTROL_MSG_READ 64
 #define CONTROL_MSG_WRITE 65
 #define USB_CTRL_GET_TIMEOUT 1000
@@ -1029,6 +1030,7 @@ parts = [
     defines,
     '#include "tests/register_helpers.h"',
     '#include "fl2000_registers.h"',
+    '#include "bridge/it66121_registers.h"',
     structure(header, "fl2000_pll"),
 ]
 parts += [

@@ -5,6 +5,7 @@
  */
 
 #include "fl2000.h"
+#include "bridge/it66121_registers.h"
 
 /* The controller transfers aligned four-byte register groups. Byte writes
  * require read-modify-write; full groups avoid destructive side-effect reads.
@@ -181,8 +182,9 @@ static int fl2000_bridge_detect(struct i2c_adapter *adapter, unsigned short addr
 		if (ret != ARRAY_SIZE(msgs))
 			return 0;
 	}
-	return bytes[0] == 0x54 && bytes[1] == 0x49 && bytes[2] == 0x12 &&
-	       (bytes[3] & 0x0f) == 0x06;
+	return bytes[0] == IT66121_VENDOR_ID0 && bytes[1] == IT66121_VENDOR_ID1 &&
+	       bytes[2] == IT66121_DEVICE_ID0 &&
+	       (bytes[3] & IT66121_DEVICE_ID1_MASK) == IT66121_DEVICE_ID1;
 }
 
 int fl2000_i2c_init(struct usb_device *usb_dev)

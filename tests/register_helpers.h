@@ -10,6 +10,7 @@
 #endif
 #define GENMASK(h, l)		((UINT32_MAX << (l)) & (UINT32_MAX >> (31 - (h))))
 #define FIELD_PREP(mask, value) (((uint32_t)(value) << __builtin_ctz(mask)) & (uint32_t)(mask))
+#define FIELD_MAX(mask) ((uint32_t)(mask) >> __builtin_ctz(mask))
 #define FIELD_GET(mask, value)	(((uint32_t)(value) & (uint32_t)(mask)) >> __builtin_ctz(mask))
 
 #endif

@@ -30,6 +30,7 @@ typedef uint32_t __le32;
 #define I2C_RDWR_TIMEOUT 256000
 #define I2C_LOCK_ROOT_ADAPTER 1
 #define FL2000_HW_RST_MDELAY 10
+#define FL2000_MONITOR_DETECT_MDELAY 750
 #define GFP_KERNEL 0
 #define GFP_DMA 0
 #define kmalloc_obj(v,f) malloc(sizeof(v))
@@ -201,14 +202,27 @@ int main(void)
 }
 """
 names = (
-    "fl2000_set_pll", "fl2000_set_timings", "fl2000_set_pixfmt", "fl2000_set_transfers",
-    "fl2000_reset", "fl2000_afe_magic", "fl2000_usb_magic", "fl2000_enable_interrupts",
-    "fl2000_check_interrupt", "fl2000_i2c_dword", "fl2000_reg_read", "fl2000_reg_write",
+    "fl2000_set_pll",
+    "fl2000_set_timings",
+    "fl2000_set_pixfmt",
+    "fl2000_set_transfers",
+    "fl2000_reset",
+    "fl2000_afe_magic",
+    "fl2000_usb_magic",
+    "fl2000_enable_interrupts",
+    "fl2000_check_interrupt",
+    "fl2000_i2c_dword",
+    "fl2000_reg_read",
+    "fl2000_reg_write",
 )
 parts = [
-    prelude, '#include "tests/register_helpers.h"', '#include "fl2000_registers.h"',
-    structure(header, "fl2000_pll"), structure(header, "fl2000_timings"),
-    *(function(source, name) for name in names), checks,
+    prelude,
+    '#include "tests/register_helpers.h"',
+    '#include "fl2000_registers.h"',
+    structure(header, "fl2000_pll"),
+    structure(header, "fl2000_timings"),
+    *(function(source, name) for name in names),
+    checks,
 ]
 with tempfile.TemporaryDirectory(prefix="fl2000-registers-") as temp:
     c = Path(temp) / "test.c"
@@ -234,6 +248,7 @@ with tempfile.TemporaryDirectory(prefix="fl2000-registers-") as temp:
     probe = subprocess.run(
         ["cc", "-Werror", "-fsso-struct=big-endian", "-x", "c", "-fsyntax-only", "-"],
         input="struct sample { unsigned int word; };\n",
+        check=False,
         text=True,
         capture_output=True,
     )

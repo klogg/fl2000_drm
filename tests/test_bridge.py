@@ -172,6 +172,14 @@ int main(void)
  assert(it66121_bridge_interrupt(&ctx.bridge)==-EIO && notifications==before_ack);
  fault_write_reg=-1;
  assert(!it66121_bridge_interrupt(&ctx.bridge) && notifications==before_ack);
+ /* AFE clock selection changes only bit 4 of register 0x68. */
+ struct drm_display_mode afe_mode={.clock=148500};
+ map.values[IT66121_AFE_XP_EC1_REG]=0xb5;
+ assert(!it66121_configure_afe(&ctx,&afe_mode));
+ assert(map.values[IT66121_AFE_XP_EC1_REG]==0xa5);
+ afe_mode.clock=74250;
+ assert(!it66121_configure_afe(&ctx,&afe_mode));
+ assert(map.values[IT66121_AFE_XP_EC1_REG]==0xb5);
  /* Mode limits and error propagation retain existing behavior. */
  struct drm_display_mode mode={.clock=25000};
  assert(it66121_bridge_mode_valid(&ctx.bridge,&connector.display_info,&mode)==MODE_OK);

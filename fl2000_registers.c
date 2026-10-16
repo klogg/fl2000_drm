@@ -11,6 +11,8 @@
 #define CONTROL_MSG_WRITE 65
 
 #define FL2000_HW_RST_MDELAY 10
+/* Vendor detection restart sequence waits for EDID detection to settle. */
+#define FL2000_MONITOR_DETECT_MDELAY 750
 
 static bool fl2000_reg_precious(struct device *dev __always_unused, unsigned int reg)
 {
@@ -79,7 +81,7 @@ static const struct regmap_config fl2000_regmap_config = {
 	.val_bits = 32,
 	.reg_bits = 16,
 	.reg_stride = 4,
-	.max_register = 0xFFFF,
+	.max_register = FL2000_MAX_REGISTER,
 
 	.cache_type = REGCACHE_RBTREE,
 
@@ -144,7 +146,8 @@ int fl2000_set_timings(struct usb_device *usb_dev, const struct fl2000_timings *
 
 	value = FIELD_PREP(FL2000_VGA_VSYNC2_VSYNC_WIDTH, timings->vsync_width) |
 		FIELD_PREP(FL2000_VGA_VSYNC2_VSTART, timings->vstart) |
-		FIELD_PREP(FL2000_VGA_VSYNC2_START_LATENCY, min_t(u32, timings->vstart, 1023));
+		FIELD_PREP(FL2000_VGA_VSYNC2_START_LATENCY,
+			   min_t(u32, timings->vstart, FIELD_MAX(FL2000_VGA_VSYNC2_START_LATENCY)));
 	ret = regmap_write(regmap, FL2000_VGA_VSYNC_REG2, value);
 	if (ret)
 		return ret;
@@ -204,7 +207,7 @@ int fl2000_reset(struct usb_device *usb_dev)
 		goto unlock;
 
 	msleep(FL2000_HW_RST_MDELAY);
-	regcache_drop_region(regmap, 0, 0xffff);
+	regcache_drop_region(regmap, 0, FL2000_MAX_REGISTER);
 
 	ret = 0;
 unlock:
@@ -217,8 +220,8 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 
-	return regmap_write_bits(regmap, FL2000_USB_LPM_REG, FL2000_USB_LPM_MAGIC,
-				 FL2000_USB_LPM_MAGIC);
+	return regmap_write_bits(regmap, FL2000_USB_LPM_REG, FL2000_USB_LPM_VENDOR_QUIRK,
+				 FL2000_USB_LPM_VENDOR_QUIRK);
 }
 
 int fl2000_usb_magic(struct usb_device *usb_dev)
@@ -242,7 +245,7 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, FL2000_VGA_I2C_SC_EDID_DETECT);
 	if (ret)
 		goto unlock;
-	msleep(750);
+	msleep(FL2000_MONITOR_DETECT_MDELAY);
 	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, mask);
 	if (ret)
 		goto unlock;

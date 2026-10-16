@@ -11,15 +11,20 @@
 #include <linux/bits.h>
 #include <linux/types.h>
 
-/* #### USB Control Registers Bank #### */
-/* Some unknown & undocumented FL2000 USB settings */
+/* Vendor USB register requests carry a 16-bit register offset. */
+#define FL2000_MAX_REGISTER GENMASK(15, 0)
 
+/* #### USB Control Registers Bank #### */
+/* USB setup retained from the vendor driver. These fields are not described
+ * by the public VGA register manual; do not infer semantics for the quirk bit.
+ */
 #define FL2000_USB_CONTROL_OFFSET 0x0000
 
-#define FL2000_USB_LPM_REG	 (FL2000_USB_CONTROL_OFFSET + 0x70)
-#define FL2000_USB_LPM_MAGIC	 BIT(13)
-#define FL2000_USB_LPM_U2_REJECT BIT(19)
-#define FL2000_USB_LPM_U1_REJECT BIT(20)
+#define FL2000_USB_LPM_REG (FL2000_USB_CONTROL_OFFSET + 0x70)
+/* Undocumented bit 13 retained from the established AFE setup sequence. */
+#define FL2000_USB_LPM_VENDOR_QUIRK BIT(13)
+#define FL2000_USB_LPM_U2_REJECT    BIT(19)
+#define FL2000_USB_LPM_U1_REJECT    BIT(20)
 
 #define FL2000_USB_CTRL_REG	  (FL2000_USB_CONTROL_OFFSET + 0x78)
 #define FL2000_USB_CTRL_WAKE_NRDY BIT(17)

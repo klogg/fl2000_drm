@@ -54,19 +54,19 @@ static const struct regmap_range_cfg it66121_regmap_banks[] = {
 	{
 		.name = "it66121",
 		.range_min = 0,
-		.range_max = 0x1ff,
+		.range_max = IT66121_MAX_REGISTER,
 		.selector_reg = IT66121_CLK_BANK_REG,
-		.selector_mask = 1,
+		.selector_mask = IT66121_CLK_BANK_SELECT,
 		.selector_shift = 0,
 		.window_start = 0,
-		.window_len = 0x100,
+		.window_len = IT66121_REG_BANK_SIZE,
 	},
 };
 
 static const struct regmap_config it66121_regmap_config = {
 	.val_bits = 8,
 	.reg_bits = 8,
-	.max_register = 0x1ff,
+	.max_register = IT66121_MAX_REGISTER,
 	.ranges = it66121_regmap_banks,
 	.num_ranges = ARRAY_SIZE(it66121_regmap_banks),
 	/* Resets are controlled by FL2000; do not cache bridge registers. */
@@ -80,7 +80,7 @@ static const struct regmap_config it66121_regmap_config = {
 #define EDID_TIMEOUT		200000
 #define EDID_FIFO_SIZE		32
 #define FL2000_EDID_FIFO_SKIP	3
-#define EDID_DDC_ADDR		0xa0
+#define EDID_DDC_ADDR		IT66121_DDC_HEADER_EDID
 #define IT66121_DDC_CONTROL	IT66121_MASTER_SEL_REG
 #define IT66121_DDC_SEGMENT	IT66121_DDC_SEGMENT_REG
 #define IT66121_DDC_MASTER_HOST IT66121_MASTER_SEL_HOST
@@ -96,8 +96,8 @@ static inline int it66121_fire_afe(struct it66121_ctx *ctx)
 static int it66121_configure_input(struct it66121_ctx *ctx)
 {
 	int ret;
-	/* Preserve the FL2000 parallel bus's one-cycle PCLK delay. */
-	u8 mode = IT66121_INPUT_MODE_RGB | BIT(0);
+	/* Preserve the input-clock delay setting validated on FL2000 adapters. */
+	u8 mode = IT66121_INPUT_MODE_RGB | IT66121_INPUT_MODE_PCLK_DELAY1;
 
 	if (ctx->bus_width == 12)
 		mode |= IT66121_INPUT_MODE_DDR;
@@ -141,9 +141,10 @@ static int it66121_configure_afe(struct it66121_ctx *ctx, const struct drm_displ
 					high_clock ? 0 : IT66121_AFE_IP_EC1);
 		if (ret)
 			return ret;
+		/* Only LOWCLK is in the update mask; high clocks clear that bit. */
 		ret = regmap_write_bits(ctx->regmap, IT66121_AFE_XP_EC1_REG,
 					IT66121_AFE_XP_EC1_LOWCLK,
-					high_clock ? 0x80 : IT66121_AFE_XP_EC1_LOWCLK);
+					high_clock ? 0 : IT66121_AFE_XP_EC1_LOWCLK);
 		if (ret)
 			return ret;
 	}
@@ -482,7 +483,9 @@ static int it66121_restore_interrupts(struct it66121_ctx *ctx)
 
 	if (ret)
 		return ret;
-	return regmap_write_bits(ctx->regmap, IT66121_INT_MASK1_REG, 0xff, 0xfe);
+	/* A set mask bit suppresses its interrupt; leave only HPD unmasked. */
+	return regmap_write_bits(ctx->regmap, IT66121_INT_MASK1_REG, IT66121_INT_MASK1_ALL,
+				 IT66121_INT_MASK1_ALL & ~IT66121_INT_MASK1_HPD);
 }
 
 static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
@@ -543,7 +546,7 @@ static int it66121_configure_hdmi(struct it66121_ctx *ctx, const struct drm_disp
 		ret = regmap_write(ctx->regmap, IT66121_AVI_INFO_PKT_REG, 0);
 		if (ret)
 			return ret;
-		return regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, 0);
+		return regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, IT66121_HDMI_MODE_DVI);
 	}
 	ret = drm_hdmi_avi_infoframe_from_display_mode(&ctx->hdmi_avi_infoframe, ctx->connector,
 						       mode);
@@ -778,7 +781,9 @@ static int it66121_probe(struct i2c_client *client)
 			return dev_err_probe(ctx->dev, ret, "ID register %u read failed\n", i);
 		bytes[i] = (u8)value;
 	}
-	if (bytes[0] != 0x54 || bytes[1] != 0x49 || bytes[2] != 0x12 || (bytes[3] & 0x0f) != 0x06)
+	if (bytes[0] != IT66121_VENDOR_ID0 || bytes[1] != IT66121_VENDOR_ID1 ||
+	    bytes[2] != IT66121_DEVICE_ID0 ||
+	    (bytes[3] & IT66121_DEVICE_ID1_MASK) != IT66121_DEVICE_ID1)
 		return -ENODEV;
 	ctx->bridge.type = DRM_MODE_CONNECTOR_HDMIA;
 	/* The USB worker acknowledges HPD; the connector helper delivers events. */

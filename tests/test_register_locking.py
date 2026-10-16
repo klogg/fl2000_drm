@@ -25,6 +25,7 @@ typedef uint32_t u32;
 #define __aligned(n) __attribute__((aligned(n)))
 #define __packed __attribute__((packed))
 #define FL2000_HW_RST_MDELAY 10
+#define FL2000_MONITOR_DETECT_MDELAY 750
 #define I2C_LOCK_ROOT_ADAPTER 1
 struct i2c_adapter { pthread_mutex_t bus; };
 struct regmap { struct i2c_adapter *adapter; int calls,fail_at,sleeps,drops; };
@@ -124,14 +125,16 @@ with tempfile.TemporaryDirectory(prefix="fl2000-register-locking-") as temp:
     c = Path(temp) / "test.c"
     exe = Path(temp) / "test"
     c.write_text(
-        "\n".join([
-            prelude,
-            '#include "tests/register_helpers.h"',
-            '#include "fl2000_registers.h"',
-            function(source, "fl2000_reset"),
-            function(source, "fl2000_usb_magic"),
-            checks,
-        ])
+        "\n".join(
+            [
+                prelude,
+                '#include "tests/register_helpers.h"',
+                '#include "fl2000_registers.h"',
+                function(source, "fl2000_reset"),
+                function(source, "fl2000_usb_magic"),
+                checks,
+            ]
+        )
     )
     subprocess.run(
         [
