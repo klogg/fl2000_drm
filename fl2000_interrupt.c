@@ -228,7 +228,7 @@ out:
 	return ret;
 }
 
-int fl2000_disable_interrupt(struct usb_device *usb_dev)
+int fl2000_disable_interrupt(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct fl2000_interrupt *intr;

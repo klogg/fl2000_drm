@@ -582,7 +582,7 @@ static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
 	struct drm_plane_state *new_plane = drm_atomic_get_new_plane_state(state, plane);
-	struct drm_crtc_state *crtc = drm_atomic_get_new_crtc_state(state, &drm_if->crtc);
+	const struct drm_crtc_state *crtc = drm_atomic_get_new_crtc_state(state, &drm_if->crtc);
 	int ret;
 
 	ret = drm_atomic_helper_check_plane_state(new_plane, crtc, DRM_PLANE_NO_SCALING,
@@ -927,7 +927,7 @@ int fl2000_drm_suspend(struct usb_device *usb_dev)
 int fl2000_drm_resume(struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
-	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	const struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	int ret;
 
 	if (!regmap)

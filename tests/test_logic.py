@@ -176,7 +176,7 @@ static bool drm_atomic_helper_damage_merged(const struct drm_plane_state *old,co
 { (void)old;(void)new;*rect=merged_damage;return damage_merged; }
 static struct drm_crtc_state *drm_atomic_get_new_crtc_state(struct drm_atomic_state *state,struct drm_crtc *crtc)
 { (void)crtc;return state->crtc; }
-static int drm_atomic_helper_check_plane_state(struct drm_plane_state *plane,struct drm_crtc_state *crtc,int min_scale,int max_scale,bool position,bool disabled)
+static int drm_atomic_helper_check_plane_state(struct drm_plane_state *plane,const struct drm_crtc_state *crtc,int min_scale,int max_scale,bool position,bool disabled)
 {
  (void)crtc;assert(min_scale==DRM_PLANE_NO_SCALING && max_scale==DRM_PLANE_NO_SCALING);
  assert(!position && !disabled);plane->visible=plane_visible;return plane_check_result;

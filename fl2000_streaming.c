@@ -202,7 +202,7 @@ static void fl2000_streaming_release(struct device *dev __always_unused, void *r
 	mutex_unlock(&stream->mutex);
 }
 
-static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev)
+static struct fl2000_stream *fl2000_find_stream(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 

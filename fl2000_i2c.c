@@ -124,7 +124,7 @@ static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 }
 
 /* Callers must keep control-interface resources alive while using the adapter. */
-struct i2c_adapter *fl2000_i2c_adapter(struct usb_device *usb_dev)
+struct i2c_adapter *fl2000_i2c_adapter(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 
