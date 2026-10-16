@@ -115,7 +115,8 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_comb_2nd_msg_len = 4,
 };
 
-static void fl2000_i2c_adapter_release(struct device *dev, void *res)
+static void fl2000_i2c_adapter_release(struct device *dev, /* NOSONAR: devres callback ABI. */
+				       void *res)
 {
 	struct i2c_adapter *adapter = res;
 

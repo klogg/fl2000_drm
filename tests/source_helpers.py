@@ -8,7 +8,7 @@ def function(source, name):
     match = re.search(
         r"^[ \t]*(?:static\s+)?(?:inline\s+)?[\w \t*]+(?:\n[ \t]*)?\b"
         + name
-        + r"\([^;]*?\)\s*\{",
+        + r"\([^;]*?\)\s*(?:/\*[^\n]*\*/\s*)?\{",
         source,
         re.MULTILINE,
     )

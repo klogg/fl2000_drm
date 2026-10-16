@@ -491,7 +491,9 @@ static int it66121_restore_interrupts(struct it66121_ctx *ctx)
 static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
 				    const struct drm_display_mode *adjusted_mode);
 
-static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_state *state)
+static void
+it66121_bridge_enable(struct drm_bridge *bridge,
+		      struct drm_atomic_state *state) /* NOSONAR: Kernel callback ABI. */
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	const struct drm_crtc_state *crtc_state;

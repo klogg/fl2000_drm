@@ -578,7 +578,9 @@ static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_sta
 	return drm_atomic_add_affected_planes(state, crtc);
 }
 
-static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_state *state)
+static int
+fl2000_plane_atomic_check(struct drm_plane *plane,
+			  struct drm_atomic_state *state) /* NOSONAR: Kernel callback ABI. */
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
 	struct drm_plane_state *new_plane = drm_atomic_get_new_plane_state(state, plane);
@@ -592,7 +594,9 @@ static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_
 	return fl2000_display_check(drm_if, new_plane, crtc);
 }
 
-static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_state *state)
+static void
+fl2000_crtc_atomic_enable(struct drm_crtc *crtc,
+			  struct drm_atomic_state *state) /* NOSONAR: Kernel callback ABI. */
 {
 	struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
 	struct drm_plane_state *plane = drm_atomic_get_new_plane_state(state, &drm_if->plane);
@@ -626,7 +630,9 @@ static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
 	fl2000_streaming_disable(drm_if->usb_dev);
 }
 
-static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomic_state *state)
+static void
+fl2000_plane_atomic_update(struct drm_plane *plane,
+			   struct drm_atomic_state *state) /* NOSONAR: Kernel callback ABI. */
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
 	const struct drm_crtc_state *crtc = drm_atomic_get_new_crtc_state(state, &drm_if->crtc);
