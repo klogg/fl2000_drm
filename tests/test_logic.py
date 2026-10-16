@@ -56,6 +56,8 @@ struct drm_rect { int x1,y1,x2,y2; };
 #define BIT(n) (1U << (n))
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 #define kmalloc_obj(value, flags) kmalloc(sizeof(value), flags)
+#define kzalloc_obj(value) calloc(1, sizeof(value))
+#define swap(a,b) do { __typeof__(a) tmp=(a);(a)=(b);(b)=tmp; } while (0)
 #define GFP_ATOMIC 1
 #define STREAMING_EP 1
 #define PAGE_SIZE 4096
@@ -96,7 +98,7 @@ struct drm_format_info { u32 format; unsigned int cpp[1]; };
 struct drm_framebuffer { const struct drm_format_info *format; unsigned int pitches[1]; };
 struct drm_plane { struct drm_device *dev; struct drm_plane_state *state; };
 struct drm_crtc;
-struct drm_plane_state { u32 src_x,src_y,src_w,src_h; struct drm_framebuffer *fb; struct drm_crtc *crtc; bool visible; };
+struct drm_plane_state { struct drm_atomic_state *state; u32 src_x,src_y,src_w,src_h; struct drm_framebuffer *fb; struct drm_crtc *crtc; bool visible; };
 struct drm_crtc_state { struct drm_display_mode mode,adjusted_mode; bool no_vblank,mode_changed,active; };
 struct iosys_map { bool is_iomem; void *vaddr; };
 struct drm_shadow_plane_state { struct drm_plane_state base; struct iosys_map map[1],data[1]; };
@@ -111,7 +113,8 @@ static void drm_gem_fb_vunmap(struct drm_framebuffer *fb,struct iosys_map *map)
 { (void)fb; assert(map[0].vaddr && map_refs>0); map[0].vaddr=NULL; if(!--map_refs)map_removals++; }
 enum usb_device_speed { USB_SPEED_HIGH, USB_SPEED_SUPER, USB_SPEED_SUPER_PLUS };
 struct device { int unused; };
-struct usb_device { struct device dev; enum usb_device_speed speed; };
+struct usb_bus { unsigned int sg_tablesize; };
+struct usb_device { struct usb_bus *bus; struct device dev; enum usb_device_speed speed; };
 struct regmap { u32 aclk, ctrl2, pll, regs[0x10000/4]; };
 static struct regmap test_regmap;
 static int regmap_error, regmap_calls, detection_writes, detection_delay;
@@ -143,6 +146,7 @@ struct fl2000_drm_if { struct drm_device drm; struct usb_device *usb_dev; struct
 static struct fl2000_drm_if test_drm_if;
 struct drm_atomic_state { struct drm_plane plane; struct drm_plane_state *old_plane,*new_plane; struct drm_crtc_state *crtc; int get_error; bool allow_modeset; };
 #define IS_ERR(p) ((uintptr_t)(p)>=(uintptr_t)-4095)
+#define ERR_PTR(e) ((void *)(intptr_t)(e))
 #define PTR_ERR(p) ((intptr_t)(p))
 #define PTR_ERR_OR_ZERO(p) (IS_ERR(p) ? (int)PTR_ERR(p) : 0)
 #define for_each_oldnew_plane_in_state(s,p,o,n,i) \
@@ -174,6 +178,7 @@ static int drm_atomic_helper_check_plane_state(struct drm_plane_state *plane,str
  (void)crtc;assert(min_scale==DRM_PLANE_NO_SCALING && max_scale==DRM_PLANE_NO_SCALING);
  assert(!position && !disabled);plane->visible=plane_visible;return plane_check_result;
 }
+static bool drm_atomic_crtc_needs_modeset(const struct drm_crtc_state *s) { return s->mode_changed; }
 static bool drm_dev_enter(struct drm_device *drm,int *idx) { *idx=0;return !drm->unplugged; }
 static void drm_dev_exit(int idx) { (void)idx; }
 static int cpu_access_result,cpu_access_count,cpu_access_calls;
@@ -200,7 +205,11 @@ struct urb {
 };
 #define for_each_sg(list, sg, count, i) \
  for ((i) = 0, (sg) = (list); (i) < (count); (i)++, (sg)++)
-static unsigned int sg_sets;
+static unsigned int sg_sets, sg_allocs, sg_frees, fail_sg_at;
+static int sg_alloc_table(struct sg_table *t,unsigned int n,int flags)
+{ (void)flags;if(++sg_allocs==fail_sg_at)return -ENOMEM;t->sgl=calloc(n,sizeof(*t->sgl));t->orig_nents=n;return t->sgl?0:-ENOMEM; }
+static void sg_free_table(struct sg_table *t)
+{ if(t->sgl){free(t->sgl);sg_frees++;}memset(t,0,sizeof(*t)); }
 static void sg_set_page(struct scatterlist *sg, struct page *page, unsigned int length, int offset)
 { assert(!offset); sg_sets++; sg->page = page; sg->length = length; }
 static int submit_count, fail_at, log_count;
@@ -677,6 +686,100 @@ static void test_frame_allocation(void)
  fail_dma_alloc=false;fail_page_at=0;
 }
 
+static void test_stream_preparation(void)
+{
+ struct usb_bus bus={.sg_tablesize=1024};
+ struct usb_device usb={.bus=&bus,.speed=USB_SPEED_SUPER};
+ struct fl2000_stream stream={.usb_dev=&usb};
+ struct urb urbs[FL2000_QUEUE_DEPTH]={0};
+ struct fl2000_stream_buffers *prepared;
+ unsigned int dma_live=dma_allocs-dma_frees, pages_live=page_allocs-page_frees;
+ test_stream=&stream;fail_at=0;
+ assert(PTR_ERR(fl2000_streaming_prepare(&usb,0,3))==-EINVAL);
+ assert(PTR_ERR(fl2000_streaming_prepare(&usb,-1,3))==-EINVAL);
+ assert(PTR_ERR(fl2000_streaming_prepare(&usb,16,4))==-EINVAL);
+ assert(PTR_ERR(fl2000_streaming_prepare(&usb,INT_MAX,3))==-EINVAL);
+ for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
+  stream.transfers[i].stream=&stream;stream.transfers[i].urb=&urbs[i];
+  urbs[i].context=&stream.transfers[i];
+ }
+ prepared=fl2000_streaming_prepare(&usb,16,3);assert(!IS_ERR(prepared));
+ assert(!fl2000_streaming_mode_set(&usb,&prepared) && !prepared);
+ stream.latest=&stream.frames[0];stream.frames[0].valid=true;
+ assert(!fl2000_streaming_enable(&usb));
+ u8 *active=stream.frames[0].vaddr;
+ active[0]=0xa5;
+ /* Fail every frame position through the page fallback. */
+ fail_dma_alloc=true;
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++) {
+  unsigned int freed=page_frees,allocated=page_allocs;
+  fail_page_at=page_allocs+i+1;
+  prepared=fl2000_streaming_prepare(&usb,16,2);
+  assert(PTR_ERR(prepared)==-ENOMEM);
+  assert(page_frees-freed==page_allocs-allocated-1);
+  assert(stream.enabled && stream.buf_size==48 && stream.bytes_pix==3);
+  assert(stream.latest==&stream.frames[0] && active==stream.frames[0].vaddr && active[0]==0xa5);
+  for(unsigned int j=0;j<FL2000_QUEUE_DEPTH;j++)assert(urbs[j].submitted);
+ }
+ fail_page_at=0;
+ /* SG allocation errors must unwind complete frames and partial tables. */
+ for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
+  unsigned int freed=sg_frees;
+  fail_sg_at=sg_allocs+i+1;
+  prepared=fl2000_streaming_prepare(&usb,16,2);
+  assert(PTR_ERR(prepared)==-ENOMEM && sg_frees-freed==i);
+  assert(stream.enabled && stream.frames[0].vaddr==active);
+ }
+ fail_sg_at=0;bus.sg_tablesize=0;
+ prepared=fl2000_streaming_prepare(&usb,16,2);
+ assert(PTR_ERR(prepared)==-E2BIG && stream.enabled);
+ bus.sg_tablesize=1024;
+ prepared=fl2000_streaming_prepare(&usb,16,2);assert(!IS_ERR(prepared));
+ fl2000_streaming_free_buffers(&usb,prepared); /* Cancelled pending commit. */
+ assert(stream.enabled && stream.frames[0].vaddr==active);
+ prepared=fl2000_streaming_prepare(&usb,16,2);assert(!IS_ERR(prepared));
+ unsigned int allocations=page_allocs+dma_allocs+sg_allocs;
+ assert(!fl2000_streaming_mode_set(&usb,&prepared) && !prepared);
+ assert(allocations==page_allocs+dma_allocs+sg_allocs);
+ assert(!stream.enabled && !stream.latest && !stream.source);
+ assert(stream.buf_size==32 && stream.bytes_pix==2 && !stream.frames[0].valid);
+ for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
+  assert(!urbs[i].submitted && !stream.transfers[i].sg_frame);
+  sg_free_table(&stream.transfers[i].sgt);
+ }
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)fl2000_free_frame(&usb,&stream.frames[i]);
+ assert(dma_allocs-dma_frees==dma_live);
+ /* Five intentionally failed alloc_page calls increment the mock counter. */
+ assert(page_allocs-page_frees==pages_live+FL2000_FRAME_COUNT);
+ fail_dma_alloc=false;test_stream=NULL;
+
+ /* prepare_fb must return allocation errors and unwind its mapping itself. */
+ const struct drm_format_info rgb={DRM_FORMAT_RGB888,{3}};
+ struct drm_framebuffer fb={.format=&rgb};
+ struct fl2000_plane_state state={0};
+ struct drm_plane plane={.dev=&test_drm_if.drm};
+ struct drm_crtc_state crtc={.active=true,.mode_changed=true,
+  .adjusted_mode={.clock=25175,.hdisplay=640,.htotal=800,.vdisplay=480,.vtotal=525}};
+ struct drm_atomic_state atomic={.crtc=&crtc};
+ state.shadow.base=(struct drm_plane_state){.fb=&fb,.crtc=&test_drm_if.crtc,.state=&atomic};
+ test_drm_if.usb_dev=&usb;
+ fail_dma_alloc=true;fail_page_at=page_allocs+1;
+ assert(fl2000_prepare_fb(&plane,&state.shadow.base)==-ENOMEM);
+ assert(!state.prepared && !map_refs);
+ fail_dma_alloc=false;fail_page_at=0;
+ assert(!fl2000_prepare_fb(&plane,&state.shadow.base) && state.prepared && map_refs==1);
+ fl2000_cleanup_fb(&plane,&state.shadow.base);
+ assert(!state.prepared && !map_refs && dma_allocs-dma_frees==dma_live);
+ crtc.mode_changed=false;
+ unsigned int allocated=dma_allocs;
+ assert(!fl2000_prepare_fb(&plane,&state.shadow.base) && !state.prepared);
+ assert(dma_allocs==allocated); /* Ordinary page flips allocate no wire buffers. */
+ fl2000_cleanup_fb(&plane,&state.shadow.base);
+ test_drm_if.drm.unplugged=true;crtc.mode_changed=true;
+ assert(fl2000_prepare_fb(&plane,&state.shadow.base)==-ENODEV && !map_refs);
+ test_drm_if.drm.unplugged=false;
+}
+
 static void test_atomic_state(void)
 {
  struct drm_plane plane={0};
@@ -684,30 +787,30 @@ static void test_atomic_state(void)
  struct usb_device usb={.speed=USB_SPEED_SUPER};test_drm_if.usb_dev=&usb;
  const struct drm_format_info xrgb={DRM_FORMAT_XRGB8888,{4}};
  struct drm_framebuffer fb={.format=&xrgb};
- struct drm_shadow_plane_state old={.base={.fb=&fb,.src_w=800U<<16,.src_h=600U<<16}}, new=old;
+ struct fl2000_plane_state old={.shadow={.base={.fb=&fb,.src_w=800U<<16,.src_h=600U<<16}}}, new=old;
  int calls=mode_calls;
- assert(!fl2000_display_check(&test_drm_if,&old.base,&crtc));
+ assert(!fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc));
  assert(mode_calls==calls+1 && crtc.no_vblank);
  calls=mode_calls; crtc.mode_changed=false;
  struct drm_display_mode adjusted=crtc.adjusted_mode;
- for(int i=0;i<100;i++)assert(!fl2000_display_check(&test_drm_if,&old.base,&crtc));
+ for(int i=0;i<100;i++)assert(!fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc));
  assert(mode_calls==calls && !memcmp(&adjusted,&crtc.adjusted_mode,sizeof(adjusted)));
- old.base.src_x=1;
- assert(fl2000_display_check(&test_drm_if,&old.base,&crtc)==-EINVAL);
- old.base.src_x=0;
+ old.shadow.base.src_x=1;
+ assert(fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc)==-EINVAL);
+ old.shadow.base.src_x=0;
  const struct drm_format_info rgb888={DRM_FORMAT_RGB888,{3}},rgb565={DRM_FORMAT_RGB565,{2}};
  usb.speed=USB_SPEED_HIGH;
  crtc.mode=(struct drm_display_mode){.clock=25175,.hdisplay=640,.hsync_start=656,.hsync_end=752,.htotal=800,.vdisplay=480,.vsync_start=490,.vsync_end=492,.vtotal=525};
- crtc.mode_changed=true;old.base.src_w=640U<<16;old.base.src_h=480U<<16;
+ crtc.mode_changed=true;old.shadow.base.src_w=640U<<16;old.shadow.base.src_h=480U<<16;
  fb.format=&rgb888;
- assert(fl2000_display_check(&test_drm_if,&old.base,&crtc)==-EINVAL);
+ assert(fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc)==-EINVAL);
  fb.format=&rgb565;
- assert(!fl2000_display_check(&test_drm_if,&old.base,&crtc));
+ assert(!fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc));
  crtc.mode_changed=false;fb.format=&rgb888;
- assert(fl2000_display_check(&test_drm_if,&old.base,&crtc)==-EINVAL);
+ assert(fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc)==-EINVAL);
  fb.format=&xrgb;usb.speed=USB_SPEED_SUPER;
  /* CRTC-only changes must pull in planes; failures must propagate unchanged. */
- struct drm_atomic_state atomic={.crtc=&crtc,.new_plane=&old.base};
+ struct drm_atomic_state atomic={.crtc=&crtc,.new_plane=&old.shadow.base};
  primary_check_result=-EINVAL;
  assert(fl2000_crtc_atomic_check(&test_drm_if.crtc,&atomic)==-EINVAL && !affected_calls);
  primary_check_result=0;affected_result=-EDEADLK;
@@ -717,28 +820,28 @@ static void test_atomic_state(void)
  plane.dev=&test_drm_if.drm;
  plane_check_result=-ERANGE;
  assert(fl2000_plane_atomic_check(&plane,&atomic)==-ERANGE);
- plane_check_result=0;plane_visible=false;old.base.fb=NULL;
+ plane_check_result=0;plane_visible=false;old.shadow.base.fb=NULL;
  assert(!fl2000_plane_atomic_check(&plane,&atomic));
- old.base.fb=&fb;plane_visible=true;crtc.no_vblank=false;
+ old.shadow.base.fb=&fb;plane_visible=true;crtc.no_vblank=false;
  assert(!fl2000_plane_atomic_check(&plane,&atomic) && crtc.no_vblank);
- old.base.src_w-=1;
+ old.shadow.base.src_w-=1;
  assert(fl2000_plane_atomic_check(&plane,&atomic)==-EINVAL);
- old.base.src_w+=1;
- assert(!fl2000_prepare_fb(&plane,&old.base));
- assert(!fl2000_prepare_fb(&plane,&new.base));
- fl2000_cleanup_fb(&plane,&old.base);
+ old.shadow.base.src_w+=1;
+ assert(!fl2000_prepare_fb(&plane,&old.shadow.base));
+ assert(!fl2000_prepare_fb(&plane,&new.shadow.base));
+ fl2000_cleanup_fb(&plane,&old.shadow.base);
  assert(map_refs==1 && map_creations==1 && !map_removals);
- fl2000_cleanup_fb(&plane,&new.base);
+ fl2000_cleanup_fb(&plane,&new.shadow.base);
  assert(!map_refs && map_removals==1);
  prepare_result=-ENOMEM;
- assert(fl2000_prepare_fb(&plane,&new.base)==-ENOMEM && !map_refs);
+ assert(fl2000_prepare_fb(&plane,&new.shadow.base)==-ENOMEM && !map_refs);
  prepare_result=0;map_result=-ENOMEM;
- assert(fl2000_prepare_fb(&plane,&new.base)==-ENOMEM && !map_refs);
+ assert(fl2000_prepare_fb(&plane,&new.shadow.base)==-ENOMEM && !map_refs);
  map_result=0;map_iomem=true;
- assert(fl2000_prepare_fb(&plane,&new.base)==-EOPNOTSUPP && !map_refs);
- map_iomem=false;new.base.fb=NULL;
- assert(!fl2000_prepare_fb(&plane,&new.base));
- fl2000_cleanup_fb(&plane,&new.base);
+ assert(fl2000_prepare_fb(&plane,&new.shadow.base)==-EOPNOTSUPP && !map_refs);
+ map_iomem=false;new.shadow.base.fb=NULL;
+ assert(!fl2000_prepare_fb(&plane,&new.shadow.base));
+ fl2000_cleanup_fb(&plane,&new.shadow.base);
 }
 
 static void test_register_io(void)
@@ -846,7 +949,7 @@ static void test_queue(void)
 }
 int main(void)
 {
- test_damage_simd_boundaries(); test_partial_damage(); test_conversion(); test_native_reordering(); test_native_formats(); test_native_crop(); test_modes(); test_i2c(); test_register_io(); test_queue(); test_atomic_state(); test_frame_allocation();
+ test_damage_simd_boundaries(); test_partial_damage(); test_conversion(); test_native_reordering(); test_native_formats(); test_native_crop(); test_modes(); test_i2c(); test_register_io(); test_queue(); test_atomic_state(); test_frame_allocation(); test_stream_preparation();
 #ifdef TEST_SIMD
  assert(!fpu_depth);
  simd_cpu_available=false;
@@ -854,7 +957,7 @@ int main(void)
  simd_cpu_available=true; simd_context_available=false;
  test_damage_simd_boundaries(); test_conversion(); test_native_reordering();
 #endif
- puts("PASS: conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, persistent DMA, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers");
+ puts("PASS: conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, persistent DMA, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers, atomic buffer preparation/failure/unwind");
  return 0;
 }
 """
@@ -879,8 +982,6 @@ parts += [
         "fl2000_display_check",
         "fl2000_crtc_atomic_check",
         "fl2000_plane_atomic_check",
-        "fl2000_prepare_fb",
-        "fl2000_cleanup_fb",
     )
 ]
 parts = [
@@ -892,7 +993,7 @@ parts = [
 ]
 parts += [
     structure(stream, name)
-    for name in ("fl2000_frame", "fl2000_transfer", "fl2000_stream")
+    for name in ("fl2000_frame", "fl2000_transfer", "fl2000_stream_buffers", "fl2000_stream")
 ]
 parts += [
     function(stream, name)
@@ -914,9 +1015,16 @@ parts += [
         "fl2000_submit_transfer",
         "fl2000_data_completion",
         "fl2000_stop_stream",
+        "fl2000_streaming_free_buffers",
+        "fl2000_streaming_prepare",
+        "fl2000_streaming_mode_set",
         "fl2000_streaming_enable",
     )
 ]
+parts.append(structure(drm, "fl2000_plane_state"))
+parts += [function(drm, name) for name in (
+    "fl2000_plane_state", "fl2000_prepare_fb", "fl2000_cleanup_fb",
+)]
 parts.append(function(drm, "fl2000_copy_frame"))
 parts.append(function(drm, "fl2000_plane_atomic_update"))
 parts += [

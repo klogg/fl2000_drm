@@ -369,9 +369,59 @@ static int fl2000_display_check(const struct fl2000_drm_if *drm_if,
 	return 0;
 }
 
+struct fl2000_plane_state {
+	struct drm_shadow_plane_state shadow;
+	struct fl2000_stream_buffers *prepared;
+};
+
+static struct fl2000_plane_state *fl2000_plane_state(struct drm_plane_state *state)
+{
+	return container_of(to_drm_shadow_plane_state(state), struct fl2000_plane_state, shadow);
+}
+
+static void fl2000_plane_destroy_state(struct drm_plane *plane, struct drm_plane_state *state)
+{
+	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
+	struct fl2000_plane_state *fl_state = fl2000_plane_state(state);
+
+	fl2000_streaming_free_buffers(drm_if->usb_dev, fl_state->prepared);
+	__drm_gem_destroy_shadow_plane_state(&fl_state->shadow);
+	kfree(fl_state);
+}
+
+static void fl2000_plane_reset(struct drm_plane *plane)
+{
+	struct fl2000_plane_state *state;
+
+	if (plane->state)
+		fl2000_plane_destroy_state(plane, plane->state);
+	plane->state = NULL;
+	state = kzalloc_obj(*state);
+	if (state)
+		__drm_gem_reset_shadow_plane(plane, &state->shadow);
+}
+
+static struct drm_plane_state *fl2000_plane_duplicate_state(struct drm_plane *plane)
+{
+	struct fl2000_plane_state *state;
+
+	state = kzalloc_obj(*state);
+	if (!state)
+		return NULL;
+	/* Mappings and prepared buffers belong to a single commit. */
+	__drm_gem_duplicate_shadow_plane_state(plane, &state->shadow);
+	return &state->shadow.base;
+}
+
 static int fl2000_prepare_fb(struct drm_plane *plane, struct drm_plane_state *state)
 {
-	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
+	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
+	struct fl2000_plane_state *fl_state = fl2000_plane_state(state);
+	struct drm_shadow_plane_state *shadow = &fl_state->shadow;
+	const struct drm_crtc_state *crtc;
+	const struct drm_display_mode *mode;
+	unsigned int bytes_pix;
+	int idx;
 	int ret;
 
 	ret = drm_gem_plane_helper_prepare_fb(plane, state);
@@ -384,14 +434,36 @@ static int fl2000_prepare_fb(struct drm_plane *plane, struct drm_plane_state *st
 		drm_gem_fb_vunmap(state->fb, shadow->map);
 		return -EOPNOTSUPP;
 	}
-	return 0;
+	crtc = state->crtc ? drm_atomic_get_new_crtc_state(state->state, state->crtc) : NULL;
+	if (!crtc || !crtc->active || !drm_atomic_crtc_needs_modeset(crtc))
+		return 0;
+	if (!drm_dev_enter(plane->dev, &idx)) {
+		ret = -ENODEV;
+		goto unmap;
+	}
+	mode = &crtc->adjusted_mode;
+	bytes_pix = fl2000_frame_bytes_pix(drm_if->usb_dev->speed, mode, state->fb->format->format);
+	fl_state->prepared = fl2000_streaming_prepare(drm_if->usb_dev,
+						      mode->hdisplay * mode->vdisplay, bytes_pix);
+	ret = PTR_ERR_OR_ZERO(fl_state->prepared);
+	if (ret)
+		fl_state->prepared = NULL;
+	drm_dev_exit(idx);
+	if (!ret)
+		return 0;
+unmap:
+	drm_gem_fb_vunmap(state->fb, shadow->map);
+	return ret;
 }
 
-static void fl2000_cleanup_fb(struct drm_plane *plane __always_unused,
-			      struct drm_plane_state *state)
+static void fl2000_cleanup_fb(struct drm_plane *plane, struct drm_plane_state *state)
 {
-	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
+	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
+	struct fl2000_plane_state *fl_state = fl2000_plane_state(state);
+	struct drm_shadow_plane_state *shadow = &fl_state->shadow;
 
+	fl2000_streaming_free_buffers(drm_if->usb_dev, fl_state->prepared);
+	fl_state->prepared = NULL;
 	if (state->fb)
 		drm_gem_fb_vunmap(state->fb, shadow->map);
 }
@@ -447,9 +519,6 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_
 	bytes_pix = fl2000_frame_bytes_pix(usb_dev->speed, mode, format);
 	if (!bytes_pix)
 		return -EINVAL;
-	ret = fl2000_streaming_mode_set(usb_dev, mode->hdisplay * mode->vdisplay, bytes_pix);
-	if (ret)
-		return ret;
 	/* Reset before programming: the cache must describe the current hardware. */
 	ret = fl2000_reset(usb_dev);
 	if (ret)
@@ -518,7 +587,10 @@ static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_s
 
 	if (!drm_dev_enter(&drm_if->drm, &idx))
 		return;
-	ret = fl2000_configure_mode(drm_if, &crtc_state->adjusted_mode, plane->fb->format->format);
+	ret = fl2000_streaming_mode_set(drm_if->usb_dev, &fl2000_plane_state(plane)->prepared);
+	if (!ret)
+		ret = fl2000_configure_mode(drm_if, &crtc_state->adjusted_mode,
+					    plane->fb->format->format);
 	if (!ret)
 		ret = fl2000_copy_frame(drm_if, plane, NULL);
 	if (!ret)
@@ -587,7 +659,9 @@ static const struct drm_plane_funcs fl2000_plane_funcs = {
 	.update_plane = drm_atomic_helper_update_plane,
 	.disable_plane = drm_atomic_helper_disable_plane,
 	.destroy = drm_plane_cleanup,
-	DRM_GEM_SHADOW_PLANE_FUNCS,
+	.reset = fl2000_plane_reset,
+	.atomic_duplicate_state = fl2000_plane_duplicate_state,
+	.atomic_destroy_state = fl2000_plane_destroy_state,
 };
 
 static const struct drm_plane_helper_funcs fl2000_plane_helper_funcs = {
