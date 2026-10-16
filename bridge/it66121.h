@@ -29,7 +29,8 @@
 struct fl2000_bridge {
 	struct drm_bridge *bridge;
 	struct drm_connector **connector;
-	void (*interrupt)(struct drm_bridge *bridge);
+	/* Return zero after status processing, or a negative errno for retry. */
+	int (*interrupt)(struct drm_bridge *bridge);
 };
 
 #endif /* __IT66121_H__ */

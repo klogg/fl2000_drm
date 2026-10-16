@@ -133,7 +133,7 @@ int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset,
 int fl2000_drm_init(struct usb_device *usb_dev);
 void fl2000_drm_cleanup(struct usb_device *usb_dev);
 /* ... and interface */
-void fl2000_drm_hotplug(const struct usb_device *usb_dev);
+int fl2000_drm_hotplug(const struct usb_device *usb_dev);
 void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling);
 int fl2000_drm_suspend(struct usb_device *usb_dev);
 int fl2000_drm_resume(struct usb_device *usb_dev);

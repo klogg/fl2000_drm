@@ -5,26 +5,31 @@
  */
 #include "fl2000.h"
 
-#define FL2000_INTR_STALL_RETRIES 3
+#define FL2000_INTR_STALL_RETRIES   3
+#define FL2000_INTR_STATUS_RETRY_MS 1000
 
 struct fl2000_interrupt {
 	struct usb_device *usb_dev;
 	struct urb *urb;
 	u8 *buf;
-	struct work_struct work;
+	struct delayed_work work;
 	struct mutex mutex; /* Serializes enable, disable and resource release. */
 	spinlock_t lock; /* Serializes submission against stop. */
 	unsigned int stalls;
 	bool stalled;
 	bool rearm;
 	bool fallback;
+	bool status_polling; /* Owned by the worker; reset after cancellation. */
 	bool enabled;
 };
 
 static void fl2000_intr_work(struct work_struct *work)
 {
-	struct fl2000_interrupt *intr = container_of(work, struct fl2000_interrupt, work);
+	struct fl2000_interrupt *intr =
+		container_of(to_delayed_work(work), struct fl2000_interrupt, work);
 	unsigned long flags;
+	const unsigned long retry_delay = msecs_to_jiffies(FL2000_INTR_STATUS_RETRY_MS);
+	bool retry;
 	int ret;
 
 	if (!READ_ONCE(intr->enabled)) {
@@ -44,10 +49,15 @@ static void fl2000_intr_work(struct work_struct *work)
 		if (intr->enabled) {
 			if (!ret) {
 				intr->stalled = false;
-				ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
+				if (intr->status_polling)
+					intr->rearm = true;
+				else
+					ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
 			}
 			if (ret)
 				intr->enabled = false;
+			else if (intr->status_polling)
+				schedule_delayed_work(&intr->work, retry_delay);
 		}
 		spin_unlock_irqrestore(&intr->lock, flags);
 		if (ret) {
@@ -58,20 +68,33 @@ static void fl2000_intr_work(struct work_struct *work)
 		return;
 	}
 	ret = fl2000_check_interrupt(intr->usb_dev);
-	if (ret > 0)
-		fl2000_drm_hotplug(intr->usb_dev);
-	else if (ret < 0)
-		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt status read failed: %d\n", ret);
+	/* A previous failed read may already have cleared the FL2000 event bit. */
+	if (ret >= 0 && (ret > 0 || intr->status_polling))
+		ret = fl2000_drm_hotplug(intr->usb_dev);
+	retry = ret < 0;
+	if (retry) {
+		if (!intr->status_polling) {
+			intr->status_polling = true;
+			fl2000_drm_set_polling(intr->usb_dev, true);
+		}
+		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt status processing failed: %d\n",
+				    ret);
+	} else if (intr->status_polling) {
+		intr->status_polling = false;
+		fl2000_drm_set_polling(intr->usb_dev, false);
+	}
 
 	/* Acknowledge the device and bridge before requesting another packet. */
 	ret = 0;
 	spin_lock_irqsave(&intr->lock, flags);
-	if (intr->enabled && intr->rearm) {
+	if (intr->enabled && intr->rearm && !retry) {
 		intr->rearm = false;
 		ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
 		if (ret)
 			intr->enabled = false;
 	}
+	if (intr->enabled && retry)
+		schedule_delayed_work(&intr->work, retry_delay);
 	spin_unlock_irqrestore(&intr->lock, flags);
 	if (ret) {
 		fl2000_drm_set_polling(intr->usb_dev, true);
@@ -93,20 +116,20 @@ static void fl2000_intr_completion(struct urb *urb)
 		if (++intr->stalls > FL2000_INTR_STALL_RETRIES) {
 			intr->enabled = false;
 			intr->fallback = true;
-			schedule_work(&intr->work);
+			mod_delayed_work(system_wq, &intr->work, 0);
 			exhausted = true;
 		} else {
 			intr->stalled = true;
-			schedule_work(&intr->work);
+			mod_delayed_work(system_wq, &intr->work, 0);
 		}
 	} else if (status) {
 		intr->enabled = false;
 		intr->fallback = true;
-		schedule_work(&intr->work);
+		mod_delayed_work(system_wq, &intr->work, 0);
 	} else {
 		intr->stalls = 0;
 		intr->rearm = true;
-		schedule_work(&intr->work);
+		mod_delayed_work(system_wq, &intr->work, 0);
 	}
 unlock:
 	spin_unlock_irqrestore(&intr->lock, flags);
@@ -130,7 +153,8 @@ static void fl2000_intr_stop(struct fl2000_interrupt *intr)
 	intr->stalls = 0;
 	spin_unlock_irqrestore(&intr->lock, flags);
 	usb_kill_urb(intr->urb);
-	cancel_work_sync(&intr->work);
+	cancel_delayed_work_sync(&intr->work);
+	intr->status_polling = false;
 }
 
 static void fl2000_intr_release(struct device *dev __always_unused, void *res)
@@ -156,7 +180,8 @@ int fl2000_enable_interrupt(struct usb_device *usb_dev)
 	mutex_lock(&intr->mutex);
 	if (!READ_ONCE(intr->enabled)) {
 		usb_kill_urb(intr->urb);
-		cancel_work_sync(&intr->work);
+		cancel_delayed_work_sync(&intr->work);
+		intr->status_polling = false;
 		if (intr->urb->status == -EPIPE) {
 			ret = usb_clear_halt(usb_dev, intr->urb->pipe);
 			if (ret)
@@ -175,7 +200,7 @@ int fl2000_enable_interrupt(struct usb_device *usb_dev)
 			intr->enabled = false;
 		else
 			/* A stale pending event may suppress further notifications. */
-			schedule_work(&intr->work);
+			mod_delayed_work(system_wq, &intr->work, 0);
 		spin_unlock_irqrestore(&intr->lock, flags);
 	}
 out:
@@ -214,7 +239,7 @@ int fl2000_interrupt_create(struct usb_interface *interface)
 	intr->usb_dev = usb_dev;
 	mutex_init(&intr->mutex);
 	spin_lock_init(&intr->lock);
-	INIT_WORK(&intr->work, fl2000_intr_work);
+	INIT_DELAYED_WORK(&intr->work, fl2000_intr_work);
 	intr->urb = usb_alloc_urb(0, GFP_KERNEL);
 	intr->buf = kmalloc(1, GFP_KERNEL);
 	if (!intr->urb || !intr->buf) {

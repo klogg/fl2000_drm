@@ -52,7 +52,7 @@ struct hdmi_avi_infoframe { int unused; };
 enum drm_connector_status { connector_status_connected, connector_status_disconnected, connector_status_unknown };
 enum drm_mode_status { MODE_OK, MODE_BAD, MODE_CLOCK_HIGH, MODE_CLOCK_LOW };
 struct regmap { u8 values[512]; };
-static int fault_reg=-1, writes, notifications;
+static int fault_reg=-1, fault_write_reg=-1, writes, notifications;
 static bool unplugged;
 static enum drm_connector_status notified_status;
 static int regmap_read(struct regmap *map,unsigned int r,unsigned int *v)
@@ -64,7 +64,7 @@ static int regmap_read(struct regmap *map,unsigned int r,unsigned int *v)
 static int regmap_write(struct regmap *map,unsigned int r,unsigned int v)
 {
  assert(r<512);
- if ((int)r==fault_reg) return -EIO;
+ if ((int)r==fault_reg || (int)r==fault_write_reg) return -EIO;
  writes++;map->values[r]=v;
  if(r==0x0c && (v&1))map->values[6]&=~1;
  if(r==0x0e && (v&1))map->values[0x0e]&=~0x80;
@@ -140,16 +140,29 @@ int main(void)
  assert(it66121_bridge_detect(&ctx.bridge,&connector)==connector_status_disconnected);
  unplugged=false;
  /* The interrupt path owns acknowledgment and only notifies real HPD events. */
- it66121_bridge_interrupt(&ctx.bridge);
+ assert(!it66121_bridge_interrupt(&ctx.bridge));
  assert(notifications==1 && notified_status==connector_status_connected);
  assert(!(map.values[IT66121_INT_STATUS1_REG]&1));
  assert(!(map.values[IT66121_SYS_STATUS_REG]&0x80));
- writes=0;it66121_bridge_interrupt(&ctx.bridge);
+ writes=0;assert(!it66121_bridge_interrupt(&ctx.bridge));
  assert(notifications==1 && writes==0);
  map.values[IT66121_SYS_STATUS_REG]=0x80;
  map.values[IT66121_INT_STATUS1_REG]=1;
- it66121_bridge_interrupt(&ctx.bridge);
+ assert(!it66121_bridge_interrupt(&ctx.bridge));
  assert(notifications==2 && notified_status==connector_status_disconnected);
+ /* Failed status reads and acknowledgments must reach the USB worker. */
+ const unsigned int irq_regs[]={IT66121_SYS_STATUS_REG,IT66121_INT_STATUS1_REG,IT66121_INT_CLR1_REG};
+ for(unsigned int i=0;i<sizeof(irq_regs)/sizeof(irq_regs[0]);i++) {
+  map.values[IT66121_SYS_STATUS_REG]=0xc0;map.values[IT66121_INT_STATUS1_REG]=1;
+  fault_reg=(int)irq_regs[i];int previous=notifications;
+  assert(it66121_bridge_interrupt(&ctx.bridge)==-EIO && notifications==previous);
+ }
+ fault_reg=-1;
+ map.values[IT66121_SYS_STATUS_REG]=0xc0;map.values[IT66121_INT_STATUS1_REG]=1;
+ fault_write_reg=IT66121_SYS_STATUS_REG;int before_ack=notifications;
+ assert(it66121_bridge_interrupt(&ctx.bridge)==-EIO && notifications==before_ack);
+ fault_write_reg=-1;
+ assert(!it66121_bridge_interrupt(&ctx.bridge) && notifications==before_ack);
  /* Mode limits and error propagation retain existing behavior. */
  struct drm_display_mode mode={.clock=25000};
  assert(it66121_bridge_mode_valid(&ctx.bridge,&connector.display_info,&mode)==MODE_OK);
@@ -167,7 +180,6 @@ names = (
     "it66121_fire_afe",
     "it66121_configure_input",
     "it66121_configure_afe",
-    "it66121_is_hpd_detect",
     "it66121_set_mute",
     "it66121_restore_interrupts",
     "it66121_configure_hdmi",

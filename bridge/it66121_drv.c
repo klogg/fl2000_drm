@@ -298,16 +298,6 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 	return 0;
 }
 
-static bool it66121_is_hpd_detect(struct it66121_ctx *ctx)
-{
-	unsigned int val;
-
-	if (regmap_read(ctx->regmap, IT66121_SYS_STATUS_REG, &val))
-		return false;
-
-	return val & IT66121_SYS_STATUS_HPDETECT;
-}
-
 static int it66121_bridge_attach(struct drm_bridge *bridge, struct drm_encoder *encoder,
 				 enum drm_bridge_attach_flags flags)
 {
@@ -667,45 +657,39 @@ static const struct drm_bridge_funcs it66121_bridge_funcs = {
 	.hpd_disable = it66121_bridge_hpd_disable,
 };
 
-static void it66121_bridge_interrupt(struct drm_bridge *bridge)
+static int it66121_bridge_interrupt(struct drm_bridge *bridge)
 {
-	int ret;
-	unsigned int val;
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
-	const struct device *dev = ctx->dev;
 	enum drm_connector_status status;
+	unsigned int val;
 	bool event = false;
+	int ret;
 
 	mutex_lock(&ctx->lock);
-
 	ret = regmap_read(ctx->regmap, IT66121_SYS_STATUS_REG, &val);
-	if (ret)
+	if (ret || !(val & IT66121_SYS_STATUS_ACTIVE_IRQ))
 		goto unlock;
-
-	if (!(val & IT66121_SYS_STATUS_ACTIVE_IRQ))
-		goto unlock;
+	status = val & IT66121_SYS_STATUS_HPDETECT ? connector_status_connected :
+						     connector_status_disconnected;
 
 	ret = regmap_read(ctx->regmap, IT66121_INT_STATUS1_REG, &val);
-	if (ret) {
-		dev_err(dev, "Cannot read STATUS1_REG %d\n", ret);
-	} else if (val & IT66121_INT_STATUS1_HPD_STATUS) {
-		regmap_write_bits(ctx->regmap, IT66121_INT_CLR1_REG, IT66121_INT_CLR1_HPD,
-				  IT66121_INT_CLR1_HPD);
-
-		status = it66121_is_hpd_detect(ctx) ? connector_status_connected :
-						      connector_status_disconnected;
-
+	if (ret)
+		goto unlock;
+	if (val & IT66121_INT_STATUS1_HPD_STATUS) {
+		ret = regmap_write_bits(ctx->regmap, IT66121_INT_CLR1_REG, IT66121_INT_CLR1_HPD,
+					IT66121_INT_CLR1_HPD);
+		if (ret)
+			goto unlock;
 		event = true;
 	}
 
-	regmap_write_bits(ctx->regmap, IT66121_SYS_STATUS_REG, IT66121_SYS_STATUS_CLEAR_IRQ,
-			  IT66121_SYS_STATUS_CLEAR_IRQ);
-
+	ret = regmap_write_bits(ctx->regmap, IT66121_SYS_STATUS_REG, IT66121_SYS_STATUS_CLEAR_IRQ,
+				IT66121_SYS_STATUS_CLEAR_IRQ);
 unlock:
 	mutex_unlock(&ctx->lock);
-
-	if (event)
+	if (!ret && event)
 		drm_bridge_hpd_notify(&ctx->bridge, status);
+	return ret;
 }
 
 /* USB component glue: the bridge has no Device Tree graph or GPIO IRQ. */

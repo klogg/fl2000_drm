@@ -702,22 +702,26 @@ static int fl2000_pipeline_init(struct fl2000_drm_if *drm_if)
 	return 0;
 }
 
-void fl2000_drm_hotplug(const struct usb_device *usb_dev)
+int fl2000_drm_hotplug(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct drm_device *drm = READ_ONCE(device->drm);
 	int idx;
+	int ret = -ENODEV;
 
 	if (drm && drm_dev_enter(drm, &idx)) {
 		struct fl2000_drm_if *drm_if = container_of(drm, struct fl2000_drm_if, drm);
 
-		if (drm_if->bridge.interrupt)
-			drm_if->bridge.interrupt(drm_if->bridge.bridge);
-		/* Update the cached connector status even without periodic polling. */
-		if (!drm_helper_hpd_irq_event(drm))
-			drm_kms_helper_hotplug_event(drm);
+		ret = drm_if->bridge.interrupt ? drm_if->bridge.interrupt(drm_if->bridge.bridge) :
+						 0;
+		if (!ret) {
+			/* Update cached status even without periodic polling. */
+			if (!drm_helper_hpd_irq_event(drm))
+				drm_kms_helper_hotplug_event(drm);
+		}
 		drm_dev_exit(idx);
 	}
+	return ret;
 }
 
 void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
