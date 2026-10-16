@@ -170,11 +170,12 @@ static void fl2000_intr_release(struct device *dev __always_unused, void *res)
 
 int fl2000_enable_interrupt(struct usb_device *usb_dev)
 {
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct fl2000_interrupt *intr;
 	unsigned long flags;
 	int ret = 0;
 
-	intr = devres_find(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
+	intr = device->interrupt;
 	if (!intr)
 		return -ENODEV;
 	mutex_lock(&intr->mutex);
@@ -212,9 +213,10 @@ out:
 
 int fl2000_disable_interrupt(struct usb_device *usb_dev)
 {
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct fl2000_interrupt *intr;
 
-	intr = devres_find(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
+	intr = device->interrupt;
 	if (!intr)
 		return 0;
 	mutex_lock(&intr->mutex);
@@ -225,6 +227,7 @@ int fl2000_disable_interrupt(struct usb_device *usb_dev)
 
 int fl2000_interrupt_create(struct usb_interface *interface)
 {
+	struct fl2000_device *device = dev_get_drvdata(&interface_to_usbdev(interface)->dev);
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct usb_endpoint_descriptor *ep;
 	struct fl2000_interrupt *intr;
@@ -250,10 +253,15 @@ int fl2000_interrupt_create(struct usb_interface *interface)
 	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, INTERRUPT_EP), intr->buf, 1,
 			 fl2000_intr_completion, intr, ep->bInterval);
 	devres_add(&usb_dev->dev, intr);
+	device->interrupt = intr;
 	return 0;
 }
 
 void fl2000_interrupt_destroy(struct usb_interface *interface)
 {
-	devres_release(&interface_to_usbdev(interface)->dev, fl2000_intr_release, NULL, NULL);
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
+	devres_release(&usb_dev->dev, fl2000_intr_release, NULL, NULL);
+	device->interrupt = NULL;
 }

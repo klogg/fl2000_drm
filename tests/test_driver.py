@@ -38,9 +38,10 @@ struct usb_device { int speed; struct device dev; struct usb_interface *ifs[3]; 
 struct usb_driver { int unused; };
 struct usb_device_id { int unused; };
 static struct usb_driver fl2000_driver;
-static int fl2000_device_lock;
-static void mutex_lock(int *lock) { assert(!*lock);*lock=1; }
-static void mutex_unlock(int *lock) { assert(*lock);*lock=0; }
+struct mutex { int locked; };
+static void mutex_init(struct mutex *lock) { lock->locked=0; }
+static void mutex_lock(struct mutex *lock) { assert(!lock->locked);lock->locked=1; }
+static void mutex_unlock(struct mutex *lock) { assert(lock->locked);lock->locked=0; }
 #define interface_to_usbdev(i) ((i)->usb)
 #define dev_get_drvdata(d) ((d)->data)
 #define dev_set_drvdata(d,v) ((d)->data=(v))
@@ -122,6 +123,15 @@ int main(void)
   interfaces[busy].owner=0;interfaces[busy].data=NULL;
   for(int i=0;i<3;i++)assert(!interfaces[i].owner && !interfaces[i].data);
  }
+ /* A locked adapter must not prevent an independent adapter from probing. */
+ struct fl2000_device *first=usb.dev.data;
+ struct usb_device other={.speed=USB_SPEED_HIGH};
+ struct usb_interface other_control={.usb=&other,.cur_altsetting=&alts[0]};
+ mutex_lock(&first->lock);
+ assert(fl2000_probe(&other_control,NULL)==-ENODEV);
+ assert(other.dev.data && other.dev.data!=first && first->lock.locked);
+ mutex_unlock(&first->lock);
+ free(other.dev.data);
  /* Inject failure at every setup operation, then retry using the same state. */
  for(int failure=1;failure<=9;failure++) {
   fail_step=failure;step=destroy_count=0;

@@ -125,7 +125,9 @@ static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 /* Callers must keep control-interface resources alive while using the adapter. */
 struct i2c_adapter *fl2000_i2c_adapter(struct usb_device *usb_dev)
 {
-	return devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
+	return device->i2c;
 }
 
 /**
@@ -188,6 +190,7 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	static const unsigned short addresses[] = { 0x4c, 0x4d, I2C_CLIENT_END };
 	struct i2c_board_info info = { I2C_BOARD_INFO("it66121", 0) };
 	struct i2c_client *client;
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	int ret;
 	struct i2c_adapter *adapter;
 
@@ -214,10 +217,12 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	}
 
 	devres_add(&usb_dev->dev, adapter);
+	device->i2c = adapter;
 	client = i2c_new_scanned_device(adapter, &info, addresses, fl2000_bridge_detect);
 	if (IS_ERR(client)) {
 		ret = PTR_ERR_OR_ZERO(client);
 		devres_release(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
+		device->i2c = NULL;
 		return ret;
 	}
 	return 0;
@@ -225,5 +230,8 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 
 void fl2000_i2c_cleanup(struct usb_device *usb_dev)
 {
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
 	devres_release(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
+	device->i2c = NULL;
 }

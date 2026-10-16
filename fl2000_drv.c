@@ -6,8 +6,6 @@
 #include "fl2000.h"
 
 static struct usb_driver fl2000_driver;
-/* USB probes for different interfaces and different drivers may run concurrently. */
-static DEFINE_MUTEX(fl2000_device_lock);
 
 static const struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_NUMBER(0x1d5c, 0x2000, FL2000_USBIF_AVCONTROL) },
@@ -101,16 +99,18 @@ static int fl2000_probe(struct usb_interface *interface,
 	if (usb_dev->speed < USB_SPEED_HIGH ||
 	    interface->cur_altsetting->desc.bInterfaceNumber != FL2000_USBIF_AVCONTROL)
 		return -ENODEV;
-	mutex_lock(&fl2000_device_lock);
+	/* USB core holds the parent device lock while probing an interface. */
 	device = dev_get_drvdata(&usb_dev->dev);
 	if (!device) {
 		device = devm_kzalloc(&usb_dev->dev, sizeof(*device), GFP_KERNEL);
 		if (!device) {
 			ret = -ENOMEM;
-			goto out;
+			return ret;
 		}
+		mutex_init(&device->lock);
 		dev_set_drvdata(&usb_dev->dev, device);
 	}
+	mutex_lock(&device->lock);
 	device->interfaces[FL2000_USBIF_AVCONTROL] = interface;
 	usb_set_intfdata(interface, device);
 	/* Own the complete device before changing endpoints or hardware state. */
@@ -147,7 +147,7 @@ cleanup:
 release:
 	fl2000_release_interfaces(device, interface);
 out:
-	mutex_unlock(&fl2000_device_lock);
+	mutex_unlock(&device->lock);
 	return ret;
 }
 
@@ -158,10 +158,10 @@ static void fl2000_disconnect(struct usb_interface *interface)
 
 	if (!device)
 		return;
-	mutex_lock(&fl2000_device_lock);
+	mutex_lock(&device->lock);
 	fl2000_cleanup(usb_dev, device);
 	fl2000_release_interfaces(device, interface);
-	mutex_unlock(&fl2000_device_lock);
+	mutex_unlock(&device->lock);
 }
 
 static int fl2000_suspend(struct usb_interface *interface, pm_message_t message __always_unused)
@@ -169,13 +169,15 @@ static int fl2000_suspend(struct usb_interface *interface, pm_message_t message 
 	struct fl2000_device *device = usb_get_intfdata(interface);
 	int ret = 0;
 
-	mutex_lock(&fl2000_device_lock);
-	if (device && !device->suspended) {
+	if (!device)
+		return 0;
+	mutex_lock(&device->lock);
+	if (!device->suspended) {
 		ret = fl2000_drm_suspend(interface_to_usbdev(interface));
 		if (!ret)
 			device->suspended = true;
 	}
-	mutex_unlock(&fl2000_device_lock);
+	mutex_unlock(&device->lock);
 	return ret;
 }
 
@@ -187,15 +189,17 @@ static int fl2000_resume(struct usb_interface *interface)
 	/* The control interface owns restoration after all USB endpoints return. */
 	if (interface->cur_altsetting->desc.bInterfaceNumber != FL2000_USBIF_AVCONTROL)
 		return 0;
-	mutex_lock(&fl2000_device_lock);
-	if (device && device->suspended) {
+	if (!device)
+		return 0;
+	mutex_lock(&device->lock);
+	if (device->suspended) {
 		ret = usb_set_interface(interface_to_usbdev(interface), FL2000_USBIF_AVCONTROL, 1);
 		if (!ret)
 			ret = fl2000_drm_resume(interface_to_usbdev(interface));
 		if (!ret)
 			device->suspended = false;
 	}
-	mutex_unlock(&fl2000_device_lock);
+	mutex_unlock(&device->lock);
 	return ret;
 }
 

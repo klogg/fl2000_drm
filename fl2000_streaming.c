@@ -204,7 +204,9 @@ static void fl2000_streaming_release(struct device *dev __always_unused, void *r
 
 static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev)
 {
-	return devres_find(&usb_dev->dev, fl2000_streaming_release, NULL, NULL);
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
+	return device->stream;
 }
 
 static u16 fl2000_rgb565(u32 pixel)
@@ -641,6 +643,7 @@ void fl2000_streaming_disable(struct usb_device *usb_dev)
 
 int fl2000_streaming_create(struct usb_interface *interface)
 {
+	struct fl2000_device *device = dev_get_drvdata(&interface_to_usbdev(interface)->dev);
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
 	struct usb_interface *control = usb_ifnum_to_if(usb_dev, FL2000_USBIF_AVCONTROL);
 	struct usb_endpoint_descriptor *ep;
@@ -670,6 +673,7 @@ int fl2000_streaming_create(struct usb_interface *interface)
 		transfer->urb->transfer_flags = URB_ZERO_PACKET;
 	}
 	devres_add(&usb_dev->dev, stream);
+	device->stream = stream;
 	return 0;
 fail:
 	fl2000_streaming_release(&usb_dev->dev, stream);
@@ -679,5 +683,9 @@ fail:
 
 void fl2000_streaming_destroy(struct usb_interface *interface)
 {
-	devres_release(&interface_to_usbdev(interface)->dev, fl2000_streaming_release, NULL, NULL);
+	struct usb_device *usb_dev = interface_to_usbdev(interface);
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
+	devres_release(&usb_dev->dev, fl2000_streaming_release, NULL, NULL);
+	device->stream = NULL;
 }

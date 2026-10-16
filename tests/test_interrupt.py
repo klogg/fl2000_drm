@@ -39,10 +39,10 @@ struct urb { int status,pipe;void *context;bool submitted; };
 #define mutex_lock(p) ((void)(p))
 #define mutex_unlock(p) ((void)(p))
 struct fl2000_interrupt;
-static struct fl2000_interrupt *resource;
-static void fl2000_intr_release(void *dev,void *res) { (void)dev;(void)res; }
-static void *devres_find(void *dev,void (*release)(void *,void *),void *match,void *data)
-{ (void)dev;(void)release;(void)match;(void)data;return resource; }
+struct fl2000_device { struct fl2000_interrupt *interrupt; };
+static struct fl2000_device device;
+#define resource device.interrupt
+static void *dev_get_drvdata(void *dev) { (void)dev;return &device; }
 static int submissions,submit_error,clear_count,clear_error,status_reads,status_result,hotplugs,logs;
 static int poll_enables,poll_disables,hotplug_result;
 static bool polling_current;
