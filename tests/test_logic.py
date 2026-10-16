@@ -230,6 +230,7 @@ static void usb_kill_urb(struct urb *urb);
 static struct fl2000_stream *test_stream;
 static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev);
 #define I2C_M_RD 1
+#define I2C_M_DMA_SAFE 0x0200
 #define I2C_XFER_ADDR_MASK (~0x3ul)
 struct i2c_adapter { void *algo_data; };
 #define I2C_LOCK_ROOT_ADAPTER 1
@@ -643,6 +644,28 @@ static void test_i2c(void)
  msgs[0].buf = &aligned; msgs[1].buf = group; msgs[1].len = 4;
  assert(fl2000_i2c_xfer(&adapter, msgs, 2) == 2);
  assert(group[0] == 0x78 && group[3] == 0x12);
+ /* The DMA-safe annotation is independent for each message and read size. */
+ for(unsigned int len=1;len<=4;len+=3) {
+  msgs[1].len=len;
+  for(unsigned int flags=0;flags<4;flags++) {
+   msgs[0].flags=(flags&1)?I2C_M_DMA_SAFE:0;
+   msgs[1].flags=I2C_M_RD|((flags&2)?I2C_M_DMA_SAFE:0);
+   assert(fl2000_i2c_xfer(&adapter,msgs,2)==2 && group[0]==0x78);
+  }
+ }
+ int rejected_calls=i2c_calls;
+ for(unsigned int bit=0;bit<16;bit++) {
+  unsigned int flag=1U<<bit;
+  if(flag==I2C_M_DMA_SAFE)continue;
+  msgs[0].flags=I2C_M_DMA_SAFE|flag;msgs[1].flags=I2C_M_RD|I2C_M_DMA_SAFE;
+  assert(fl2000_i2c_xfer(&adapter,msgs,2)==-EOPNOTSUPP);
+  msgs[0].flags=I2C_M_DMA_SAFE;msgs[1].flags=I2C_M_RD|I2C_M_DMA_SAFE|flag;
+  if(flag!=I2C_M_RD)assert(fl2000_i2c_xfer(&adapter,msgs,2)==-EOPNOTSUPP);
+ }
+ msgs[1].flags=I2C_M_DMA_SAFE;
+ assert(fl2000_i2c_xfer(&adapter,msgs,2)==-EOPNOTSUPP); /* Missing read bit. */
+ assert(i2c_calls==rejected_calls);
+ msgs[0].flags=0;msgs[1].flags=I2C_M_RD;msgs[1].len=4;
  aligned++;
  assert(fl2000_i2c_xfer(&adapter, msgs, 2) == -EOPNOTSUPP);
  u8 full[] = {0xfc, 1, 2, 3, 4};
@@ -650,6 +673,14 @@ static void test_i2c(void)
  int before = i2c_calls;
  assert(fl2000_i2c_xfer(&adapter, msgs, 1) == 1);
  assert(i2c_calls == before + 1 && i2c_value == 0x04030201);
+ msgs[0].flags=I2C_M_DMA_SAFE;
+ before=i2c_calls;
+ assert(fl2000_i2c_xfer(&adapter,msgs,1)==1 && i2c_calls==before+1);
+ u8 byte_write[]={0xff,0xab};msgs[0].buf=byte_write;msgs[0].len=2;
+ before=i2c_calls;
+ assert(fl2000_i2c_xfer(&adapter,msgs,1)==1 && i2c_calls==before+2);
+ assert(i2c_value==0xab030201); /* Preserve the other three bytes. */
+ msgs[0].flags=0;
  msgs[0].buf = &reg; msgs[0].len = 1;
  msgs[1].buf = &value; msgs[1].len = 1; i2c_value = 0x12345678;
  int calls = i2c_calls;

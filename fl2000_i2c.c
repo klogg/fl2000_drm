@@ -28,12 +28,14 @@ static bool fl2000_i2c_xfer_valid(const struct i2c_msg *msgs, int num)
 {
 	bool read;
 
-	if (!msgs || (num != 1 && num != 2) || !msgs[0].buf || msgs[0].flags || msgs[0].addr > 0x7f)
+	/* DMA safety describes the buffer and does not change the wire protocol. */
+	if (!msgs || (num != 1 && num != 2) || !msgs[0].buf || (msgs[0].flags & ~I2C_M_DMA_SAFE) ||
+	    msgs[0].addr > 0x7f)
 		return false;
 	read = num == 2;
 	if (read) {
 		if (msgs[0].len != 1 || !msgs[1].buf || (msgs[1].len != 1 && msgs[1].len != 4) ||
-		    msgs[1].flags != I2C_M_RD || msgs[1].addr != msgs[0].addr)
+		    (msgs[1].flags & ~I2C_M_DMA_SAFE) != I2C_M_RD || msgs[1].addr != msgs[0].addr)
 			return false;
 	} else if (msgs[0].len != 2 && msgs[0].len != 5) {
 		return false;
