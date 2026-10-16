@@ -809,7 +809,6 @@ static int fl2000_drm_bind(struct device *master)
 		drm_dev_unplug(drm);
 		drm_atomic_helper_shutdown(drm);
 		fl2000_streaming_disable(usb_dev);
-		drm_dev_unregister(drm);
 		goto detach;
 	}
 
