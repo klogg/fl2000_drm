@@ -11,8 +11,6 @@
 #include <linux/types.h>
 #include <linux/math64.h>
 #include <linux/kernel.h>
-#include <linux/printk.h>
-#include <linux/init.h>
 #include <linux/usb.h>
 #include <linux/i2c.h>
 #include <linux/component.h>
@@ -22,7 +20,6 @@
 #include <linux/device.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_vblank.h>
-#include <drm/drm_ioctl.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_framebuffer.h>
@@ -34,7 +31,6 @@
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_gem_shmem_helper.h>
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_plane_helper.h>
 #include <drm/drm_encoder.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_probe_helper.h>

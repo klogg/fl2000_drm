@@ -7,7 +7,9 @@
 #include "fl2000.h"
 #include <drm/drm_atomic.h>
 #include "bridge/it66121.h"
+#include <drm/drm_bridge.h>
 #include <drm/drm_bridge_connector.h>
+#include <drm/drm_plane_helper.h>
 
 #define DRM_DRIVER_NAME "fl2000_drm"
 #define DRM_DRIVER_DESC "USB-HDMI"

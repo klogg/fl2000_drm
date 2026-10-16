@@ -10,9 +10,25 @@
  * fixed parallel input timing, reset restoration, and polling fallback.
  */
 #include "it66121.h"
+#include <linux/component.h>
+#include <linux/delay.h>
+#include <linux/device.h>
+#include <linux/hdmi.h>
+#include <linux/i2c.h>
 #include <linux/ktime.h>
+#include <linux/module.h>
+#include <linux/mutex.h>
+#include <linux/regmap.h>
 #include <linux/media-bus-format.h>
+#include <drm/drm_atomic.h>
+#include <drm/drm_atomic_helper.h>
 #include <drm/drm_atomic_state_helper.h>
+#include <drm/drm_bridge.h>
+#include <drm/drm_drv.h>
+#include <drm/drm_edid.h>
+#include <drm/drm_print.h>
+
+#include "it66121_registers.h"
 
 enum chip_id {
 	ID_IT6610,
