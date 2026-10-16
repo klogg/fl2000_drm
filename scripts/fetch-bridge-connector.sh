@@ -12,7 +12,7 @@ mkdir -p "$output"
 temporary=$(mktemp "$output/connector.XXXXXX")
 trap 'rm -f "$temporary" "$temporary.b64"' EXIT
 while read -r name checksum; do
-    curl --fail --silent --show-error --location \
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
         "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/v7.0/drivers/gpu/drm/display/$name.c?format=TEXT" \
         --output "$temporary.b64"
     base64 --decode "$temporary.b64" > "$temporary"
