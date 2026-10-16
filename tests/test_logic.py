@@ -25,7 +25,6 @@ registers = (ROOT / "fl2000_registers.c").read_text()
 defines = "\n".join(
     re.findall(r"^#define FL2000_.*$", drm + "\n" + stream, re.MULTILINE)
 )
-mask = re.search(r"#define fl2000_add_bitmask.*?(?=\n\n)", header, re.DOTALL)[0]
 prelude = r"""
 #include <assert.h>
 #include <stdbool.h>
@@ -580,11 +579,8 @@ static void test_modes(void)
  assert(fl2000_mode_calc(&mode, &adjusted, &pll) == -EINVAL);
  mode.vsync_end = mode.vsync_start + 5; mode.htotal = 4096;
  assert(fl2000_mode_calc(&mode, &adjusted, &pll) == -EINVAL);
- u32 mask = 0;
- fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, hsync_polarity);
- assert(mask == BIT(2));
- fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, vsync_polarity);
- assert(mask == (BIT(2) | BIT(3)));
+ assert(FL2000_VGA_CTRL_PXCLK_HSYNC_POLARITY == BIT(2));
+ assert(FL2000_VGA_CTRL_PXCLK_VSYNC_POLARITY == BIT(3));
 
  /* Configure IRQ sources and acknowledgment even when reset defaults differ. */
  struct usb_device irq_usb={0};
@@ -603,22 +599,18 @@ static void test_modes(void)
  test_regmap.aclk=BIT(25);detection_writes=detection_delay=0;
  assert(!fl2000_init_clock(&irq_usb));
  assert(!(test_regmap.aclk & BIT(25)) && (test_regmap.aclk & BIT(26)));
- union fl2000_vga_pll_reg initial_pll={.val=test_regmap.pll};
- assert((u64)FL2000_XTAL*initial_pll.multiplier/initial_pll.prescaler/initial_pll.divisor==25000000);
+ assert((u64)FL2000_XTAL*FIELD_GET(FL2000_VGA_PLL_MULTIPLIER,test_regmap.pll)/
+  FIELD_GET(FL2000_VGA_PLL_PRESCALER,test_regmap.pll)/
+  FIELD_GET(FL2000_VGA_PLL_DIVISOR,test_regmap.pll)==25000000);
  assert(!fl2000_usb_magic(&irq_usb));
  assert(detection_writes==3 && detection_delay==750);
  assert((test_regmap.regs[0x8020/4] & (BIT(30)|BIT(28)))==(BIT(30)|BIT(28)));
  /* Datasheet 0x8064: HDMI enable is bit 19, polarity is bit 20. */
- mask = 0;
- fl2000_add_bitmask(mask, union fl2000_vga_ctrl2_reg_axclk, hdmi_int_en);
- assert(mask == BIT(19));
- fl2000_add_bitmask(mask, union fl2000_vga_ctrl2_reg_axclk, hdmi_int_active_high);
- assert(mask == (BIT(19) | BIT(20)));
- union fl2000_vga_ctrl2_reg_axclk control = { .val = 0x311c0118 };
- control.hdmi_int_en = true;
- control.hdmi_int_active_high = false;
- assert(control.val == 0x310c0118);
- assert(sizeof(control) == sizeof(u32));
+ assert(FL2000_VGA_CTRL2_ACLK_HDMI_INT_EN == BIT(19));
+ assert(FL2000_VGA_CTRL2_ACLK_HDMI_INT_ACTIVE_HIGH == BIT(20));
+ u32 control = (0x311c0118 | FL2000_VGA_CTRL2_ACLK_HDMI_INT_EN) &
+  ~FL2000_VGA_CTRL2_ACLK_HDMI_INT_ACTIVE_HIGH;
+ assert(control == 0x310c0118);
 }
 
 
@@ -999,7 +991,7 @@ int main(void)
 parts = [
     prelude,
     defines,
-    mask,
+    '#include "tests/register_helpers.h"',
     '#include "fl2000_registers.h"',
     structure(header, "fl2000_pll"),
 ]

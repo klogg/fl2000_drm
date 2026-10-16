@@ -8,6 +8,7 @@
 #ifndef __FL2000_REGISTERS_H__
 #define __FL2000_REGISTERS_H__
 
+#include <linux/bits.h>
 #include <linux/types.h>
 
 /* #### USB Control Registers Bank #### */
@@ -15,357 +16,209 @@
 
 #define FL2000_USB_CONTROL_OFFSET 0x0000
 
-#define FL2000_USB_LPM_REG (FL2000_USB_CONTROL_OFFSET + 0x70)
-union fl2000_usb_lpm_reg {
-	u32 val;
-	struct {
-		u32 __reserved1 : 13;
-		u32 magic	: 1;
-		u32 __reserved2 : 5;
-		u32 u2_reject	: 1;
-		u32 u1_reject	: 1;
-		u32 __reserved3 : 11;
-	} __aligned(4) __packed;
-};
+#define FL2000_USB_LPM_REG	 (FL2000_USB_CONTROL_OFFSET + 0x70)
+#define FL2000_USB_LPM_MAGIC	 BIT(13)
+#define FL2000_USB_LPM_U2_REJECT BIT(19)
+#define FL2000_USB_LPM_U1_REJECT BIT(20)
 
-#define FL2000_USB_CTRL_REG (FL2000_USB_CONTROL_OFFSET + 0x78)
-union fl2000_usb_ctrl_reg {
-	u32 val;
-	struct {
-		u32 __reserved1 : 17;
-		u32 wake_nrdy	: 1;
-		u32 __reserved2 : 14;
-	} __aligned(4) __packed;
-};
+#define FL2000_USB_CTRL_REG	  (FL2000_USB_CONTROL_OFFSET + 0x78)
+#define FL2000_USB_CTRL_WAKE_NRDY BIT(17)
 
 /* #### VGA Control Registers Bank #### */
 /* Taken from the 'FL200DX Memory Mapped Address Space Registers' spec */
 
 #define FL2000_VGA_CONTROL_OFFSET 0x8000
 
-#define FL2000_VGA_STATUS_REG (FL2000_VGA_CONTROL_OFFSET + 0x00)
-union fl2000_vga_status_reg {
-	u32 val;
-	struct {
-		u32 vga_status	   : 1;
-		u32 vga_error	   : 1; /* read self clear */
-		u32 lbuf_halt	   : 1;
-		u32 iso_ack	   : 1; /* read self clear */
-		u32 td_drop	   : 1; /* read self clear */
-		u32 irq_pending	   : 1; /* read self clear */
-		u32 pll_status	   : 1;
-		u32 dac_status	   : 1;
-		u32 lbuf_overflow  : 1;
-		u32 lbuf_underflow : 1;
-		u32 frame_cnt	   : 16;
-		u32 hdmi_event	   : 1; /* read self clear */
-		u32 hdmi_status	   : 1;
-		u32 edid_status	   : 1;
-		u32 monitor_status : 1;
-		u32 monitor_event  : 1; /* read self clear */
-		u32 edid_event	   : 1; /* read self clear */
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_STATUS_REG		 (FL2000_VGA_CONTROL_OFFSET + 0x00)
+#define FL2000_VGA_STATUS_VGA_STATUS	 BIT(0)
+#define FL2000_VGA_STATUS_VGA_ERROR	 BIT(1) /* read self clear */
+#define FL2000_VGA_STATUS_LBUF_HALT	 BIT(2)
+#define FL2000_VGA_STATUS_ISO_ACK	 BIT(3) /* read self clear */
+#define FL2000_VGA_STATUS_TD_DROP	 BIT(4) /* read self clear */
+#define FL2000_VGA_STATUS_IRQ_PENDING	 BIT(5) /* read self clear */
+#define FL2000_VGA_STATUS_PLL_STATUS	 BIT(6)
+#define FL2000_VGA_STATUS_DAC_STATUS	 BIT(7)
+#define FL2000_VGA_STATUS_LBUF_OVERFLOW	 BIT(8)
+#define FL2000_VGA_STATUS_LBUF_UNDERFLOW BIT(9)
+#define FL2000_VGA_STATUS_FRAME_CNT	 GENMASK(25, 10)
+#define FL2000_VGA_STATUS_HDMI_EVENT	 BIT(26) /* read self clear */
+#define FL2000_VGA_STATUS_HDMI_STATUS	 BIT(27)
+#define FL2000_VGA_STATUS_EDID_STATUS	 BIT(28)
+#define FL2000_VGA_STATUS_MONITOR_STATUS BIT(29)
+#define FL2000_VGA_STATUS_MONITOR_EVENT	 BIT(30) /* read self clear */
+#define FL2000_VGA_STATUS_EDID_EVENT	 BIT(31) /* read self clear */
 
-#define FL2000_VGA_CTRL_REG_PXCLK (FL2000_VGA_CONTROL_OFFSET + 0x04)
-union fl2000_vga_cntrl_reg_pxclk {
-	u32 val;
-	struct {
-		u32 clear_watermark	 : 1;
-		u32 frame_sync		 : 1;
-		u32 hsync_polarity	 : 1;
-		u32 vsync_polarity	 : 1;
-		u32 de_polarity		 : 1;
-		u32 mirror_mode		 : 1;
-		u32 vga565_mode		 : 1;
-		u32 dac_output_en	 : 1;
-		u32 vga_timing_en	 : 1;
-		u32 use_new_pkt_retry	 : 1;
-		u32 ref_select		 : 1;
-		u32 dac_px_clk_invert	 : 1;
-		u32 clear_lbuf_status	 : 1;
-		u32 drop_cnt		 : 1;
-		u32 use_vdi_itp_cnt	 : 1;
-		u32 __reserved1		 : 1;
-		u32 __reserved2		 : 8;
-		u32 vga_compress	 : 1;
-		u32 vga332_mode		 : 1;
-		u32 vga_color_palette_en : 1;
-		u32 vga_first_bt_enc_en	 : 1;
-		u32 clear_125us_cnt	 : 1;
-		u32 disable_halt	 : 1;
-		u32 force_de_en		 : 1;
-		u32 vga555_mode		 : 1;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_CTRL_REG_PXCLK		   (FL2000_VGA_CONTROL_OFFSET + 0x04)
+#define FL2000_VGA_CTRL_PXCLK_CLEAR_WATERMARK	   BIT(0)
+#define FL2000_VGA_CTRL_PXCLK_FRAME_SYNC	   BIT(1)
+#define FL2000_VGA_CTRL_PXCLK_HSYNC_POLARITY	   BIT(2)
+#define FL2000_VGA_CTRL_PXCLK_VSYNC_POLARITY	   BIT(3)
+#define FL2000_VGA_CTRL_PXCLK_DE_POLARITY	   BIT(4)
+#define FL2000_VGA_CTRL_PXCLK_MIRROR_MODE	   BIT(5)
+#define FL2000_VGA_CTRL_PXCLK_VGA565_MODE	   BIT(6)
+#define FL2000_VGA_CTRL_PXCLK_DAC_OUTPUT_EN	   BIT(7)
+#define FL2000_VGA_CTRL_PXCLK_VGA_TIMING_EN	   BIT(8)
+#define FL2000_VGA_CTRL_PXCLK_USE_NEW_PKT_RETRY	   BIT(9)
+#define FL2000_VGA_CTRL_PXCLK_REF_SELECT	   BIT(10)
+#define FL2000_VGA_CTRL_PXCLK_DAC_PX_CLK_INVERT	   BIT(11)
+#define FL2000_VGA_CTRL_PXCLK_CLEAR_LBUF_STATUS	   BIT(12)
+#define FL2000_VGA_CTRL_PXCLK_DROP_CNT		   BIT(13)
+#define FL2000_VGA_CTRL_PXCLK_USE_VDI_ITP_CNT	   BIT(14)
+#define FL2000_VGA_CTRL_PXCLK_VGA_COMPRESS	   BIT(24)
+#define FL2000_VGA_CTRL_PXCLK_VGA332_MODE	   BIT(25)
+#define FL2000_VGA_CTRL_PXCLK_VGA_COLOR_PALETTE_EN BIT(26)
+#define FL2000_VGA_CTRL_PXCLK_VGA_FIRST_BT_ENC_EN  BIT(27)
+#define FL2000_VGA_CTRL_PXCLK_CLEAR_125US_CNT	   BIT(28)
+#define FL2000_VGA_CTRL_PXCLK_DISABLE_HALT	   BIT(29)
+#define FL2000_VGA_CTRL_PXCLK_FORCE_DE_EN	   BIT(30)
+#define FL2000_VGA_CTRL_PXCLK_VGA555_MODE	   BIT(31)
 
-#define FL2000_VGA_HSYNC_REG1 (FL2000_VGA_CONTROL_OFFSET + 0x08)
-union fl2000_vga_hsync_reg1 {
-	u32 val;
-	struct {
-		u32 htotal	: 12;
-		u32 __reserved1 : 4;
-		u32 hactive	: 12;
-		u32 __reserved2 : 4;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_HSYNC_REG1	  (FL2000_VGA_CONTROL_OFFSET + 0x08)
+#define FL2000_VGA_HSYNC1_HTOTAL  GENMASK(11, 0)
+#define FL2000_VGA_HSYNC1_HACTIVE GENMASK(27, 16)
 
-#define FL2000_VGA_HSYNC_REG2 (FL2000_VGA_CONTROL_OFFSET + 0x0C)
-union fl2000_vga_hsync_reg2 {
-	u32 val;
-	struct {
-		u32 hstart	: 12;
-		u32 __reserved1 : 4;
-		u32 hsync_width : 8;
-		u32 __reserved2 : 8;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_HSYNC_REG2	      (FL2000_VGA_CONTROL_OFFSET + 0x0C)
+#define FL2000_VGA_HSYNC2_HSTART      GENMASK(11, 0)
+#define FL2000_VGA_HSYNC2_HSYNC_WIDTH GENMASK(23, 16)
 
-#define FL2000_VGA_VSYNC_REG1 (FL2000_VGA_CONTROL_OFFSET + 0x10)
-union fl2000_vga_vsync_reg1 {
-	u32 val;
-	struct {
-		u32 vtotal	: 12;
-		u32 __reserved1 : 4;
-		u32 vactive	: 12;
-		u32 __reserved2 : 4;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_VSYNC_REG1	  (FL2000_VGA_CONTROL_OFFSET + 0x10)
+#define FL2000_VGA_VSYNC1_VTOTAL  GENMASK(11, 0)
+#define FL2000_VGA_VSYNC1_VACTIVE GENMASK(27, 16)
 
-#define FL2000_VGA_VSYNC_REG2 (FL2000_VGA_CONTROL_OFFSET + 0x14)
-union fl2000_vga_vsync_reg2 {
-	u32 val;
-	struct {
-		u32 vstart	  : 12;
-		u32 __reserved1	  : 4;
-		u32 vsync_width	  : 3;
-		u32 __reserved2	  : 1;
-		u32 start_latency : 10;
-		u32 __reserved3	  : 1;
-		u32 buf_error_en  : 1;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_VSYNC_REG2		(FL2000_VGA_CONTROL_OFFSET + 0x14)
+#define FL2000_VGA_VSYNC2_VSTART	GENMASK(11, 0)
+#define FL2000_VGA_VSYNC2_VSYNC_WIDTH	GENMASK(18, 16)
+#define FL2000_VGA_VSYNC2_START_LATENCY GENMASK(29, 20)
+#define FL2000_VGA_VSYNC2_BUF_ERROR_EN	BIT(31)
 
-#define FL2000_VGA_TEST_REG  (FL2000_VGA_CONTROL_OFFSET + 0x18)
-#define FL2000_VGA_ISOCH_REG (FL2000_VGA_CONTROL_OFFSET + 0x1C)
-union fl2000_vga_isoch_reg {
-	u32 val;
-	struct {
-		u32 start_mframe_cnt   : 14;
-		u32 use_mframe_match   : 1;
-		u32 use_zero_len_frame : 1;
-		u32 mframe_cnt	       : 14;
-		u32 mframe_cnt_update  : 1;
-		u32 __reserved	       : 1;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_TEST_REG		    (FL2000_VGA_CONTROL_OFFSET + 0x18)
+#define FL2000_VGA_ISOCH_REG		    (FL2000_VGA_CONTROL_OFFSET + 0x1C)
+#define FL2000_VGA_ISOCH_START_MFRAME_CNT   GENMASK(13, 0)
+#define FL2000_VGA_ISOCH_USE_MFRAME_MATCH   BIT(14)
+#define FL2000_VGA_ISOCH_USE_ZERO_LEN_FRAME BIT(15)
+#define FL2000_VGA_ISOCH_MFRAME_CNT	    GENMASK(29, 16)
+#define FL2000_VGA_ISOCH_MFRAME_CNT_UPDATE  BIT(30)
 
-#define FL2000_VGA_I2C_SC_REG (FL2000_VGA_CONTROL_OFFSET + 0x20)
-union fl2000_vga_i2c_sc_reg {
-	u32 val;
-	struct {
-		u32 i2c_addr	   : 7;
-		u32 i2c_cmd	   : 1;
-		u32 i2c_offset	   : 8;
-		u32 vga_status	   : 8;
-		u32 i2c_status	   : 4;
-		u32 monitor_detect : 1;
-		u32 i2c_ready	   : 1;
-		u32 edid_detect	   : 1;
-		u32 i2c_done	   : 1;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_I2C_SC_REG		 (FL2000_VGA_CONTROL_OFFSET + 0x20)
+#define FL2000_VGA_I2C_SC_I2C_ADDR	 GENMASK(6, 0)
+#define FL2000_VGA_I2C_SC_I2C_CMD	 BIT(7)
+#define FL2000_VGA_I2C_SC_I2C_OFFSET	 GENMASK(15, 8)
+#define FL2000_VGA_I2C_SC_VGA_STATUS	 GENMASK(23, 16)
+#define FL2000_VGA_I2C_SC_I2C_STATUS	 GENMASK(27, 24)
+#define FL2000_VGA_I2C_SC_MONITOR_DETECT BIT(28)
+#define FL2000_VGA_I2C_SC_I2C_READY	 BIT(29)
+#define FL2000_VGA_I2C_SC_EDID_DETECT	 BIT(30)
+#define FL2000_VGA_I2C_SC_I2C_DONE	 BIT(31)
 
 #define FL2000_VGA_I2C_RD_REG (FL2000_VGA_CONTROL_OFFSET + 0x24)
 #define FL2000_VGA_I2C_WR_REG (FL2000_VGA_CONTROL_OFFSET + 0x28)
 
-#define FL2000_VGA_PLL_REG (FL2000_VGA_CONTROL_OFFSET + 0x2C)
-union fl2000_vga_pll_reg {
-	u32 val;
-	struct {
-		u32 divisor	    : 8;
-		u32 prescaler	    : 2;
-		u32 __reserved1	    : 3;
-		u32 function	    : 2;
-		u32 __reserved2	    : 1;
-		u32 multiplier	    : 8;
-		u32 test_io	    : 1;
-		u32 cfg_dac_pwrdown : 1;
-		u32 force_dac_pwrup : 1;
-		u32 __reserved3	    : 5;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_PLL_REG	       (FL2000_VGA_CONTROL_OFFSET + 0x2C)
+#define FL2000_VGA_PLL_DIVISOR	       GENMASK(7, 0)
+#define FL2000_VGA_PLL_PRESCALER       GENMASK(9, 8)
+#define FL2000_VGA_PLL_FUNCTION	       GENMASK(14, 13)
+#define FL2000_VGA_PLL_MULTIPLIER      GENMASK(23, 16)
+#define FL2000_VGA_PLL_TEST_IO	       BIT(24)
+#define FL2000_VGA_PLL_CFG_DAC_PWRDOWN BIT(25)
+#define FL2000_VGA_PLL_FORCE_DAC_PWRUP BIT(26)
 
-#define FL2000_VGA_LBUF_REG (FL2000_VGA_CONTROL_OFFSET + 0x30)
-union fl2000_vga_lbuf_reg {
-	u32 val;
-	struct {
-		u32 lbuf_watermark_assert_rdy : 15;
-		u32 __reserved		      : 17;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_LBUF_REG			  (FL2000_VGA_CONTROL_OFFSET + 0x30)
+#define FL2000_VGA_LBUF_LBUF_WATERMARK_ASSERT_RDY GENMASK(14, 0)
 
-#define FL2000_VGA_HI_MARK (FL2000_VGA_CONTROL_OFFSET + 0x34)
-union fl2000_vga_hi_mark {
-	u32 val;
-	struct {
-		u32 lbuf_high_watermark : 17;
-		u32 __reserved		: 15;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_HI_MARK		       (FL2000_VGA_CONTROL_OFFSET + 0x34)
+#define FL2000_VGA_HI_MARK_LBUF_HIGH_WATERMARK GENMASK(16, 0)
 
-#define FL2000_VGA_LO_MARK (FL2000_VGA_CONTROL_OFFSET + 0x38)
-union fl2000_vga_lo_mark {
-	u32 val;
-	struct {
-		u32 lbuf_low_watermark : 17;
-		u32 __reserved	       : 15;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_LO_MARK		      (FL2000_VGA_CONTROL_OFFSET + 0x38)
+#define FL2000_VGA_LO_MARK_LBUF_LOW_WATERMARK GENMASK(16, 0)
 
-#define FL2000_VGA_CTRL_REG_ACLK (FL2000_VGA_CONTROL_OFFSET + 0x3C)
-union fl2000_vga_ctrl_reg_aclk {
-	u32 val;
-	struct {
-		u32 cfg_timing_reset_n	  : 1;
-		u32 plh_block_en	  : 1;
-		u32 edid_mon_int_en	  : 1;
-		u32 ext_mon_int_en	  : 1;
-		u32 vga_status_self_clear : 1;
-		u32 pll_lock_time	  : 5;
-		u32 pll_fast_timeout_en	  : 1;
-		u32 ppe_block_em	  : 1;
-		u32 pll_timer_en	  : 1;
-		u32 feedback_int_en	  : 1;
-		u32 clr_125us_counter	  : 1;
-		u32 ccs_pd_dis		  : 1;
-		u32 standby_en		  : 1;
-		u32 force_loopback	  : 1;
-		u32 lbuf_drop_frame_en	  : 1;
-		u32 lbuf_vde_rst_en	  : 1;
-		u32 lbuf_sw_rst		  : 1;
-		u32 lbuf_err_int_en	  : 1;
-		u32 biac_en		  : 1;
-		u32 pxclk_in_en		  : 1;
-		u32 vga_err_int_en	  : 1;
-		u32 force_vga_connect	  : 1;
-		u32 force_pll_up	  : 1;
-		u32 use_zero_td		  : 1;
-		u32 use_zero_pkt_len	  : 1;
-		u32 use_pkt_pending	  : 1;
-		u32 pll_dac_pd_usbp3_en	  : 1;
-		u32 pll_dac_pd_novga_en	  : 1;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_CTRL_REG_ACLK		   (FL2000_VGA_CONTROL_OFFSET + 0x3C)
+#define FL2000_VGA_CTRL_ACLK_CFG_TIMING_RESET_N	   BIT(0)
+#define FL2000_VGA_CTRL_ACLK_PLH_BLOCK_EN	   BIT(1)
+#define FL2000_VGA_CTRL_ACLK_EDID_MON_INT_EN	   BIT(2)
+#define FL2000_VGA_CTRL_ACLK_EXT_MON_INT_EN	   BIT(3)
+#define FL2000_VGA_CTRL_ACLK_VGA_STATUS_SELF_CLEAR BIT(4)
+#define FL2000_VGA_CTRL_ACLK_PLL_LOCK_TIME	   GENMASK(9, 5)
+#define FL2000_VGA_CTRL_ACLK_PLL_FAST_TIMEOUT_EN   BIT(10)
+#define FL2000_VGA_CTRL_ACLK_PPE_BLOCK_EM	   BIT(11)
+#define FL2000_VGA_CTRL_ACLK_PLL_TIMER_EN	   BIT(12)
+#define FL2000_VGA_CTRL_ACLK_FEEDBACK_INT_EN	   BIT(13)
+#define FL2000_VGA_CTRL_ACLK_CLR_125US_COUNTER	   BIT(14)
+#define FL2000_VGA_CTRL_ACLK_CCS_PD_DIS		   BIT(15)
+#define FL2000_VGA_CTRL_ACLK_STANDBY_EN		   BIT(16)
+#define FL2000_VGA_CTRL_ACLK_FORCE_LOOPBACK	   BIT(17)
+#define FL2000_VGA_CTRL_ACLK_LBUF_DROP_FRAME_EN	   BIT(18)
+#define FL2000_VGA_CTRL_ACLK_LBUF_VDE_RST_EN	   BIT(19)
+#define FL2000_VGA_CTRL_ACLK_LBUF_SW_RST	   BIT(20)
+#define FL2000_VGA_CTRL_ACLK_LBUF_ERR_INT_EN	   BIT(21)
+#define FL2000_VGA_CTRL_ACLK_BIAC_EN		   BIT(22)
+#define FL2000_VGA_CTRL_ACLK_PXCLK_IN_EN	   BIT(23)
+#define FL2000_VGA_CTRL_ACLK_VGA_ERR_INT_EN	   BIT(24)
+#define FL2000_VGA_CTRL_ACLK_FORCE_VGA_CONNECT	   BIT(25)
+#define FL2000_VGA_CTRL_ACLK_FORCE_PLL_UP	   BIT(26)
+#define FL2000_VGA_CTRL_ACLK_USE_ZERO_TD	   BIT(27)
+#define FL2000_VGA_CTRL_ACLK_USE_ZERO_PKT_LEN	   BIT(28)
+#define FL2000_VGA_CTRL_ACLK_USE_PKT_PENDING	   BIT(29)
+#define FL2000_VGA_CTRL_ACLK_PLL_DAC_PD_USBP3_EN   BIT(30)
+#define FL2000_VGA_CTRL_ACLK_PLL_DAC_PD_NOVGA_EN   BIT(31)
 
-#define FL2000_VGA_PXCLK_CNT_REG (FL2000_VGA_CONTROL_OFFSET + 0x40)
-union fl2000_vga_pxclk_cnt_reg_reg {
-	u32 val;
-	struct {
-		u32 pix_clock_count : 28;
-		u32 __reserved	    : 4;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_PXCLK_CNT_REG	     (FL2000_VGA_CONTROL_OFFSET + 0x40)
+#define FL2000_VGA_PXCLK_CNT_PIX_CLOCK_COUNT GENMASK(27, 0)
 
-#define FL2000_VGA_VCNT_REG (FL2000_VGA_CONTROL_OFFSET + 0x44)
-union fl2000_vga_vcnt_reg {
-	u32 val;
-	struct {
-		u32 max_aclk_count	: 15;
-		u32 max_aclk_count_hit	: 1;
-		u32 max_lbuf_accumulate : 16;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_VCNT_REG		    (FL2000_VGA_CONTROL_OFFSET + 0x44)
+#define FL2000_VGA_VCNT_MAX_ACLK_COUNT	    GENMASK(14, 0)
+#define FL2000_VGA_VCNT_MAX_ACLK_COUNT_HIT  BIT(15)
+#define FL2000_VGA_VCNT_MAX_LBUF_ACCUMULATE GENMASK(31, 16)
 
-#define FL2000_RST_CTRL_REG (FL2000_VGA_CONTROL_OFFSET + 0x48)
-union fl2000_rst_cntrl_reg {
-	u32 val;
-	struct {
-		u32 dis_hot_rst2_port	: 1;
-		u32 dis_warm_rst2_port	: 1;
-		u32 dis_hot_reset_pipe	: 1;
-		u32 dis_warm_reset_pipe : 1;
-		u32 dis_hot_reset_pix	: 1;
-		u32 dis_warm_reset_pix	: 1;
-		u32 dis_usb2_reset_pix	: 1;
-		u32 dis_pll_reset_pix	: 1;
-		u32 dis_sw_reset_pix	: 1;
-		u32 dis_usb2_reset_buf	: 1;
-		u32 dis_sw_reset_buf	: 1;
-		u32 dis_lbuf_reset_pix	: 1;
-		u32 dis_hot_reset_port	: 1;
-		u32 dis_warm_reset_port : 1;
-		u32 set_slow_clk_predft : 1;
-		u32 sw_reset		: 1;
-		u32 frame_first_itp_wl	: 16;
-	} __aligned(4) __packed;
-};
+#define FL2000_RST_CTRL_REG		    (FL2000_VGA_CONTROL_OFFSET + 0x48)
+#define FL2000_RST_CTRL_DIS_HOT_RST2_PORT   BIT(0)
+#define FL2000_RST_CTRL_DIS_WARM_RST2_PORT  BIT(1)
+#define FL2000_RST_CTRL_DIS_HOT_RESET_PIPE  BIT(2)
+#define FL2000_RST_CTRL_DIS_WARM_RESET_PIPE BIT(3)
+#define FL2000_RST_CTRL_DIS_HOT_RESET_PIX   BIT(4)
+#define FL2000_RST_CTRL_DIS_WARM_RESET_PIX  BIT(5)
+#define FL2000_RST_CTRL_DIS_USB2_RESET_PIX  BIT(6)
+#define FL2000_RST_CTRL_DIS_PLL_RESET_PIX   BIT(7)
+#define FL2000_RST_CTRL_DIS_SW_RESET_PIX    BIT(8)
+#define FL2000_RST_CTRL_DIS_USB2_RESET_BUF  BIT(9)
+#define FL2000_RST_CTRL_DIS_SW_RESET_BUF    BIT(10)
+#define FL2000_RST_CTRL_DIS_LBUF_RESET_PIX  BIT(11)
+#define FL2000_RST_CTRL_DIS_HOT_RESET_PORT  BIT(12)
+#define FL2000_RST_CTRL_DIS_WARM_RESET_PORT BIT(13)
+#define FL2000_RST_CTRL_SET_SLOW_CLK_PREDFT BIT(14)
+#define FL2000_RST_CTRL_SW_RESET	    BIT(15)
+#define FL2000_RST_CTRL_FRAME_FIRST_ITP_WL  GENMASK(31, 16)
 
-#define FL2000_BIAC_CTRL1_REG (FL2000_VGA_CONTROL_OFFSET + 0x4C)
-union fl2000_cfg_biac_ctrl1_reg {
-	u32 val;
-	struct {
-		u32 cfg_biac_ctrl_lo8	: 8;
-		u32 cfg_biac_frame_mult : 8;
-		u32 cfg_biac_125us_mult : 16;
-	} __aligned(4) __packed;
-};
+#define FL2000_BIAC_CTRL1_REG		      (FL2000_VGA_CONTROL_OFFSET + 0x4C)
+#define FL2000_BIAC_CTRL1_CFG_BIAC_CTRL_LO8   GENMASK(7, 0)
+#define FL2000_BIAC_CTRL1_CFG_BIAC_FRAME_MULT GENMASK(15, 8)
+#define FL2000_BIAC_CTRL1_CFG_BIAC_125US_MULT GENMASK(31, 16)
 
-#define FL2000_BIAC_CTRL2_REG (FL2000_VGA_CONTROL_OFFSET + 0x50)
-union fl2000_cfg_biac_ctrl2_reg {
-	u32 val;
-	struct {
-		u32 cfg_biac_ctrl_hi16 : 16;
-		u32 __reserved	       : 16;
-	} __aligned(4) __packed;
-};
+#define FL2000_BIAC_CTRL2_REG		     (FL2000_VGA_CONTROL_OFFSET + 0x50)
+#define FL2000_BIAC_CTRL2_CFG_BIAC_CTRL_HI16 GENMASK(15, 0)
 
-#define FL2000_BIAC_STATUS_REG (FL2000_VGA_CONTROL_OFFSET + 0x54)
-union fl2000_cfg_biac_status_reg {
-	u32 val;
-	struct {
-		u32 current_status : 16;
-		u32 current_value  : 16;
-	} __aligned(4) __packed;
-};
+#define FL2000_BIAC_STATUS_REG		  (FL2000_VGA_CONTROL_OFFSET + 0x54)
+#define FL2000_BIAC_STATUS_CURRENT_STATUS GENMASK(15, 0)
+#define FL2000_BIAC_STATUS_CURRENT_VALUE  GENMASK(31, 16)
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x58) */
 
-#define FL2000_VGA_PLT_REG_PXCLK (FL2000_VGA_CONTROL_OFFSET + 0x5C)
-union fl2000_vga_plt_reg_pxclk {
-	u32 val;
-	struct {
-		u32 palette_ram_wr_data : 24;
-		u32 __reserved		: 8;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_PLT_REG_PXCLK		 (FL2000_VGA_CONTROL_OFFSET + 0x5C)
+#define FL2000_VGA_PLT_PXCLK_PALETTE_RAM_WR_DATA GENMASK(23, 0)
 
-#define FL2000_VGA_PLT_RADDR_REG_PXCLK (FL2000_VGA_CONTROL_OFFSET + 0x60)
-union fl2000_vga_plt_rdaddr_reg_pxclk {
-	u32 val;
-	struct {
-		u32 palette_ram_rd_addr	      : 8;
-		u32 last_frame_lbuf_watermark : 16;
-		u32 __reserved		      : 8;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_PLT_RADDR_REG_PXCLK			     (FL2000_VGA_CONTROL_OFFSET + 0x60)
+#define FL2000_VGA_PLT_RADDR_PXCLK_PALETTE_RAM_RD_ADDR	     GENMASK(7, 0)
+#define FL2000_VGA_PLT_RADDR_PXCLK_LAST_FRAME_LBUF_WATERMARK GENMASK(23, 8)
 
-#define FL2000_VGA_CTRL2_REG_ACLK (FL2000_VGA_CONTROL_OFFSET + 0x64)
-union fl2000_vga_ctrl2_reg_axclk {
-	u32 val;
-	struct {
-		u32 pll_powerdown_detect_en : 1;
-		u32 mstor_blksize_ptr_width : 4;
-		u32 mstor_blk_count	    : 12;
-		u32 spi_wr_en		    : 1;
-		u32 detect_pins_debounce_en : 1;
-		u32 hdmi_int_en		    : 1;
-		u32 hdmi_int_active_high    : 1;
-		u32 spi_en		    : 1;
-		u32 __reserved		    : 2;
-		u32 sw_prod_rev		    : 8;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_CTRL2_REG_ACLK		      (FL2000_VGA_CONTROL_OFFSET + 0x64)
+#define FL2000_VGA_CTRL2_ACLK_PLL_POWERDOWN_DETECT_EN BIT(0)
+#define FL2000_VGA_CTRL2_ACLK_MSTOR_BLKSIZE_PTR_WIDTH GENMASK(4, 1)
+#define FL2000_VGA_CTRL2_ACLK_MSTOR_BLK_COUNT	      GENMASK(16, 5)
+#define FL2000_VGA_CTRL2_ACLK_SPI_WR_EN		      BIT(17)
+#define FL2000_VGA_CTRL2_ACLK_DETECT_PINS_DEBOUNCE_EN BIT(18)
+#define FL2000_VGA_CTRL2_ACLK_HDMI_INT_EN	      BIT(19)
+#define FL2000_VGA_CTRL2_ACLK_HDMI_INT_ACTIVE_HIGH    BIT(20)
+#define FL2000_VGA_CTRL2_ACLK_SPI_EN		      BIT(21)
+#define FL2000_VGA_CTRL2_ACLK_SW_PROD_REV	      GENMASK(31, 24)
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x68) */
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x6C) */
@@ -377,15 +230,8 @@ union fl2000_vga_ctrl2_reg_axclk {
 #define FL2000_TEST_STAT2     (FL2000_VGA_CONTROL_OFFSET + 0x80)
 #define FL2000_TEST_STAT3     (FL2000_VGA_CONTROL_OFFSET + 0x84)
 
-#define FL2000_VGA_CTRL_REG_3 (FL2000_VGA_CONTROL_OFFSET + 0x88)
-union fl2000_vga_ctrl_reg_3 {
-	u32 val;
-	struct {
-		u32 __reserved1	  : 10;
-		u32 wakeup_clr_en : 1;
-		u32 __reserved2	  : 21;
-	} __aligned(4) __packed;
-};
+#define FL2000_VGA_CTRL_REG_3	       (FL2000_VGA_CONTROL_OFFSET + 0x88)
+#define FL2000_VGA_CTRL3_WAKEUP_CLR_EN BIT(10)
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x8C) */
 

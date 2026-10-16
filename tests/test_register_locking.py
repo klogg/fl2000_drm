@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0
 """Exercise reset and detection setup against concurrent I2C bus users."""
 
-import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -11,8 +10,6 @@ from source_helpers import function
 
 ROOT = Path(__file__).resolve().parents[1]
 source = (ROOT / "fl2000_registers.c").read_text()
-header = (ROOT / "fl2000.h").read_text()
-mask = re.search(r"#define fl2000_add_bitmask.*?(?=\n\n)", header, re.DOTALL)[0]
 prelude = r"""
 #include <assert.h>
 #include <stdbool.h>
@@ -129,7 +126,7 @@ with tempfile.TemporaryDirectory(prefix="fl2000-register-locking-") as temp:
     c.write_text(
         "\n".join([
             prelude,
-            mask,
+            '#include "tests/register_helpers.h"',
             '#include "fl2000_registers.h"',
             function(source, "fl2000_reset"),
             function(source, "fl2000_usb_magic"),

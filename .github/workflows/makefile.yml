@@ -73,6 +73,7 @@ jobs:
         run: |
           python3 tests/test_logic.py
           python3 tests/test_register_locking.py
+          python3 tests/test_registers.py
           python3 tests/test_edid.py
           python3 tests/test_bridge.py
           python3 tests/test_connector.py

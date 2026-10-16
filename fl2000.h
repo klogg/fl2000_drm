@@ -54,26 +54,6 @@ enum fl2000_interface {
 	FL2000_USBIF_INTERRUPT = 2,
 };
 
-/**
- * fl2000_add_bitmask - Set bitmask for structure field
- *
- * @__mask: Variable to set mask to (assumed u32)
- * @__type: Structure type to use with bitfield (assumed size equal to u32)
- * @__field: Field to set mask for in the '__type' structure
- *
- * Sets bits to 1 in '__mask' variable that correspond to field '__field' of
- * structure type '__type'. Tested only with u32 data types
- */
-#define fl2000_add_bitmask(__mask, __type, __field)     \
-	({                                              \
-		union {                                 \
-			__type __umask;                 \
-			typeof(__mask) __val;           \
-		} __aligned(4) __data = { .__val = 0 }; \
-		__data.__umask.__field = ~0;            \
-		(__mask) |= __data.__val;               \
-	})
-
 struct fl2000_timings {
 	u32 hactive;
 	u32 htotal;

@@ -5,6 +5,7 @@
  */
 
 #include "fl2000.h"
+#include <linux/bitfield.h>
 
 #define CONTROL_MSG_READ  64
 #define CONTROL_MSG_WRITE 65
@@ -97,138 +98,90 @@ static const struct regmap_config fl2000_regmap_config = {
 
 int fl2000_set_pll(struct usb_device *usb_dev, const struct fl2000_pll *pll)
 {
-	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_pll_reg pll_reg = { .val = 0 };
-	union fl2000_vga_ctrl_reg_aclk aclk = { .val = 0 };
-	u32 mask = 0;
+	u32 value;
+	int ret;
 
-	pll_reg.prescaler = pll->prescaler;
-	pll_reg.multiplier = pll->multiplier;
-	pll_reg.divisor = pll->divisor;
-	pll_reg.function = pll->function;
-	ret = regmap_write(regmap, FL2000_VGA_PLL_REG, pll_reg.val);
+	value = FIELD_PREP(FL2000_VGA_PLL_PRESCALER, pll->prescaler) |
+		FIELD_PREP(FL2000_VGA_PLL_MULTIPLIER, pll->multiplier) |
+		FIELD_PREP(FL2000_VGA_PLL_DIVISOR, pll->divisor) |
+		FIELD_PREP(FL2000_VGA_PLL_FUNCTION, pll->function);
+	ret = regmap_write(regmap, FL2000_VGA_PLL_REG, value);
 	if (ret)
 		return ret;
 
-	aclk.force_pll_up = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, force_pll_up);
 	/* Let monitor detection report unplugging instead of forcing connected. */
-	aclk.force_vga_connect = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, force_vga_connect);
-	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
-	if (ret)
-		return ret;
-
-	return 0;
+	return regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK,
+				 FL2000_VGA_CTRL_ACLK_FORCE_PLL_UP |
+					 FL2000_VGA_CTRL_ACLK_FORCE_VGA_CONNECT,
+				 FL2000_VGA_CTRL_ACLK_FORCE_PLL_UP);
 }
 
 int fl2000_set_timings(struct usb_device *usb_dev, const struct fl2000_timings *timings)
 {
-	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_hsync_reg1 hsync1 = { .val = 0 };
-	union fl2000_vga_hsync_reg2 hsync2 = { .val = 0 };
-	union fl2000_vga_vsync_reg1 vsync1 = { .val = 0 };
-	union fl2000_vga_vsync_reg2 vsync2 = { .val = 0 };
-	union fl2000_vga_cntrl_reg_pxclk pxclk = { .val = 0 };
-	u32 mask = 0;
+	u32 value;
+	u32 mask = FL2000_VGA_CTRL_PXCLK_HSYNC_POLARITY | FL2000_VGA_CTRL_PXCLK_VSYNC_POLARITY;
+	int ret;
 
-	hsync1.hactive = timings->hactive;
-	hsync1.htotal = timings->htotal;
-	ret = regmap_write(regmap, FL2000_VGA_HSYNC_REG1, hsync1.val);
+	value = FIELD_PREP(FL2000_VGA_HSYNC1_HACTIVE, timings->hactive) |
+		FIELD_PREP(FL2000_VGA_HSYNC1_HTOTAL, timings->htotal);
+	ret = regmap_write(regmap, FL2000_VGA_HSYNC_REG1, value);
 	if (ret)
 		return ret;
 
-	hsync2.hsync_width = timings->hsync_width;
-	hsync2.hstart = timings->hstart;
-	ret = regmap_write(regmap, FL2000_VGA_HSYNC_REG2, hsync2.val);
+	value = FIELD_PREP(FL2000_VGA_HSYNC2_HSYNC_WIDTH, timings->hsync_width) |
+		FIELD_PREP(FL2000_VGA_HSYNC2_HSTART, timings->hstart);
+	ret = regmap_write(regmap, FL2000_VGA_HSYNC_REG2, value);
 	if (ret)
 		return ret;
 
-	vsync1.vactive = timings->vactive;
-	vsync1.vtotal = timings->vtotal;
-	ret = regmap_write(regmap, FL2000_VGA_VSYNC_REG1, vsync1.val);
+	value = FIELD_PREP(FL2000_VGA_VSYNC1_VACTIVE, timings->vactive) |
+		FIELD_PREP(FL2000_VGA_VSYNC1_VTOTAL, timings->vtotal);
+	ret = regmap_write(regmap, FL2000_VGA_VSYNC_REG1, value);
 	if (ret)
 		return ret;
 
-	vsync2.vsync_width = timings->vsync_width;
-	vsync2.vstart = timings->vstart;
-	vsync2.start_latency = min_t(u32, timings->vstart, 1023);
-	ret = regmap_write(regmap, FL2000_VGA_VSYNC_REG2, vsync2.val);
+	value = FIELD_PREP(FL2000_VGA_VSYNC2_VSYNC_WIDTH, timings->vsync_width) |
+		FIELD_PREP(FL2000_VGA_VSYNC2_VSTART, timings->vstart) |
+		FIELD_PREP(FL2000_VGA_VSYNC2_START_LATENCY, min_t(u32, timings->vstart, 1023));
+	ret = regmap_write(regmap, FL2000_VGA_VSYNC_REG2, value);
 	if (ret)
 		return ret;
 
-	pxclk.hsync_polarity = timings->hsync_positive;
-	pxclk.vsync_polarity = timings->vsync_positive;
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, hsync_polarity);
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, vsync_polarity);
-	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, pxclk.val);
-	if (ret)
-		return ret;
-
-	return 0;
+	value = FIELD_PREP(FL2000_VGA_CTRL_PXCLK_HSYNC_POLARITY, timings->hsync_positive) |
+		FIELD_PREP(FL2000_VGA_CTRL_PXCLK_VSYNC_POLARITY, timings->vsync_positive);
+	return regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, value);
 }
 
 int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix)
 {
-	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_cntrl_reg_pxclk pxclk = { .val = 0 };
-	u32 mask = 0;
+	u32 mask = FL2000_VGA_CTRL_PXCLK_DAC_OUTPUT_EN | FL2000_VGA_CTRL_PXCLK_DROP_CNT |
+		   FL2000_VGA_CTRL_PXCLK_VGA565_MODE | FL2000_VGA_CTRL_PXCLK_VGA332_MODE |
+		   FL2000_VGA_CTRL_PXCLK_VGA555_MODE | FL2000_VGA_CTRL_PXCLK_VGA_COMPRESS |
+		   FL2000_VGA_CTRL_PXCLK_CLEAR_WATERMARK;
+	u32 value = FL2000_VGA_CTRL_PXCLK_DAC_OUTPUT_EN | FL2000_VGA_CTRL_PXCLK_CLEAR_WATERMARK;
 
-	pxclk.dac_output_en = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, dac_output_en);
-	pxclk.drop_cnt = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, drop_cnt);
-	pxclk.vga565_mode = (bytes_pix == 2);
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, vga565_mode);
-	pxclk.vga332_mode = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, vga332_mode);
-	pxclk.vga555_mode = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, vga555_mode);
-	pxclk.vga_compress = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, vga_compress);
-	pxclk.dac_output_en = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, dac_output_en);
-	pxclk.clear_watermark = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_cntrl_reg_pxclk, clear_watermark);
-	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, pxclk.val);
-	if (ret)
-		return ret;
-
-	return 0;
+	if (bytes_pix == 2)
+		value |= FL2000_VGA_CTRL_PXCLK_VGA565_MODE;
+	return regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, value);
 }
 
 int fl2000_set_transfers(struct usb_device *usb_dev)
 {
-	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_ctrl_reg_aclk aclk = { .val = 0 };
-	union fl2000_vga_isoch_reg isoch = { .val = 0 };
-	u32 mask;
+	u32 mask = FL2000_VGA_CTRL_ACLK_USE_PKT_PENDING | FL2000_VGA_CTRL_ACLK_USE_ZERO_TD |
+		   FL2000_VGA_CTRL_ACLK_USE_ZERO_PKT_LEN | FL2000_VGA_CTRL_ACLK_VGA_ERR_INT_EN;
+	int ret;
 
-	mask = 0;
-	aclk.use_pkt_pending = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, use_pkt_pending);
-	aclk.use_zero_td = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, use_zero_td);
-	aclk.use_zero_pkt_len = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, use_zero_pkt_len);
-	aclk.vga_err_int_en = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, vga_err_int_en);
-	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask,
+				FL2000_VGA_CTRL_ACLK_USE_ZERO_PKT_LEN |
+					FL2000_VGA_CTRL_ACLK_VGA_ERR_INT_EN);
 	if (ret)
 		return ret;
 
-	mask = 0;
-	isoch.mframe_cnt = 0;
-	fl2000_add_bitmask(mask, union fl2000_vga_isoch_reg, mframe_cnt);
-	ret = regmap_write_bits(regmap, FL2000_VGA_ISOCH_REG, mask, isoch.val);
-	if (ret)
-		return ret;
-
-	return 0;
+	return regmap_write_bits(regmap, FL2000_VGA_ISOCH_REG, FL2000_VGA_ISOCH_MFRAME_CNT, 0);
 }
 
 int fl2000_reset(struct usb_device *usb_dev)
@@ -236,8 +189,6 @@ int fl2000_reset(struct usb_device *usb_dev)
 	struct i2c_adapter *adapter = fl2000_i2c_adapter(usb_dev);
 	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_rst_cntrl_reg rst_cntrl_reg = { .val = 0 };
-	u32 mask = 0;
 
 	/* Bus lock covers whole I2C transfers, including byte-write RMW pairs.
 	 * Lock order is adapter bus before FL2000 regmap.
@@ -247,9 +198,8 @@ int fl2000_reset(struct usb_device *usb_dev)
 	if (adapter)
 		i2c_lock_bus(adapter, I2C_LOCK_ROOT_ADAPTER);
 
-	rst_cntrl_reg.sw_reset = true;
-	fl2000_add_bitmask(mask, union fl2000_rst_cntrl_reg, sw_reset);
-	ret = regmap_write_bits(regmap, FL2000_RST_CTRL_REG, mask, rst_cntrl_reg.val);
+	ret = regmap_write_bits(regmap, FL2000_RST_CTRL_REG, FL2000_RST_CTRL_SW_RESET,
+				FL2000_RST_CTRL_SW_RESET);
 	if (ret)
 		goto unlock;
 
@@ -265,18 +215,10 @@ unlock:
 
 int fl2000_afe_magic(struct usb_device *usb_dev)
 {
-	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_usb_lpm_reg usb_lpm_reg = { .val = 0 };
-	u32 mask = 0;
 
-	usb_lpm_reg.magic = true;
-	fl2000_add_bitmask(mask, union fl2000_usb_lpm_reg, magic);
-	ret = regmap_write_bits(regmap, FL2000_USB_LPM_REG, mask, usb_lpm_reg.val);
-	if (ret)
-		return ret;
-
-	return 0;
+	return regmap_write_bits(regmap, FL2000_USB_LPM_REG, FL2000_USB_LPM_MAGIC,
+				 FL2000_USB_LPM_MAGIC);
 }
 
 int fl2000_usb_magic(struct usb_device *usb_dev)
@@ -284,10 +226,6 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	struct i2c_adapter *adapter = fl2000_i2c_adapter(usb_dev);
 	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_i2c_sc_reg vga_i2c_sc_reg = { .val = 0 };
-	union fl2000_vga_ctrl_reg_3 vga_ctrl_reg_3 = { .val = 0 };
-	union fl2000_usb_lpm_reg usb_lpm_reg = { .val = 0 };
-	union fl2000_usb_ctrl_reg usb_ctrl_reg = { .val = 0 };
 	u32 mask;
 
 	/* Detection setup shares the transaction engine's control register. */
@@ -297,42 +235,28 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	/* Restart detection after the PLL is running (register manual, page 25).
 	 * The vendor enables EDID detection first and gives it 750 ms to settle.
 	 */
-	mask = 0;
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, monitor_detect);
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, edid_detect);
+	mask = FL2000_VGA_I2C_SC_MONITOR_DETECT | FL2000_VGA_I2C_SC_EDID_DETECT;
 	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, 0);
 	if (ret)
 		goto unlock;
-	vga_i2c_sc_reg.edid_detect = true;
-	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, vga_i2c_sc_reg.val);
+	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, FL2000_VGA_I2C_SC_EDID_DETECT);
 	if (ret)
 		goto unlock;
 	msleep(750);
-	vga_i2c_sc_reg.monitor_detect = true;
-	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, vga_i2c_sc_reg.val);
+	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, mask);
 	if (ret)
 		goto unlock;
 
-	mask = 0;
-	vga_ctrl_reg_3.wakeup_clr_en = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_3, wakeup_clr_en);
-	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_3, mask, vga_ctrl_reg_3.val);
+	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_3, FL2000_VGA_CTRL3_WAKEUP_CLR_EN, 0);
 	if (ret)
 		goto unlock;
 
-	mask = 0;
-	usb_lpm_reg.u1_reject = true;
-	fl2000_add_bitmask(mask, union fl2000_usb_lpm_reg, u1_reject);
-	usb_lpm_reg.u2_reject = true;
-	fl2000_add_bitmask(mask, union fl2000_usb_lpm_reg, u2_reject);
-	ret = regmap_write_bits(regmap, FL2000_USB_LPM_REG, mask, usb_lpm_reg.val);
+	mask = FL2000_USB_LPM_U1_REJECT | FL2000_USB_LPM_U2_REJECT;
+	ret = regmap_write_bits(regmap, FL2000_USB_LPM_REG, mask, mask);
 	if (ret)
 		goto unlock;
 
-	mask = 0;
-	usb_ctrl_reg.wake_nrdy = false;
-	fl2000_add_bitmask(mask, union fl2000_usb_ctrl_reg, wake_nrdy);
-	ret = regmap_write_bits(regmap, FL2000_USB_CTRL_REG, mask, usb_ctrl_reg.val);
+	ret = regmap_write_bits(regmap, FL2000_USB_CTRL_REG, FL2000_USB_CTRL_WAKE_NRDY, 0);
 	if (ret)
 		goto unlock;
 
@@ -345,43 +269,25 @@ unlock:
 
 int fl2000_enable_interrupts(struct usb_device *usb_dev)
 {
-	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_ctrl_reg_aclk aclk = { .val = 0 };
-	union fl2000_vga_ctrl2_reg_axclk axclk = { .val = 0 };
-	u32 mask;
+	u32 value = FL2000_VGA_CTRL_ACLK_VGA_ERR_INT_EN | FL2000_VGA_CTRL_ACLK_LBUF_ERR_INT_EN |
+		    FL2000_VGA_CTRL_ACLK_EXT_MON_INT_EN | FL2000_VGA_CTRL_ACLK_EDID_MON_INT_EN;
+	u32 mask = value | FL2000_VGA_CTRL_ACLK_VGA_STATUS_SELF_CLEAR |
+		   FL2000_VGA_CTRL_ACLK_FEEDBACK_INT_EN;
+	int ret;
 
-	mask = 0;
-	aclk.vga_err_int_en = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, vga_err_int_en);
-	aclk.lbuf_err_int_en = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, lbuf_err_int_en);
-	/* Explicitly configure both detection IRQs and our acknowledgment mode. */
-	aclk.ext_mon_int_en = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, ext_mon_int_en);
-	/* On tested FL2000 hardware bit 4 set inhibits read-to-clear, contrary
+	/* Explicitly configure both detection IRQs and our acknowledgment mode.
+	 * On tested FL2000 hardware bit 4 set inhibits read-to-clear, contrary
 	 * to the register manual. Keep it clear so pending events are acknowledged.
 	 */
-	aclk.vga_status_self_clear = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, vga_status_self_clear);
-	aclk.edid_mon_int_en = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, edid_mon_int_en);
-	aclk.feedback_int_en = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_aclk, feedback_int_en);
-	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, aclk.val);
+	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_ACLK, mask, value);
 	if (ret)
 		return ret;
 
-	mask = 0;
-	axclk.hdmi_int_en = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl2_reg_axclk, hdmi_int_en);
-	axclk.hdmi_int_active_high = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_ctrl2_reg_axclk, hdmi_int_active_high);
-	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL2_REG_ACLK, mask, axclk.val);
-	if (ret)
-		return ret;
-
-	return 0;
+	return regmap_write_bits(regmap, FL2000_VGA_CTRL2_REG_ACLK,
+				 FL2000_VGA_CTRL2_ACLK_HDMI_INT_EN |
+					 FL2000_VGA_CTRL2_ACLK_HDMI_INT_ACTIVE_HIGH,
+				 FL2000_VGA_CTRL2_ACLK_HDMI_INT_EN);
 }
 
 /*
@@ -390,43 +296,39 @@ int fl2000_enable_interrupts(struct usb_device *usb_dev)
  */
 int fl2000_check_interrupt(struct usb_device *usb_dev)
 {
-	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	union fl2000_vga_status_reg status;
+	u32 status, errors;
 	bool sink_event;
-	u32 mask = 0;
+	int ret;
 
-	/* Process interrupt */
-	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status.val);
+	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
 	if (ret)
 		return ret;
 
-	sink_event = status.hdmi_event || status.monitor_event || status.edid_event;
+	sink_event = status & (FL2000_VGA_STATUS_HDMI_EVENT | FL2000_VGA_STATUS_MONITOR_EVENT |
+			       FL2000_VGA_STATUS_EDID_EVENT);
 
-	/* LBUF issues are recoverable */
-	if (status.lbuf_overflow)
-		fl2000_add_bitmask(mask, union fl2000_vga_status_reg, lbuf_overflow);
-	if (status.lbuf_underflow)
-		fl2000_add_bitmask(mask, union fl2000_vga_status_reg, lbuf_underflow);
-	/* Do not read the precious status register again during acknowledgment. */
-	if (mask) {
-		ret = regmap_write(regmap, FL2000_VGA_STATUS_REG, mask & status.val);
+	/* Acknowledge recoverable LBUF errors without rereading self-clear events. */
+	errors = status & (FL2000_VGA_STATUS_LBUF_OVERFLOW | FL2000_VGA_STATUS_LBUF_UNDERFLOW);
+	if (errors) {
+		ret = regmap_write(regmap, FL2000_VGA_STATUS_REG, errors);
 		if (ret)
 			return ret;
 	}
 
 	/* LBUF halt and VGA error recovery remain unsupported; see docs/DEVELOPMENT.md. */
-
-	ret = sink_event ? 1 : 0;
-	return ret;
+	return sink_event ? 1 : 0;
 }
 
 int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data)
 {
-	int ret;
-	union fl2000_vga_i2c_sc_reg reg = { .val = 0 };
-	u32 mask = 0;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	u32 control, status;
+	u32 mask = FL2000_VGA_I2C_SC_MONITOR_DETECT | FL2000_VGA_I2C_SC_EDID_DETECT |
+		   FL2000_VGA_I2C_SC_I2C_STATUS | FL2000_VGA_I2C_SC_I2C_ADDR |
+		   FL2000_VGA_I2C_SC_I2C_CMD | FL2000_VGA_I2C_SC_I2C_OFFSET |
+		   FL2000_VGA_I2C_SC_I2C_DONE;
+	int ret;
 
 	if (!read) {
 		ret = regmap_write(regmap, FL2000_VGA_I2C_WR_REG, *data);
@@ -434,47 +336,27 @@ int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset,
 			return ret;
 	}
 
-	/* This bit always reads back as 0, so we need to restore it back. Though not quite
-	 * sure if we need to enable monitor detection circuit for HDMI use case
-	 */
-	reg.monitor_detect = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, monitor_detect);
-	reg.edid_detect = true;
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, edid_detect);
-
-	reg.i2c_status = 0;
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_status);
-	reg.i2c_addr = addr;
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_addr);
-	reg.i2c_cmd = read;
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_cmd);
-	reg.i2c_offset = offset;
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_offset);
-	reg.i2c_done = false;
-	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, i2c_done);
-
-	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, reg.val);
+	/* Detection enable reads back clear, so restore it for each command. */
+	control = FL2000_VGA_I2C_SC_MONITOR_DETECT | FL2000_VGA_I2C_SC_EDID_DETECT |
+		  FIELD_PREP(FL2000_VGA_I2C_SC_I2C_ADDR, addr) |
+		  FIELD_PREP(FL2000_VGA_I2C_SC_I2C_CMD, read) |
+		  FIELD_PREP(FL2000_VGA_I2C_SC_I2C_OFFSET, offset);
+	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, control);
 	if (ret)
 		return ret;
 
-	ret = regmap_read_poll_timeout(regmap, FL2000_VGA_I2C_SC_REG, reg.val, reg.i2c_done,
-				       I2C_RDWR_INTERVAL, I2C_RDWR_TIMEOUT);
-	/* This shouldn't normally happen: there's internal 256ms HW timeout on I2C operations and
-	 * USB must be always available so no I/O errors. But if it happens we are probably in
-	 * irreversible HW issue
-	 */
-	if (ret || reg.i2c_status != 0) {
+	status = control;
+	ret = regmap_read_poll_timeout(regmap, FL2000_VGA_I2C_SC_REG, status,
+				       status & FL2000_VGA_I2C_SC_I2C_DONE, I2C_RDWR_INTERVAL,
+				       I2C_RDWR_TIMEOUT);
+	if (ret || FIELD_GET(FL2000_VGA_I2C_SC_I2C_STATUS, status)) {
 		dev_dbg(&usb_dev->dev, "I2C %s addr=%02x reg=%02x status=%08x poll=%d\n",
-			read ? "read" : "write", addr, offset, reg.val, ret);
+			read ? "read" : "write", addr, offset, status, ret);
 		return ret ? ret : -EIO;
 	}
 
-	if (read) {
-		ret = regmap_read(regmap, FL2000_VGA_I2C_RD_REG, data);
-		if (ret)
-			return ret;
-	}
-
+	if (read)
+		return regmap_read(regmap, FL2000_VGA_I2C_RD_REG, data);
 	return 0;
 }
 
