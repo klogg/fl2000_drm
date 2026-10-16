@@ -87,7 +87,9 @@ static int fl2000_alloc_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 		memset(frame->vaddr, 0, size);
 		return 0;
 	}
-	/* Without a contiguous DMA address, retain the page-based SG path. */
+	/* Only the page fallback requires controller scatter-gather support. */
+	if (!usb_dev->bus->sg_tablesize)
+		return -EOPNOTSUPP;
 	frame->nr_pages = DIV_ROUND_UP(size, PAGE_SIZE);
 	frame->pages = kcalloc(frame->nr_pages, sizeof(*frame->pages), GFP_KERNEL);
 	if (!frame->pages)
@@ -646,7 +648,7 @@ int fl2000_streaming_create(struct usb_interface *interface)
 	int ret;
 
 	if (!control || usb_find_bulk_out_endpoint(control->cur_altsetting, &ep) ||
-	    usb_endpoint_num(ep) != STREAMING_EP || !usb_dev->bus->sg_tablesize)
+	    usb_endpoint_num(ep) != STREAMING_EP)
 		return -ENODEV;
 	stream = devres_alloc(fl2000_streaming_release, sizeof(*stream), GFP_KERNEL);
 	if (!stream)

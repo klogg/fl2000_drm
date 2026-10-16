@@ -695,7 +695,8 @@ static void test_i2c(void)
 
 static void test_frame_allocation(void)
 {
- struct usb_device usb={0};struct fl2000_frame frame={0};
+ struct usb_bus bus={.sg_tablesize=1024};
+ struct usb_device usb={.bus=&bus};struct fl2000_frame frame={0};
  assert(!fl2000_alloc_frame(&usb,&frame,8192));
  assert(frame.dma_sgt && !frame.pages && frame.size==8192 && dma_allocs==1);
  for(unsigned int i=0;i<8192;i++)assert(!frame.vaddr[i]);
@@ -759,7 +760,13 @@ static void test_stream_preparation(void)
  }
  fail_sg_at=0;bus.sg_tablesize=0;
  prepared=fl2000_streaming_prepare(&usb,16,2);
- assert(PTR_ERR(prepared)==-E2BIG && stream.enabled);
+ assert(PTR_ERR(prepared)==-EOPNOTSUPP && stream.enabled);
+ fail_dma_alloc=false;
+ prepared=fl2000_streaming_prepare(&usb,16,2);assert(!IS_ERR(prepared));
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)assert(prepared->frames[i].dma_sgt);
+ for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++)assert(!prepared->tables[i].sgl);
+ fl2000_streaming_free_buffers(&usb,prepared);
+ fail_dma_alloc=true;
  bus.sg_tablesize=1024;
  prepared=fl2000_streaming_prepare(&usb,16,2);assert(!IS_ERR(prepared));
  fl2000_streaming_free_buffers(&usb,prepared); /* Cancelled pending commit. */
