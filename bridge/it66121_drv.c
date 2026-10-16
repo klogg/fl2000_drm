@@ -416,11 +416,11 @@ it66121_bridge_atomic_get_output_bus_fmts(struct drm_bridge *bridge __always_unu
 	return output_fmts;
 }
 
-static u32 *it66121_bridge_atomic_get_input_bus_fmts(
-	struct drm_bridge *bridge, struct drm_bridge_state *bridge_state __always_unused,
-	struct drm_crtc_state *crtc_state __always_unused,
-	struct drm_connector_state *conn_state __always_unused, u32 output_fmt __always_unused,
-	unsigned int *num_input_fmts)
+static u32 *it66121_get_input_bus_fmts(struct drm_bridge *bridge,
+				       struct drm_bridge_state *bridge_state __always_unused,
+				       struct drm_crtc_state *crtc_state __always_unused,
+				       struct drm_connector_state *conn_state __always_unused,
+				       u32 output_fmt __always_unused, unsigned int *num_input_fmts)
 {
 	const struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	u32 *input_fmts;
@@ -676,7 +676,7 @@ static const struct drm_bridge_funcs it66121_bridge_funcs = {
 	.atomic_reset = drm_atomic_helper_bridge_reset,
 	.attach = it66121_bridge_attach,
 	.atomic_get_output_bus_fmts = it66121_bridge_atomic_get_output_bus_fmts,
-	.atomic_get_input_bus_fmts = it66121_bridge_atomic_get_input_bus_fmts,
+	.atomic_get_input_bus_fmts = it66121_get_input_bus_fmts,
 	.atomic_enable = it66121_bridge_enable,
 	.atomic_disable = it66121_bridge_disable,
 	.atomic_check = it66121_bridge_check,
