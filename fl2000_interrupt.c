@@ -23,6 +23,62 @@ struct fl2000_interrupt {
 	bool enabled;
 };
 
+static void fl2000_intr_recover_stall(struct fl2000_interrupt *intr)
+{
+	unsigned long flags;
+	int ret;
+
+	/* Recover a halted endpoint outside completion context. */
+	msleep(20);
+	if (!READ_ONCE(intr->enabled))
+		return;
+	ret = usb_clear_halt(intr->usb_dev, intr->urb->pipe);
+	spin_lock_irqsave(&intr->lock, flags);
+	if (!intr->enabled)
+		goto unlock;
+	if (!ret) {
+		intr->stalled = false;
+		if (intr->status_polling)
+			intr->rearm = true;
+		else
+			ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
+	}
+	if (ret)
+		intr->enabled = false;
+	else if (intr->status_polling)
+		schedule_delayed_work(&intr->work, msecs_to_jiffies(FL2000_INTR_STATUS_RETRY_MS));
+unlock:
+	spin_unlock_irqrestore(&intr->lock, flags);
+	if (ret) {
+		fl2000_drm_set_polling(intr->usb_dev, true);
+		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt stall recovery failed: %d\n",
+				    ret);
+	}
+}
+
+static int fl2000_intr_process_status(struct fl2000_interrupt *intr)
+{
+	int ret;
+
+	ret = fl2000_check_interrupt(intr->usb_dev);
+	/* A previous failed read may already have cleared the FL2000 event bit. */
+	if (ret >= 0 && (ret > 0 || intr->status_polling))
+		ret = fl2000_drm_hotplug(intr->usb_dev);
+	if (ret < 0) {
+		if (!intr->status_polling) {
+			intr->status_polling = true;
+			fl2000_drm_set_polling(intr->usb_dev, true);
+		}
+		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt status processing failed: %d\n",
+				    ret);
+	} else if (intr->status_polling) {
+		intr->status_polling = false;
+		fl2000_drm_set_polling(intr->usb_dev, false);
+	}
+
+	return ret;
+}
+
 static void fl2000_intr_work(struct work_struct *work)
 {
 	struct fl2000_interrupt *intr =
@@ -40,49 +96,10 @@ static void fl2000_intr_work(struct work_struct *work)
 		return;
 	}
 	if (READ_ONCE(intr->stalled)) {
-		/* Recover a halted endpoint outside completion context. */
-		msleep(20);
-		if (!READ_ONCE(intr->enabled))
-			return;
-		ret = usb_clear_halt(intr->usb_dev, intr->urb->pipe);
-		spin_lock_irqsave(&intr->lock, flags);
-		if (intr->enabled) {
-			if (!ret) {
-				intr->stalled = false;
-				if (intr->status_polling)
-					intr->rearm = true;
-				else
-					ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
-			}
-			if (ret)
-				intr->enabled = false;
-			else if (intr->status_polling)
-				schedule_delayed_work(&intr->work, retry_delay);
-		}
-		spin_unlock_irqrestore(&intr->lock, flags);
-		if (ret) {
-			fl2000_drm_set_polling(intr->usb_dev, true);
-			dev_err_ratelimited(&intr->usb_dev->dev,
-					    "Interrupt stall recovery failed: %d\n", ret);
-		}
+		fl2000_intr_recover_stall(intr);
 		return;
 	}
-	ret = fl2000_check_interrupt(intr->usb_dev);
-	/* A previous failed read may already have cleared the FL2000 event bit. */
-	if (ret >= 0 && (ret > 0 || intr->status_polling))
-		ret = fl2000_drm_hotplug(intr->usb_dev);
-	retry = ret < 0;
-	if (retry) {
-		if (!intr->status_polling) {
-			intr->status_polling = true;
-			fl2000_drm_set_polling(intr->usb_dev, true);
-		}
-		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt status processing failed: %d\n",
-				    ret);
-	} else if (intr->status_polling) {
-		intr->status_polling = false;
-		fl2000_drm_set_polling(intr->usb_dev, false);
-	}
+	retry = fl2000_intr_process_status(intr) < 0;
 
 	/* Acknowledge the device and bridge before requesting another packet. */
 	ret = 0;

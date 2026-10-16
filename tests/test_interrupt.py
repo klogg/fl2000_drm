@@ -207,6 +207,8 @@ parts = (
     + [
         function(source, n)
         for n in (
+            "fl2000_intr_recover_stall",
+            "fl2000_intr_process_status",
             "fl2000_intr_work",
             "fl2000_intr_completion",
             "fl2000_intr_stop",
