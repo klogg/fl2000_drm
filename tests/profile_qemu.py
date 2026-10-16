@@ -20,6 +20,7 @@ from qemu_utils import (
     ROOT,
     add_qemu_arguments,
     check_modules,
+    dependency_overlay,
     qemu_command,
     write_initramfs,
 )
@@ -65,6 +66,7 @@ entries += [
 ]
 if args.sampler:
     entries.append(("kernel-sample", args.sampler.read_bytes(), 0o100755))
+entries += dependency_overlay([path for _, path in modules] + [bridge], args.kernel)
 boot = args.output / "boot.cpio"
 write_initramfs(args.base, entries, boot)
 console_path = args.output / "console.sock"
@@ -119,6 +121,7 @@ script = [
     "set -e",
     "mount -t debugfs none /sys/kernel/debug",
     "/kms-profile --baseline",
+    "/fl2000-load-deps",
     "insmod /it66121.ko",
 ]
 for trial in range(args.repeat):
@@ -149,7 +152,12 @@ if args.profile_label:
         "dmesg",
         "rmmod fl2000",
     ]
-script += ["rmmod it66121", "echo PERFORMANCE_DONE", "/usr/lib/klibc/bin/poweroff -f"]
+script += [
+    "rmmod it66121",
+    "/fl2000-unload-deps",
+    "echo PERFORMANCE_DONE",
+    "/usr/lib/klibc/bin/poweroff -f",
+]
 with (
     (args.output / "qemu-stderr.log").open("w") as error,
     (args.output / "guest.log").open("w") as log,
@@ -268,7 +276,11 @@ with (
                 process.wait()
 metadata = {
     "kernel": args.kernel,
+    "driver_commit": subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip(),
     "cpu": args.cpu,
+    "bridge_sha256": hashlib.sha256(bridge.read_bytes()).hexdigest(),
     "qemu_command": command,
     "module_sha256": {
         label: hashlib.sha256(path.read_bytes()).hexdigest() for label, path in modules
