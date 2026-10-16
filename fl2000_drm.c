@@ -335,7 +335,7 @@ static enum drm_mode_status fl2000_crtc_mode_valid(struct drm_crtc *crtc,
 						   const struct drm_display_mode *mode)
 {
 	const struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
-	struct drm_display_mode adjusted;
+	struct drm_display_mode adjusted = {};
 	struct fl2000_pll pll;
 
 	if (fl2000_mode_calc(mode, &adjusted, &pll))
