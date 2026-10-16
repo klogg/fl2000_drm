@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: GPL-2.0
+config DRM_FL2000
+	tristate "Fresco Logic FL2000 USB display adapters"
+	depends on DRM && USB && I2C && MMU
+	depends on DRM_ITE_IT66121 = n
+	select DRM_KMS_HELPER
+	select DRM_GEM_SHMEM_HELPER
+	select DRM_BRIDGE
+	select DRM_DISPLAY_HELPER
+	select DRM_BRIDGE_CONNECTOR
+	select REGMAP
+	select REGMAP_I2C
+	help
+	  DRM/KMS support for Fresco Logic FL2000 USB display adapters
+	  with an IT66121 HDMI bridge. The transport-adapted bridge replaces
+	  the standard IT66121 driver, so the two cannot be enabled together.
+
+	  If built as modules, these are called fl2000 and it66121.
+
+choice
+	prompt "FL2000 frame preparation backend"
+	depends on DRM_FL2000
+	default DRM_FL2000_FRAME_SSSE3 if X86_64 && ARCH_HAS_KERNEL_FPU_SUPPORT
+	default DRM_FL2000_FRAME_GENERIC
+	help
+	  Select the optional architecture-specific frame converter. Each
+	  accelerated backend retains the portable implementation as a
+	  runtime fallback when the processor lacks the required features.
+
+config DRM_FL2000_FRAME_GENERIC
+	bool "Portable scalar implementation"
+
+config DRM_FL2000_FRAME_SSSE3
+	bool "x86-64 SSSE3 conversion"
+	depends on X86_64 && ARCH_HAS_KERNEL_FPU_SUPPORT
+
+config DRM_FL2000_FRAME_BMI2
+	bool "x86-64 BMI2 conversion"
+	depends on X86_64
+
+endchoice

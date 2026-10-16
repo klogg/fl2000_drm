@@ -1,0 +1,6 @@
+FRESCO LOGIC FL2000 DRM DRIVER
+M:	Artem Mygaiev <joculator@gmail.com>
+S:	Maintained
+W:	https://github.com/klogg/fl2000_drm
+T:	git https://github.com/klogg/fl2000_drm.git
+F:	drivers/gpu/drm/fl2000/

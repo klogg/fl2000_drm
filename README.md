@@ -40,6 +40,19 @@ If module signing is needed, `scripts/sign.sh` signs both modules. Run
 `scripts/sign.sh --help` for signing-key and tool overrides. Signing does not
 by itself enroll the certificate in the target kernel's trust store.
 
+### In-tree integration
+
+Copy the driver sources, `bridge/`, `frame/`, `Kbuild`, and `Kconfig` into
+`drivers/gpu/drm/fl2000/`. Add `source "drivers/gpu/drm/fl2000/Kconfig"` to
+the DRM Kconfig and `obj-$(CONFIG_DRM_FL2000) += fl2000/` to its Makefile.
+Merge this repository's `MAINTAINERS` entry into the kernel's file.
+
+Enable `CONFIG_DRM_FL2000` and choose its frame preparation backend. Kconfig
+selects the DRM bridge-connector and shmem helpers and limits accelerated
+backends to supported architectures. The adapted IT66121 module shares the
+standard module name, so `CONFIG_DRM_ITE_IT66121` must be disabled.
+The external build continues to accept `FL2000_FRAME_BACKEND` overrides.
+
 ## Isolated QEMU testing
 
 Tests load modules only inside a marked guest. Requirements are QEMU with KVM
