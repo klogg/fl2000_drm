@@ -300,7 +300,8 @@ int fl2000_enable_interrupts(struct usb_device *usb_dev)
 int fl2000_check_interrupt(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	u32 status, errors;
+	u32 status;
+	u32 errors;
 	bool sink_event;
 	int ret;
 
@@ -326,7 +327,8 @@ int fl2000_check_interrupt(struct usb_device *usb_dev)
 int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	u32 control, status;
+	u32 control;
+	u32 status;
 	u32 mask = FL2000_VGA_I2C_SC_MONITOR_DETECT | FL2000_VGA_I2C_SC_EDID_DETECT |
 		   FL2000_VGA_I2C_SC_I2C_STATUS | FL2000_VGA_I2C_SC_I2C_ADDR |
 		   FL2000_VGA_I2C_SC_I2C_CMD | FL2000_VGA_I2C_SC_I2C_OFFSET |

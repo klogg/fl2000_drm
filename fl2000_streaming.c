@@ -527,7 +527,8 @@ struct fl2000_stream_buffers *fl2000_streaming_prepare(struct usb_device *usb_de
 						       u32 bytes_pix)
 {
 	struct fl2000_stream_buffers *buffers;
-	unsigned int size, pages;
+	unsigned int size;
+	unsigned int pages;
 	bool needs_sg = false;
 	int ret;
 
@@ -543,7 +544,7 @@ struct fl2000_stream_buffers *fl2000_streaming_prepare(struct usb_device *usb_de
 		ret = fl2000_alloc_frame(usb_dev, &buffers->frames[i], buffers->size);
 		if (ret)
 			goto fail;
-		needs_sg |= !buffers->frames[i].dma_sgt;
+		needs_sg = needs_sg || !buffers->frames[i].dma_sgt;
 	}
 	if (needs_sg) {
 		pages = DIV_ROUND_UP(buffers->size, PAGE_SIZE);
