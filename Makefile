@@ -27,10 +27,13 @@ ifeq ($(fl2000_frame_backend),ssse3)
 ifneq ($(CONFIG_X86_64),y)
 $(error SSSE3 frame backend requires an x86-64 target kernel)
 endif
+ifneq ($(CONFIG_ARCH_HAS_KERNEL_FPU_SUPPORT),y)
+$(error SSSE3 frame backend requires kernel FPU support)
+endif
 fl2000-y += frame/x86.o frame/ssse3.o
 ccflags-y += -DFL2000_FRAME_ACCELERATED
-CFLAGS_REMOVE_frame/ssse3.o += -mno-sse -mno-sse2
-CFLAGS_frame/ssse3.o += -mssse3 -mno-avx
+CFLAGS_REMOVE_frame/ssse3.o += $(CC_FLAGS_NO_FPU)
+CFLAGS_frame/ssse3.o += $(CC_FLAGS_FPU) -mssse3 -mno-avx
 else ifeq ($(fl2000_frame_backend),bmi2)
 ifneq ($(CONFIG_X86_64),y)
 $(error BMI2 frame backend requires an x86-64 target kernel)
