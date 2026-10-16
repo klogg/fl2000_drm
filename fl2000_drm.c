@@ -129,6 +129,7 @@ struct fl2000_drm_if {
 	struct drm_plane plane;
 	struct drm_crtc crtc;
 	struct drm_encoder encoder;
+	struct drm_connector *connector;
 	struct usb_device *usb_dev;
 	struct fl2000_bridge bridge;
 };
@@ -787,6 +788,7 @@ static int fl2000_drm_bind(struct device *master)
 		ret = PTR_ERR_OR_ZERO(connector);
 		goto detach_encoder;
 	}
+	drm_if->connector = connector;
 	ret = drm_connector_attach_encoder(connector, &drm_if->encoder);
 	if (ret)
 		goto detach_encoder;
@@ -817,6 +819,7 @@ detach:
 	WRITE_ONCE(device->drm, NULL);
 detach_encoder:
 	drm_encoder_cleanup(&drm_if->encoder);
+	fl2000_bridge_connector_detach(drm_if->connector);
 unbind:
 	component_unbind_all(master, &drm_if->bridge);
 put:
@@ -841,6 +844,7 @@ static void fl2000_drm_unbind(struct device *master)
 	fl2000_streaming_disable(usb_dev);
 	/* Encoder cleanup owns bridge detachment; do it before its I2C driver can go away. */
 	drm_encoder_cleanup(&drm_if->encoder);
+	fl2000_bridge_connector_detach(drm_if->connector);
 	component_unbind_all(master, &drm_if->bridge);
 	WRITE_ONCE(device->drm, NULL);
 	drm_dev_put(drm);

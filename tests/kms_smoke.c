@@ -154,7 +154,8 @@ static void atomic_checks(int fd, uint32_t crtc, uint32_t fb, unsigned int width
 int main(int argc, char **argv)
 {
 	setbuf(stdout, NULL);
-	int fd = open("/dev/dri/card0", O_RDWR | O_CLOEXEC);
+	const char *device = getenv("DRM_DEVICE");
+	int fd = open(device ? device : "/dev/dri/card0", O_RDWR | O_CLOEXEC);
 	check(fd, "open DRM");
 	if (argc == 2 && !strcmp(argv[1], "--hold")) {
 		puts("DRM_HANDLE_OPEN");

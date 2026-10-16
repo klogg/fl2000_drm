@@ -17,31 +17,69 @@ static struct drm_bridge *fl2000_connector_bridge(struct drm_connector *connecto
 static enum drm_connector_status fl2000_connector_detect(struct drm_connector *connector,
 							 bool force __always_unused)
 {
-	struct drm_bridge *bridge = fl2000_connector_bridge(connector);
+	struct drm_bridge *bridge;
+	enum drm_connector_status status = connector_status_disconnected;
+	int idx;
 
-	return bridge->funcs->detect(bridge, connector);
+	if (!drm_dev_enter(connector->dev, &idx))
+		return status;
+	bridge = fl2000_connector_bridge(connector);
+	if (bridge)
+		status = bridge->funcs->detect(bridge, connector);
+	drm_dev_exit(idx);
+	return status;
 }
 
 static int fl2000_connector_get_modes(struct drm_connector *connector)
 {
-	struct drm_bridge *bridge = fl2000_connector_bridge(connector);
+	struct drm_bridge *bridge;
 	const struct drm_edid *edid;
-	int ret;
+	int idx;
+	int ret = 0;
 
+	if (!drm_dev_enter(connector->dev, &idx))
+		return 0;
+	bridge = fl2000_connector_bridge(connector);
+	if (!bridge)
+		goto exit;
 	edid = bridge->funcs->edid_read(bridge, connector);
 	ret = drm_edid_connector_update(connector, edid);
 	if (!ret)
 		ret = drm_edid_connector_add_modes(connector);
 	drm_edid_free(edid);
+exit:
+	drm_dev_exit(idx);
 	return ret < 0 ? 0 : ret;
 }
 
 static enum drm_mode_status fl2000_connector_mode_valid(struct drm_connector *connector,
 							const struct drm_display_mode *mode)
 {
-	struct drm_bridge *bridge = fl2000_connector_bridge(connector);
+	struct drm_bridge *bridge;
+	enum drm_mode_status status = MODE_ERROR;
+	int idx;
 
-	return bridge->funcs->mode_valid(bridge, &connector->display_info, mode);
+	if (!drm_dev_enter(connector->dev, &idx))
+		return status;
+	bridge = fl2000_connector_bridge(connector);
+	if (bridge)
+		status = bridge->funcs->mode_valid(bridge, &connector->display_info, mode);
+	drm_dev_exit(idx);
+	return status;
+}
+
+/* Call after unplug has drained callbacks, before unbinding the bridge. */
+void fl2000_bridge_connector_detach(struct drm_connector *connector)
+{
+	struct fl2000_connector *output;
+	struct drm_bridge *bridge;
+
+	if (!connector)
+		return;
+	output = container_of(connector, struct fl2000_connector, connector);
+	bridge = output->bridge;
+	output->bridge = NULL;
+	drm_bridge_put(bridge);
 }
 
 static void fl2000_connector_destroy(struct drm_connector *connector)
@@ -50,7 +88,7 @@ static void fl2000_connector_destroy(struct drm_connector *connector)
 		container_of(connector, struct fl2000_connector, connector);
 
 	drm_connector_cleanup(connector);
-	drm_bridge_put(output->bridge);
+	fl2000_bridge_connector_detach(connector);
 	kfree(output);
 }
 
