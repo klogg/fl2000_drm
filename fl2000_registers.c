@@ -233,21 +233,34 @@ int fl2000_set_transfers(struct usb_device *usb_dev)
 
 int fl2000_reset(struct usb_device *usb_dev)
 {
+	struct i2c_adapter *adapter = fl2000_i2c_adapter(usb_dev);
 	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	union fl2000_rst_cntrl_reg rst_cntrl_reg = { .val = 0 };
 	u32 mask = 0;
 
+	/* Bus lock covers whole I2C transfers, including byte-write RMW pairs.
+	 * Lock order is adapter bus before FL2000 regmap.
+	 * Never call bridge I2C or wait for interrupt work while holding it.
+	 * Initial probe has no adapter or concurrent bridge traffic yet.
+	 */
+	if (adapter)
+		i2c_lock_bus(adapter, I2C_LOCK_ROOT_ADAPTER);
+
 	rst_cntrl_reg.sw_reset = true;
 	fl2000_add_bitmask(mask, union fl2000_rst_cntrl_reg, sw_reset);
 	ret = regmap_write_bits(regmap, FL2000_RST_CTRL_REG, mask, rst_cntrl_reg.val);
 	if (ret)
-		return ret;
+		goto unlock;
 
 	msleep(FL2000_HW_RST_MDELAY);
 	regcache_drop_region(regmap, 0, 0xffff);
 
-	return 0;
+	ret = 0;
+unlock:
+	if (adapter)
+		i2c_unlock_bus(adapter, I2C_LOCK_ROOT_ADAPTER);
+	return ret;
 }
 
 int fl2000_afe_magic(struct usb_device *usb_dev)
@@ -268,6 +281,7 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 
 int fl2000_usb_magic(struct usb_device *usb_dev)
 {
+	struct i2c_adapter *adapter = fl2000_i2c_adapter(usb_dev);
 	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 	union fl2000_vga_i2c_sc_reg vga_i2c_sc_reg = { .val = 0 };
@@ -275,6 +289,10 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	union fl2000_usb_lpm_reg usb_lpm_reg = { .val = 0 };
 	union fl2000_usb_ctrl_reg usb_ctrl_reg = { .val = 0 };
 	u32 mask;
+
+	/* Detection setup shares the transaction engine's control register. */
+	if (adapter)
+		i2c_lock_bus(adapter, I2C_LOCK_ROOT_ADAPTER);
 
 	/* Restart detection after the PLL is running (register manual, page 25).
 	 * The vendor enables EDID detection first and gives it 750 ms to settle.
@@ -284,23 +302,23 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	fl2000_add_bitmask(mask, union fl2000_vga_i2c_sc_reg, edid_detect);
 	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, 0);
 	if (ret)
-		return ret;
+		goto unlock;
 	vga_i2c_sc_reg.edid_detect = true;
 	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, vga_i2c_sc_reg.val);
 	if (ret)
-		return ret;
+		goto unlock;
 	msleep(750);
 	vga_i2c_sc_reg.monitor_detect = true;
 	ret = regmap_write_bits(regmap, FL2000_VGA_I2C_SC_REG, mask, vga_i2c_sc_reg.val);
 	if (ret)
-		return ret;
+		goto unlock;
 
 	mask = 0;
 	vga_ctrl_reg_3.wakeup_clr_en = false;
 	fl2000_add_bitmask(mask, union fl2000_vga_ctrl_reg_3, wakeup_clr_en);
 	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_3, mask, vga_ctrl_reg_3.val);
 	if (ret)
-		return ret;
+		goto unlock;
 
 	mask = 0;
 	usb_lpm_reg.u1_reject = true;
@@ -309,16 +327,20 @@ int fl2000_usb_magic(struct usb_device *usb_dev)
 	fl2000_add_bitmask(mask, union fl2000_usb_lpm_reg, u2_reject);
 	ret = regmap_write_bits(regmap, FL2000_USB_LPM_REG, mask, usb_lpm_reg.val);
 	if (ret)
-		return ret;
+		goto unlock;
 
 	mask = 0;
 	usb_ctrl_reg.wake_nrdy = false;
 	fl2000_add_bitmask(mask, union fl2000_usb_ctrl_reg, wake_nrdy);
 	ret = regmap_write_bits(regmap, FL2000_USB_CTRL_REG, mask, usb_ctrl_reg.val);
 	if (ret)
-		return ret;
+		goto unlock;
 
-	return 0;
+	ret = 0;
+unlock:
+	if (adapter)
+		i2c_unlock_bus(adapter, I2C_LOCK_ROOT_ADAPTER);
+	return ret;
 }
 
 int fl2000_enable_interrupts(struct usb_device *usb_dev)

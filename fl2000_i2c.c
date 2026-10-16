@@ -120,6 +120,12 @@ static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 	i2c_del_adapter(adapter);
 }
 
+/* Callers must keep control-interface resources alive while using the adapter. */
+struct i2c_adapter *fl2000_i2c_adapter(struct usb_device *usb_dev)
+{
+	return devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
+}
+
 /**
  * fl2000_i2c_verify_client - Verify I2C client
  *
@@ -136,7 +142,7 @@ bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_
 	const struct i2c_client *client;
 	const struct device_driver *driver;
 
-	adapter = devres_find(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
+	adapter = fl2000_i2c_adapter(usb_dev);
 	if (!adapter)
 		return false;
 

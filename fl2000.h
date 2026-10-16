@@ -126,6 +126,7 @@ int fl2000_enable_interrupt(struct usb_device *usb_dev);
 int fl2000_disable_interrupt(struct usb_device *usb_dev);
 
 /* I2C adapter interface creation */
+struct i2c_adapter *fl2000_i2c_adapter(struct usb_device *usb_dev);
 int fl2000_i2c_init(struct usb_device *usb_dev);
 void fl2000_i2c_cleanup(struct usb_device *usb_dev);
 /* ... and interface*/

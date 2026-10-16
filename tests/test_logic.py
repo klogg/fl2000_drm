@@ -232,6 +232,10 @@ static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev);
 #define I2C_M_RD 1
 #define I2C_XFER_ADDR_MASK (~0x3ul)
 struct i2c_adapter { void *algo_data; };
+#define I2C_LOCK_ROOT_ADAPTER 1
+static struct i2c_adapter *fl2000_i2c_adapter(struct usb_device *usb) { (void)usb;return NULL; }
+static void i2c_lock_bus(struct i2c_adapter *a,int flags) { (void)a;(void)flags;assert(false); }
+static void i2c_unlock_bus(struct i2c_adapter *a,int flags) { (void)a;(void)flags;assert(false); }
 struct i2c_msg { u16 addr, flags, len; u8 *buf; };
 static int i2c_calls, i2c_result;
 static u32 i2c_value;

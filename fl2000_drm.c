@@ -897,7 +897,6 @@ int fl2000_drm_resume(struct usb_device *usb_dev)
 
 	if (!regmap)
 		return 0;
-	regcache_drop_region(regmap, 0, 0xffff);
 	ret = fl2000_reset(usb_dev);
 	if (!ret)
 		ret = fl2000_init_clock(usb_dev);
