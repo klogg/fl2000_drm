@@ -120,13 +120,20 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_comb_2nd_msg_len = 4,
 };
 
+static const struct property_entry fl2000_i2c_properties[] = {
+	PROPERTY_ENTRY_STRING("compatible", "fresco,fl2000-i2c"),
+	{}
+};
+
 static void fl2000_i2c_adapter_release(struct device *dev, /* NOSONAR: devres callback ABI. */
 				       void *res)
 {
 	struct i2c_adapter *adapter = res;
+	struct fwnode_handle *fwnode = dev_fwnode(&adapter->dev);
 
 	dev_info(dev, "Releasing I2C adapter");
 	i2c_del_adapter(adapter);
+	fwnode_remove_software_node(fwnode);
 }
 
 /* Callers must keep control-interface resources alive while using the adapter. */
@@ -149,6 +156,7 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	int ret;
 	struct i2c_adapter *adapter;
+	struct fwnode_handle *fwnode;
 
 	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter), GFP_KERNEL);
 	if (!adapter) {
@@ -163,17 +171,16 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	adapter->dev.parent = &usb_dev->dev;
 	strscpy(adapter->name, "FL2000 bridge I2C bus", sizeof(adapter->name));
 
+	fwnode = fwnode_create_software_node(fl2000_i2c_properties, NULL);
+	if (IS_ERR(fwnode)) {
+		devres_free(adapter);
+		return PTR_ERR(fwnode);
+	}
+	device_set_node(&adapter->dev, fwnode);
 	ret = i2c_add_adapter(adapter);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot add adapter! (%d)", ret);
-		devres_free(adapter);
-		return ret;
-	}
-
-	/* Give the IRQ domain an adapter-local identity without requiring DT. */
-	ret = device_create_managed_software_node(&adapter->dev, NULL, NULL);
-	if (ret) {
-		i2c_del_adapter(adapter);
+		fwnode_remove_software_node(fwnode);
 		devres_free(adapter);
 		return ret;
 	}

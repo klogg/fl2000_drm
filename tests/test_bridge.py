@@ -101,7 +101,9 @@ static int drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *f
 static int hdmi_avi_infoframe_pack(struct hdmi_avi_infoframe *f,u8 *buf,unsigned int n)
 {(void)f;assert(n==17);for(unsigned int i=0;i<n;i++)buf[i]=i+17;return n;}
 """
-assert not re.search(r"\.mode_set\s*=", source), "Mode programming must run only in atomic enable"
+assert not re.search(r"\.mode_set\s*=", source), (
+    "Mode programming must run only in atomic enable"
+)
 ctx = structure(source, "it66121_ctx")
 irq_mocks = r"""
 #define EPROBE_DEFER 517
@@ -138,7 +140,7 @@ int main(void)
  struct regmap map={0};
  struct drm_encoder encoder={.crtc=&map};
  struct drm_connector connector={.dev=(void *)1,.display_info={.is_hdmi=true}};
- struct it66121_ctx ctx={.regmap=&map,.bridge={.encoder=&encoder},.connector=&connector,.bus_width=24,.id=ID_IT66121};
+ struct it66121_ctx ctx={.regmap=&map,.bridge={.encoder=&encoder},.connector=&connector,.bus_width=24,.id=ID_IT66121,.fl2000=true,.hpd_enabled=true};
  struct drm_crtc_state crtc={.adjusted_mode={.clock=32000}};
  struct drm_atomic_state state={.connector=&connector,.crtc=&crtc};
  /* Simulate the encoder reset immediately before atomic bridge enable. */
@@ -159,7 +161,7 @@ int main(void)
  assert(!(map.values[IT66121_SW_RST_REG]&(IT66121_SW_RST_REF|IT66121_SW_RST_VID)));
  it66121_bridge_disable(&ctx.bridge,&state);
  assert(map.values[IT66121_AV_MUTE_REG]&IT66121_AV_MUTE_ON);
- assert(ctx.connector==&connector);
+ assert(!ctx.connector);
  /* DVI keeps parallel-bus/AFE setup while stopping AVI packets. */
  connector.display_info.is_hdmi=false;
  memset(map.values,0xff,sizeof(map.values));
@@ -210,6 +212,26 @@ int main(void)
   assert(map.values[IT66121_AV_MUTE_REG]&IT66121_AV_MUTE_ON);
  }
  fault_write_reg=-1;
+ /* Generic boards retain their clock phase and existing IRQ configuration. */
+ ctx.fl2000=false;map.values[IT66121_INT_REG]=0xc0;
+ map.values[IT66121_INT_MASK1_REG]=0x5a;
+ memset(register_writes,0,sizeof(register_writes));
+ it66121_bridge_enable(&ctx.bridge,&state);
+ assert(map.values[IT66121_INPUT_MODE_REG]==0);
+ assert(map.values[IT66121_INT_REG]==0xc0);
+ assert(map.values[IT66121_INT_MASK1_REG]==0x5a);
+ assert(!register_writes[IT66121_INT_REG] && !register_writes[IT66121_INT_MASK1_REG]);
+ it66121_bridge_disable(&ctx.bridge,&state);assert(!ctx.connector);
+ ctx.bus_width=12;assert(!it66121_configure_input(&ctx));
+ assert(map.values[IT66121_INPUT_MODE_REG]==IT66121_INPUT_MODE_DDR);ctx.bus_width=24;
+ /* A transport reset must preserve an explicit framework HPD disable. */
+ ctx.fl2000=true;ctx.bridge.dev=(void *)1;
+ it66121_bridge_hpd_disable(&ctx.bridge);assert(!ctx.hpd_enabled);
+ it66121_bridge_enable(&ctx.bridge,&state);
+ assert(map.values[IT66121_INT_MASK1_REG]==0xff);
+ it66121_bridge_hpd_enable(&ctx.bridge);assert(ctx.hpd_enabled);
+ it66121_bridge_enable(&ctx.bridge,&state);
+ assert(map.values[IT66121_INT_MASK1_REG]==0xfe);
  /* Polling must leave a latched IRQ untouched. */
  map.values[IT66121_SYS_STATUS_REG]=0xc0;
  map.values[IT66121_INT_STATUS1_REG]=1;
@@ -268,7 +290,7 @@ int main(void)
  mode.clock=148501;assert(it66121_bridge_mode_valid(&ctx.bridge,&connector.display_info,&mode)==MODE_CLOCK_HIGH);
  mode.clock=24999;assert(it66121_bridge_mode_valid(&ctx.bridge,&connector.display_info,&mode)==MODE_CLOCK_LOW);
  mode.clock=32000;mode.flags=DRM_MODE_FLAG_INTERLACE;
- assert(it66121_bridge_mode_valid(&ctx.bridge,&connector.display_info,&mode)==MODE_BAD);
+ assert(it66121_bridge_mode_valid(&ctx.bridge,&connector.display_info,&mode)==MODE_OK);
  fault_reg=IT66121_INPUT_MODE_REG;assert(it66121_configure_input(&ctx)==-EIO);
  fault_reg=IT66121_INT_MASK1_REG;assert(it66121_restore_interrupts(&ctx)==-EIO);
  assert(IT66121_CLK_BANK_MASK==3 && IT66121_CLK_BANK_SELECT==1);
@@ -291,6 +313,7 @@ int main(void)
  assert(requested_thread(37,&ctx)==IRQ_HANDLED);
  fault_reg=IT66121_SYS_STATUS_REG;
  assert(requested_thread(37,&ctx)==IRQ_NONE);
+ ctx.fl2000=false;assert(requested_thread(37,&ctx)==IRQ_HANDLED);ctx.fl2000=true;
  it66121_unbind(&component,NULL,&encoder);
  assert(!requested_irq && !ctx.connector && irq_frees==1);
  attach_error=-EIO;assert(it66121_bind(&component,NULL,&encoder)==-EIO && !requested_irq && !ctx.irq);

@@ -40,13 +40,17 @@ config DRM_FL2000_FRAME_BMI2
 endchoice
 
 config DRM_FL2000_IT66121
-	tristate "IT66121 bridge with FL2000 transport adaptations"
-	depends on DRM_FL2000
+	tristate "IT6610/21/22 bridge with optional FL2000 transport"
+	depends on DRM && I2C
 	depends on DRM_ITE_IT66121 = n
 	select REGMAP_I2C
+	select DRM_KMS_HELPER
+	select DRM_DISPLAY_HELPER
+	select SND_SOC_HDMI_CODEC if SND_SOC
 	help
-	  Optional transport-adapted IT66121 bridge. Instantiate its I2C
-	  client explicitly on the FL2000 adapter. This module shares the
+	  IT6610/21/22 bridge with firmware-described board support and
+	  optional FL2000 transport adaptations. Instantiate FL2000 clients
+	  through userspace enumeration. This module shares the
 	  standard IT66121 module name and cannot be enabled alongside it.
 
 	  If built as a module, this is called it66121.
