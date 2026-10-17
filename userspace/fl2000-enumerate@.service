@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0
+[Unit]
+Description=Enumerate the display bridge on %I
+BindsTo=%i.device
+After=%i.device
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/fl2000-enumerate /%I /etc/fl2000/enumerator.conf
+TimeoutStartSec=30

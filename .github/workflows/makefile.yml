@@ -69,7 +69,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo --preserve-env=DEBIAN_FRONTEND apt-get install -y --no-install-recommends \
-            build-essential libdrm-dev pkg-config python3 lua5.4 tshark
+            build-essential libdrm-dev pkg-config python3 lua5.4 tshark shellcheck
       - name: Run sanitizer-backed logic regressions
         run: |
           python3 tests/test_logic.py
@@ -81,13 +81,16 @@ jobs:
           python3 tests/test_drm.py
           python3 tests/test_interrupt.py
           python3 tests/test_tools.py
+          python3 tests/test_enumerator.py
       - name: Validate scripts
         run: |
-          for script in scripts/*.sh; do bash -n "$script"; done
+          for script in scripts/*.sh userspace/*.sh; do bash -n "$script"; done
+          shellcheck scripts/*.sh userspace/*.sh
           for script in startup emulate sign; do sh -n "scripts/$script.sh"; done
           for script in startup emulate sign checkpatch clang-format; do
             "scripts/$script.sh" --help
           done
+          userspace/fl2000-enumerate.sh --help
           python3 -m compileall -q tests
           luac -p scripts/fl2k.lua
           luac -p tests/fl2k_headless.lua

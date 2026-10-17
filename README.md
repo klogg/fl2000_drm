@@ -72,18 +72,31 @@ The external build continues to accept `FL2000_FRAME_BACKEND` overrides.
 ## Bridge configuration on x86
 
 FL2000 registers an I2C adapter without assuming which bridge is attached.
-Configure the actual bridge explicitly; Device Tree is not required. For the
-IT66121 test adapter at address 0x4c, after loading its bridge driver and FL2000:
+Device Tree and a kernel rebuild are not required for userspace enumeration.
+Install the four enumeration components after installing the driver modules:
 
 ```sh
-scripts/configure-bridge.sh it66121 0x4c
+sudo make install-enumerator
+sudo udevadm control --reload-rules
 ```
 
-The helper uses the kernel's standard I2C `new_device` interface. Supply an I2C
-bus number as the third argument when multiple FL2000 adapters are present.
-Use the device type and address for the attached hardware. A bridge driver must
-provide the component binding and standard IRQ handling described in
-[the architecture](docs/ARCHITECTURE.md); I2C enumeration alone is insufficient.
+The runtime requires POSIX shell, awk, base utilities, `flock` (util-linux),
+`modprobe` (kmod), and `i2ctransfer` (i2c-tools). No Python is used.
+On connection, udev activates one systemd service per FL2000 I2C adapter. The
+service reads `/etc/fl2000/enumerator.conf`, identifies a configured bridge
+using register reads, and creates its client through I2C `new_device`.
+The shipped configuration covers IT66121 at 0x4c and 0x4d. Bridge identities,
+addresses, module names, and the binding timeout reside in that configuration;
+the shell program contains no bridge-specific identification data.
+
+See [enumeration configuration](docs/ENUMERATION.md) for the format, manual
+activation on an already-connected adapter, and diagnostics. Installation
+preserves an existing configuration file. The service stops if its adapter
+is removed; the I2C core removes its clients automatically.
+
+A bridge driver still needs the component binding and standard IRQ handling
+described in [the architecture](docs/ARCHITECTURE.md). Enumeration alone does
+not adapt an arbitrary upstream bridge driver.
 The QEMU startup script declares the current test fixture explicitly and accepts
 `BRIDGE_MODULE`, `BRIDGE_TYPE`, `BRIDGE_ADDR`, and `I2C_BUS` overrides.
 
@@ -217,6 +230,7 @@ python3 tests/test_bridge.py
 python3 tests/test_driver.py
 python3 tests/test_interrupt.py
 python3 tests/test_tools.py
+python3 tests/test_enumerator.py
 ```
 
 For synthetic USB decoding and analysis callbacks, install headless TShark with

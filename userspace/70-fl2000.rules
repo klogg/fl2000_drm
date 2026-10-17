@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: GPL-2.0
+# An empty service instance is expanded to the escaped full sysfs device path.
+ACTION=="add", SUBSYSTEM=="i2c", KERNEL=="i2c-[0-9]*", ATTR{name}=="FL2000 bridge I2C bus", ATTRS{idVendor}=="1d5c", ATTRS{idProduct}=="2000", TAG+="systemd", ENV{SYSTEMD_WANTS}+="fl2000-enumerate@.service"

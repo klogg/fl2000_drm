@@ -1,9 +1,11 @@
 # Driver architecture
 
 The FL2000 core registers an I2C adapter and waits for a bridge component on
-that adapter. Userspace explicitly creates the bridge's I2C client through
-`new_device`; the core does not scan chip IDs, select a bridge driver, or
-require Device Tree. Components are matched by their owning I2C adapter.
+that adapter. A udev-activated service identifies bridges from external
+configuration and creates the I2C client through `new_device`; the core does
+not scan chip IDs, select a bridge driver, or require Device Tree. Components
+are matched by their owning I2C adapter.
+See [userspace enumeration](ENUMERATION.md) for configuration and activation.
 Each dongle owns its own adapter and DRM device. Component binding receives
 its DRM encoder; the bridge attaches itself using `drm_bridge_attach()`.
 The master uses the encoder bridge chain and pins the matched I2C driver's
