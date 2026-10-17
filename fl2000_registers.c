@@ -5,6 +5,12 @@
  */
 
 #include "fl2000.h"
+#include <linux/delay.h>
+#include <linux/i2c.h>
+#include <linux/regmap.h>
+#include <linux/slab.h>
+#include <linux/usb.h>
+#include "fl2000_registers.h"
 #include <linux/bitfield.h>
 
 #define CONTROL_MSG_READ  64

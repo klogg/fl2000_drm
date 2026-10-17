@@ -4,6 +4,9 @@
  * (C) Copyright 2018-2020, Artem Mygaiev
  */
 #include "fl2000.h"
+#include <linux/module.h>
+#include <linux/slab.h>
+#include <linux/usb.h>
 
 static struct usb_driver fl2000_driver;
 

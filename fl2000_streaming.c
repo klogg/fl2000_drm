@@ -5,6 +5,12 @@
  */
 /* FL2000 bulk streaming. Interface 0 altsetting 1 avoids shared endpoint 1. */
 #include "fl2000.h"
+#include <linux/dma-mapping.h>
+#include <linux/scatterlist.h>
+#include <linux/usb.h>
+#include <linux/vmalloc.h>
+#include <drm/drm_fourcc.h>
+#include <drm/drm_rect.h>
 #include <linux/overflow.h>
 #include <linux/unaligned.h>
 #include "fl2000_frame.h"

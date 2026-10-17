@@ -5,6 +5,9 @@
  */
 
 #include "fl2000.h"
+#include <linux/i2c.h>
+#include <linux/module.h>
+#include <linux/usb.h>
 #include <linux/property.h>
 
 /* The controller transfers aligned four-byte register groups. Byte writes

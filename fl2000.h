@@ -7,37 +7,17 @@
 #ifndef __FL2000_DRM_H__
 #define __FL2000_DRM_H__
 
-#include <linux/module.h>
 #include <linux/atomic.h>
+#include <linux/mutex.h>
 #include <linux/types.h>
-#include <linux/math64.h>
-#include <linux/kernel.h>
-#include <linux/usb.h>
-#include <linux/i2c.h>
-#include <linux/component.h>
-#include <linux/regmap.h>
-#include <linux/vmalloc.h>
-#include <linux/dma-mapping.h>
-#include <linux/device.h>
-#include <drm/drm_gem.h>
-#include <drm/drm_vblank.h>
-#include <drm/drm_drv.h>
-#include <drm/drm_fourcc.h>
-#include <drm/drm_framebuffer.h>
-#include <drm/drm_fbdev_shmem.h>
-#include <drm/clients/drm_client_setup.h>
-#include <drm/drm_managed.h>
-#include <drm/drm_modeset_helper.h>
-#include <drm/drm_gem_atomic_helper.h>
-#include <drm/drm_gem_framebuffer_helper.h>
-#include <drm/drm_gem_shmem_helper.h>
-#include <drm/drm_atomic_helper.h>
-#include <drm/drm_encoder.h>
-#include <drm/drm_crtc_helper.h>
-#include <drm/drm_probe_helper.h>
-#include <drm/drm_damage_helper.h>
 
-#include "fl2000_registers.h"
+struct device;
+struct drm_device;
+struct drm_rect;
+struct i2c_adapter;
+struct module;
+struct usb_device;
+struct usb_interface;
 
 /* Known USB interfaces of FL2000 */
 enum fl2000_interface {

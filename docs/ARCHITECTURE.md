@@ -7,6 +7,11 @@ not scan chip IDs, select a bridge driver, or require Device Tree. Components
 are matched by their owning I2C adapter.
 See [userspace enumeration](ENUMERATION.md) for configuration and activation.
 
+`fl2000.h` contains shared state and subsystem declarations, with forward
+declarations for pointer-only types. DRM helpers and other implementation
+headers are included by the source files that use them; transport subsystems
+do not inherit framebuffer, GEM, atomic, or fbdev helper dependencies.
+
 Each dongle owns its own adapter and DRM device. Component binding receives
 its DRM encoder; the bridge attaches itself using `drm_bridge_attach()`.
 The master uses the encoder bridge chain and pins the matched I2C driver's

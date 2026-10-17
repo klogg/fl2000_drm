@@ -4,6 +4,11 @@
  * (C) Copyright 2018-2020, Artem Mygaiev
  */
 #include "fl2000.h"
+#include <linux/delay.h>
+#include <linux/i2c.h>
+#include <linux/slab.h>
+#include <linux/usb.h>
+#include <linux/workqueue.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
