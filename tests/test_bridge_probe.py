@@ -81,16 +81,16 @@ static bool i2c_check_functionality(struct i2c_adapter *a,int flags)
 { assert(a==&adapter && flags==1);return true; }
 static unsigned int alignment=4,delay=1;
 static int property_error;
-static bool device_property_present(struct device *dev,const char *name)
+static bool device_property_present(const struct device *dev,const char *name)
 { assert(dev==&adapter.dev);return transport && (!strcmp(name,"i2c-register-access-alignment") || !strcmp(name,"display-input-clock-delay")); }
-static bool device_property_read_bool(struct device *dev,const char *name)
+static bool device_property_read_bool(const struct device *dev,const char *name)
 {
  assert(dev==&adapter.dev);
  if(!strcmp(name,"interrupt-active-high") || !strcmp(name,"interrupt-open-drain"))return false;
  assert(!strcmp(name,"display-controller-reset") || !strcmp(name,"drm-component-attachment") || !strcmp(name,"interrupt-ack-retry"));
  return transport;
 }
-static int device_property_read_u32(struct device *dev,const char *name,u32 *value)
+static int device_property_read_u32(const struct device *dev,const char *name,u32 *value)
 {
  assert(dev==&adapter.dev && transport);
  if(property_error)return property_error;

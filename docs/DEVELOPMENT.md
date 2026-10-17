@@ -35,6 +35,9 @@ formatting. `scripts/checkpatch.sh` remains strict, with two narrow exceptions:
   field names use that spelling.
 
 The exceptions do not apply to other files or disable other checks.
+Kernel callback parameter types must match their framework declarations.
+Narrow `NOSONAR` annotations identify callback parameters that cannot accept
+pointer-to-const suggestions without breaking that ABI.
 
 CI sets `UBSAN_OPTIONS=halt_on_error=1` for sanitizer regressions so undefined
 behavior fails the job rather than producing diagnostics followed by success.
