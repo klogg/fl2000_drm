@@ -49,7 +49,7 @@ typedef int irqreturn_t;
 struct mutex { int unused; };
 struct device { int unused; };
 struct i2c_client { int irq; };
-struct i2c_adapter;
+struct i2c_adapter { struct device dev; };
 struct drm_display_mode { unsigned int clock, flags; };
 struct drm_display_info { bool is_hdmi; };
 struct drm_connector { void *dev; struct drm_display_info display_info; };
@@ -102,7 +102,21 @@ static int hdmi_avi_infoframe_pack(struct hdmi_avi_infoframe *f,u8 *buf,unsigned
 """
 ctx = structure(source, "it66121_ctx")
 irq_mocks = r"""
-struct fl2000_bridge { struct drm_bridge *bridge; void *owner; int irq; };
+#define EPROBE_DEFER 517
+#define DOMAIN_BUS_ANY 0
+#define DRM_BRIDGE_ATTACH_NO_CONNECTOR 1
+struct irq_domain { int unused; };
+static struct irq_domain domain;
+static struct i2c_adapter adapter;
+static bool missing_domain,missing_mapping;
+static int attach_error;
+#define dev_fwnode(dev) (dev)
+static struct irq_domain *irq_find_matching_fwnode(struct device *dev,int token)
+{ assert(dev==&adapter.dev && token==DOMAIN_BUS_ANY);return missing_domain?NULL:&domain; }
+static int irq_find_mapping(struct irq_domain *d,int hwirq)
+{ assert(d==&domain && !hwirq);return missing_mapping?0:37; }
+static int drm_bridge_attach(struct drm_encoder *encoder,struct drm_bridge *bridge,void *prev,int flags)
+{ assert(encoder && bridge && !prev && flags==DRM_BRIDGE_ATTACH_NO_CONNECTOR);return attach_error; }
 static struct it66121_ctx *bound_ctx;
 static irqreturn_t (*requested_thread)(int,void *);
 static int requested_irq,request_error,irq_frees;
@@ -220,21 +234,25 @@ int main(void)
  assert(IT66121_INPUT_CSC_SELECT_MASK==3 && IT66121_INPUT_CSC_BTAT1004==4);
  assert(IT66121_INT_HDMI_EN==0x20 && IT66121_INT_REF_CLK_DIV==0x0c);
  /* Binding owns a normal IRQ request and releases it before bridge removal. */
- struct fl2000_bridge binding={.irq=37};struct device component={0};
+ struct device component={0};ctx.adapter=&adapter;
  bound_ctx=&ctx;fault_reg=-1;
- binding.irq=0;assert(it66121_bind(&component,NULL,&binding)==-EINVAL);
- binding.irq=37;request_error=-EBUSY;
- assert(it66121_bind(&component,NULL,&binding)==-EBUSY && !binding.bridge && !requested_irq);
- request_error=0;assert(!it66121_bind(&component,NULL,&binding));
- assert(binding.bridge==&ctx.bridge && requested_irq==37 && requested_thread);
+ missing_domain=true;assert(it66121_bind(&component,NULL,&encoder)==-EPROBE_DEFER);
+ missing_domain=false;missing_mapping=true;assert(it66121_bind(&component,NULL,&encoder)==-EPROBE_DEFER);
+ missing_mapping=false;
+ request_error=-EBUSY;
+ assert(it66121_bind(&component,NULL,&encoder)==-EBUSY && !requested_irq);
+ request_error=0;assert(!it66121_bind(&component,NULL,&encoder));
+ assert(requested_irq==37 && requested_thread);
  map.values[IT66121_SYS_STATUS_REG]=0xc0;map.values[IT66121_INT_STATUS1_REG]=1;
  assert(requested_thread(37,&ctx)==IRQ_HANDLED);
  fault_reg=IT66121_SYS_STATUS_REG;
  assert(requested_thread(37,&ctx)==IRQ_NONE);
- it66121_unbind(&component,NULL,&binding);
- assert(!requested_irq && !binding.bridge && !binding.owner && !ctx.connector && irq_frees==1);
- fault_reg=-1;assert(!it66121_bind(&component,NULL,&binding));
- it66121_unbind(&component,NULL,&binding);assert(irq_frees==2);
+ it66121_unbind(&component,NULL,&encoder);
+ assert(!requested_irq && !ctx.connector && irq_frees==1);
+ attach_error=-EIO;assert(it66121_bind(&component,NULL,&encoder)==-EIO && !requested_irq && !ctx.irq);
+ attach_error=0;
+ fault_reg=-1;assert(!it66121_bind(&component,NULL,&encoder));
+ it66121_unbind(&component,NULL,&encoder);assert(irq_frees==3);
  puts("PASS: IRQ request failure, handler delivery and rebind, bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors");
 }
 """

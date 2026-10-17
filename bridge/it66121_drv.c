@@ -9,13 +9,14 @@
  * FL2000 adaptations: USB component lifetime, aligned DWORD I2C/EDID,
  * fixed parallel input timing, reset restoration, and polling fallback.
  */
-#include "../fl2000_bridge.h"
 #include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/hdmi.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
+#include <linux/irqdomain.h>
+#include <linux/property.h>
 #include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -729,35 +730,40 @@ static irqreturn_t it66121_irq_thread(int irq __always_unused, void *data)
 	return IRQ_HANDLED;
 }
 
-/* Component binding supplies the IRQ resource on firmware-less USB adapters. */
+/* Firmware-less adapters publish the bridge IRQ through their IRQ domain. */
 static int it66121_bind(struct device *comp, struct device *master __always_unused, void *data)
 {
-	struct fl2000_bridge *binding = data;
+	struct drm_encoder *encoder = data;
+	struct irq_domain *domain;
 	struct it66121_ctx *ctx = dev_get_drvdata(comp);
 	int ret;
 
-	ctx->irq = binding->irq;
-	if (ctx->irq <= 0)
-		return -EINVAL;
+	domain = irq_find_matching_fwnode(dev_fwnode(&ctx->adapter->dev), DOMAIN_BUS_ANY);
+	if (!domain)
+		return -EPROBE_DEFER;
+	ctx->irq = irq_find_mapping(domain, 0);
+	if (!ctx->irq)
+		return -EPROBE_DEFER;
 	ret = request_threaded_irq(ctx->irq, NULL, it66121_irq_thread,
 				   IRQF_ONESHOT | IRQF_TRIGGER_LOW, dev_name(comp), ctx);
 	if (ret)
 		return ret;
-	binding->bridge = &ctx->bridge;
-	binding->owner = THIS_MODULE;
-	return 0;
+	ret = drm_bridge_attach(encoder, &ctx->bridge, NULL, DRM_BRIDGE_ATTACH_NO_CONNECTOR);
+	if (ret) {
+		free_irq(ctx->irq, ctx);
+		ctx->irq = 0;
+	}
+	return ret;
 }
 
-static void it66121_unbind(struct device *comp, struct device *master __always_unused, void *data)
+static void it66121_unbind(struct device *comp, struct device *master __always_unused,
+			   void *data __always_unused)
 {
-	struct fl2000_bridge *binding = data;
 	struct it66121_ctx *ctx = dev_get_drvdata(comp);
 
 	free_irq(ctx->irq, ctx);
 	ctx->irq = 0;
 	ctx->connector = NULL;
-	binding->bridge = NULL;
-	binding->owner = NULL;
 }
 
 static const struct component_ops it66121_component_ops = {

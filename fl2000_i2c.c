@@ -5,6 +5,7 @@
  */
 
 #include "fl2000.h"
+#include <linux/property.h>
 
 /* The controller transfers aligned four-byte register groups. Byte writes
  * require read-modify-write; full groups avoid destructive side-effect reads.
@@ -165,6 +166,14 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	ret = i2c_add_adapter(adapter);
 	if (ret) {
 		dev_err(&usb_dev->dev, "Cannot add adapter! (%d)", ret);
+		devres_free(adapter);
+		return ret;
+	}
+
+	/* Give the IRQ domain an adapter-local identity without requiring DT. */
+	ret = device_create_managed_software_node(&adapter->dev, NULL, NULL);
+	if (ret) {
+		i2c_del_adapter(adapter);
 		devres_free(adapter);
 		return ret;
 	}

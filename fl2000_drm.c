@@ -6,7 +6,6 @@
 
 #include "fl2000.h"
 #include <drm/drm_atomic.h>
-#include "fl2000_bridge.h"
 #include <drm/drm_bridge.h>
 #include <drm/drm_bridge_connector.h>
 #include <drm/drm_plane_helper.h>
@@ -129,7 +128,6 @@ struct fl2000_drm_if {
 	struct drm_encoder encoder;
 	struct drm_connector *connector;
 	struct usb_device *usb_dev;
-	struct fl2000_bridge bridge;
 };
 
 DEFINE_DRM_GEM_FOPS(fl2000_drm_driver_fops);
@@ -716,12 +714,14 @@ int fl2000_drm_hotplug(const struct usb_device *usb_dev)
 	if (drm && drm_dev_enter(drm, &idx)) {
 		struct fl2000_drm_if *drm_if = container_of(drm, struct fl2000_drm_if, drm);
 		enum drm_connector_status status;
+		struct drm_bridge *bridge = drm_bridge_chain_get_first_bridge(&drm_if->encoder);
 
 		/* Recovery can follow an acknowledgment that already cleared HPD. */
-		status = drm_bridge_detect(drm_if->bridge.bridge, drm_if->connector);
+		status = drm_bridge_detect(bridge, drm_if->connector);
 		ret = status == connector_status_unknown ? -EIO : 0;
 		if (!ret && status != READ_ONCE(drm_if->connector->status))
-			drm_bridge_hpd_notify(drm_if->bridge.bridge, status);
+			drm_bridge_hpd_notify(bridge, status);
+		drm_bridge_put(bridge);
 		drm_dev_exit(idx);
 	}
 	return ret;
@@ -788,26 +788,20 @@ static int fl2000_drm_bind(struct device *master)
 	ret = fl2000_pipeline_init(drm_if);
 	if (ret)
 		goto put;
-	drm_if->bridge.irq = fl2000_interrupt_irq(usb_dev);
-	if (drm_if->bridge.irq < 0) {
-		ret = drm_if->bridge.irq;
-		goto put;
-	}
-	ret = component_bind_all(master, &drm_if->bridge);
-	if (ret)
-		goto put;
-	/* The helper retains bridge callbacks until the last DRM file is closed. */
-	if (!try_module_get(drm_if->bridge.owner)) {
+	/* Component matching and binding run under the same framework lock.
+	 * Pin the selected provider before invoking its callbacks; the connector
+	 * retains those callbacks until the last DRM file is closed.
+	 */
+	if (!try_module_get(device->bridge_owner)) {
 		ret = -ENODEV;
-		goto unbind;
+		goto put;
 	}
-	ret = drmm_add_action_or_reset(drm, fl2000_bridge_module_put, drm_if->bridge.owner);
+	ret = drmm_add_action_or_reset(drm, fl2000_bridge_module_put, device->bridge_owner);
 	if (ret)
-		goto unbind;
-	ret = drm_bridge_attach(&drm_if->encoder, drm_if->bridge.bridge, NULL,
-				DRM_BRIDGE_ATTACH_NO_CONNECTOR);
+		goto put;
+	ret = component_bind_all(master, &drm_if->encoder);
 	if (ret)
-		goto unbind;
+		goto put;
 	connector = drm_bridge_connector_init(drm, &drm_if->encoder);
 	if (IS_ERR(connector)) {
 		ret = PTR_ERR_OR_ZERO(connector);
@@ -842,8 +836,7 @@ detach:
 	WRITE_ONCE(device->drm, NULL);
 detach_encoder:
 	drm_encoder_cleanup(&drm_if->encoder);
-unbind:
-	component_unbind_all(master, &drm_if->bridge);
+	component_unbind_all(master, &drm_if->encoder);
 put:
 	drm_dev_put(drm);
 	return ret;
@@ -866,7 +859,7 @@ static void fl2000_drm_unbind(struct device *master)
 	fl2000_streaming_disable(usb_dev);
 	/* Encoder cleanup owns bridge detachment; do it before its I2C driver can go away. */
 	drm_encoder_cleanup(&drm_if->encoder);
-	component_unbind_all(master, &drm_if->bridge);
+	component_unbind_all(master, &drm_if->encoder);
 	WRITE_ONCE(device->drm, NULL);
 	drm_dev_put(drm);
 }
@@ -878,7 +871,13 @@ static const struct component_master_ops fl2000_master_ops = {
 
 static int fl2000_component_compare(struct device *client_dev, void *data)
 {
-	return fl2000_i2c_verify_client(data, client_dev);
+	struct usb_device *usb_dev = data;
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
+	if (!fl2000_i2c_verify_client(usb_dev, client_dev))
+		return 0;
+	device->bridge_owner = client_dev->driver->owner;
+	return 1;
 }
 
 int fl2000_drm_init(struct usb_device *usb_dev)

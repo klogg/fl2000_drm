@@ -7,6 +7,7 @@
 #include <linux/interrupt.h>
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
+#include <linux/property.h>
 
 #define FL2000_INTR_STALL_RETRIES   3
 #define FL2000_INTR_STATUS_RETRY_MS 1000
@@ -14,7 +15,6 @@
 struct fl2000_interrupt {
 	struct usb_device *usb_dev;
 	struct irq_domain *domain;
-	struct fwnode_handle *fwnode;
 	unsigned int irq;
 	struct urb *urb;
 	u8 *buf;
@@ -75,23 +75,14 @@ static const struct irq_domain_ops fl2000_irq_domain_ops = {
 
 static int fl2000_intr_irq_init(struct fl2000_interrupt *intr)
 {
-	intr->fwnode = irq_domain_alloc_named_fwnode(dev_name(&intr->usb_dev->dev));
-	if (!intr->fwnode)
-		return -ENOMEM;
-	intr->domain = irq_domain_create_linear(intr->fwnode, 1, &fl2000_irq_domain_ops, intr);
+	struct i2c_adapter *adapter = fl2000_i2c_adapter(intr->usb_dev);
+
+	intr->domain = irq_domain_create_linear(dev_fwnode(&adapter->dev), 1,
+						&fl2000_irq_domain_ops, intr);
 	if (!intr->domain)
 		return -ENOMEM;
 	intr->irq = irq_create_mapping(intr->domain, 0);
 	return intr->irq ? 0 : -ENOMEM;
-}
-
-int fl2000_interrupt_irq(const struct usb_device *usb_dev)
-{
-	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
-
-	if (!device->interrupt)
-		return -ENODEV;
-	return device->interrupt->irq;
 }
 
 static void fl2000_intr_recover_stall(struct fl2000_interrupt *intr)
@@ -265,7 +256,6 @@ static void fl2000_intr_release(struct device *dev __always_unused, void *res)
 		irq_dispose_mapping(intr->irq);
 	if (intr->domain)
 		irq_domain_remove(intr->domain);
-	irq_domain_free_fwnode(intr->fwnode);
 	usb_free_urb(intr->urb);
 	kfree(intr->buf);
 	mutex_unlock(&intr->mutex);

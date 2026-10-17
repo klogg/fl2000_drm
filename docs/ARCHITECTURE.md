@@ -4,10 +4,11 @@ The FL2000 core registers an I2C adapter and waits for a bridge component on
 that adapter. Userspace explicitly creates the bridge's I2C client through
 `new_device`; the core does not scan chip IDs, select a bridge driver, or
 require Device Tree. Components are matched by their owning I2C adapter.
-Each dongle owns its own adapter and DRM device. The generic handoff interface
-is declared in `fl2000_bridge.h`. The master supplies a Linux IRQ resource;
-the provider returns its DRM bridge and module owner. No interrupt callback
-or connector pointer is passed between the drivers.
+Each dongle owns its own adapter and DRM device. Component binding receives
+its DRM encoder; the bridge attaches itself using `drm_bridge_attach()`.
+The master uses the encoder bridge chain and pins the matched I2C driver's
+module until the final DRM device release. There is no shared private header
+or bridge payload between the drivers.
 
 The supplied `it66121.ko` is one optional bridge provider. Current providers
 need component binding and an IRQ request in addition to their normal I2C
@@ -23,7 +24,11 @@ Bridge registers are uncached because FL2000 controls their resets. Polling
 reads HPD without acknowledging interrupts; the bridge IRQ handler owns
 acknowledgment and calls `drm_bridge_hpd_notify()` for HPD events.
 
-FL2000 creates a one-input IRQ domain without Device Tree. Its USB worker
+FL2000 creates a one-input IRQ domain keyed by its I2C adapter's software
+node, without Device Tree. The bridge finds that domain using the adapter's
+fwnode and looks up input zero through standard IRQ-domain APIs. The adapter
+owns the node; the FL2000 interrupt resources own the domain and mapping.
+Its USB worker
 calls `handle_nested_irq()` in sleepable context, so the bridge's normal
 threaded handler finishes before another interrupt URB is submitted. The bridge
 requests the IRQ during component binding and frees it during unbinding;
@@ -65,7 +70,7 @@ PLL clock quantization and horizontal-total adjustment run in the CRTC
 `mode_fixup` callback during modeset checking. They preserve bridge timing
 adjustments and refresh derived CRTC timings. Plane validation only reads the
 resulting mode when checking geometry and USB bandwidth. The encoder attaches
-the IT66121 bridge through the existing component path.
+a bridge through the component framework.
 
 ## Frames and transport
 

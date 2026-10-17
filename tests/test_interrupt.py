@@ -50,19 +50,21 @@ struct fl2000_device { struct fl2000_interrupt *interrupt; atomic_t i2c_errors; 
 static struct fl2000_device device;
 struct irq_domain { int unused; };
 struct fwnode_handle { int unused; };
-static int allocation_failure,allocation_step,live_nodes,live_domains,live_mappings;
+static int allocation_failure,allocation_step,live_domains,live_mappings;
 static const int fl2000_irq_domain_ops;
 #define GFP_KERNEL 0
 #define dev_name(dev) ((void)(dev), "fl2000-test")
-static struct fwnode_handle *irq_domain_alloc_named_fwnode(const char *name)
-{ assert(name);if(++allocation_step==allocation_failure)return NULL;live_nodes++;return calloc(1,sizeof(struct fwnode_handle)); }
+struct i2c_adapter { struct device dev; };
+static struct i2c_adapter adapter;
+static struct fwnode_handle node;
+static struct i2c_adapter *fl2000_i2c_adapter(const struct usb_device *usb) { (void)usb;return &adapter; }
+static struct fwnode_handle *dev_fwnode(struct device *dev) { assert(dev==&adapter.dev);return &node; }
 static struct irq_domain *irq_domain_create_linear(struct fwnode_handle *node,int size,const void *ops,void *data)
 { assert(node && size==1 && ops==&fl2000_irq_domain_ops && data);if(++allocation_step==allocation_failure)return NULL;live_domains++;return calloc(1,sizeof(struct irq_domain)); }
 static unsigned int irq_create_mapping(struct irq_domain *domain,int hwirq)
 { assert(domain && !hwirq);if(++allocation_step==allocation_failure)return 0;live_mappings++;return 37; }
 static void irq_dispose_mapping(unsigned int irq) { assert(irq==37 && live_mappings==1);live_mappings--; }
 static void irq_domain_remove(struct irq_domain *domain) { assert(domain && !live_mappings);live_domains--;free(domain); }
-static void irq_domain_free_fwnode(struct fwnode_handle *node) { if(node){assert(!live_domains);live_nodes--;free(node);} }
 static void usb_free_urb(struct urb *urb) { assert(!urb); }
 static void kfree(void *buf) { assert(!buf); }
 #define resource device.interrupt
@@ -110,14 +112,13 @@ static void complete(struct fl2000_interrupt *intr,int status)
 int main(void)
 {
  struct usb_device usb={0};struct urb urb={.pipe=3};
- assert(fl2000_interrupt_irq(&usb)==-ENODEV);
- for(allocation_failure=1;allocation_failure<=4;allocation_failure++) {
+ for(allocation_failure=1;allocation_failure<=3;allocation_failure++) {
   struct fl2000_interrupt allocated={.usb_dev=&usb};
   allocation_step=0;
-  assert(fl2000_intr_irq_init(&allocated)==(allocation_failure<=3?-ENOMEM:0));
-  if(allocation_failure==4){resource=&allocated;assert(fl2000_interrupt_irq(&usb)==37);resource=NULL;}
+  assert(fl2000_intr_irq_init(&allocated)==(allocation_failure<=2?-ENOMEM:0));
+  if(allocation_failure==3)assert(allocated.irq==37);
   fl2000_intr_release(NULL,&allocated);
-  assert(!live_nodes && !live_domains && !live_mappings);
+  assert(!live_domains && !live_mappings);
  }
  struct fl2000_interrupt intr={.usb_dev=&usb,.urb=&urb,.irq=37,.enabled=true};
  urb.context=&intr;current=&intr;
@@ -278,7 +279,6 @@ parts = (
             "fl2000_intr_completion",
             "fl2000_intr_stop",
             "fl2000_intr_irq_init",
-            "fl2000_interrupt_irq",
             "fl2000_intr_release",
             "fl2000_enable_interrupt",
         )

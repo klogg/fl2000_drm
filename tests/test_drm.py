@@ -35,14 +35,14 @@ struct usb_device { struct device dev; };
 struct usb_interface { int unused; };
 struct drm_plane { int unused; };
 struct drm_crtc { int unused; };
-struct drm_encoder { int unused; };
+struct drm_encoder { void *bridge; };
 enum drm_connector_status { connector_status_disconnected, connector_status_connected, connector_status_unknown };
 struct drm_connector { enum drm_connector_status status; };
 struct drm_mode_config { const void *funcs; int min_width,max_width,min_height,max_height; };
 struct drm_device { struct drm_mode_config mode_config; bool registered,unplugged; };
-struct fl2000_device { struct drm_device *drm; };
+struct fl2000_device { struct drm_device *drm; struct module *bridge_owner; };
 struct module { int refs; };
-struct fl2000_bridge { struct module *owner; void *bridge; int irq; };
+
 #define to_usb_device(d) ((struct usb_device *)(d))
 #define dev_get_drvdata(d) ((struct fl2000_device *)(d)->data)
 static int fl2000_drm_driver,fl2000_mode_config_funcs;
@@ -57,8 +57,6 @@ static void *owner_data;
 static bool try_module_get(struct module *m) { if(reject_provider)return false;m->refs++;return true; }
 static void module_put(struct module *m) { assert(m->refs);m->refs--; }
 static int hpd_calls,hotplug_events;
-static int supplied_irq=37;
-static int fl2000_interrupt_irq(const struct usb_device *usb) { (void)usb;return supplied_irq; }
 static enum drm_connector_status detected=connector_status_connected;
 static bool drm_dev_enter(struct drm_device *d,int *idx) { *idx=0;return !d->unplugged; }
 static void drm_dev_exit(int idx) { assert(!idx); }
@@ -76,10 +74,10 @@ static struct device *usb_intf_get_dma_device(struct usb_interface *i) { (void)i
 static void drm_dev_set_dma_dev(struct drm_device *d,struct device *dma) { (void)d;(void)dma; }
 static void put_device(struct device *d) { (void)d; }
 static int fl2000_pipeline_init(struct fl2000_drm_if *d) { (void)d;return operation(); }
-static int component_bind_all(struct device *d,struct fl2000_bridge *b)
-{ (void)d;assert(b->irq==37);int ret=operation();if(!ret){bound=true;b->owner=&provider;b->bridge=b;}return ret; }
-static int drm_bridge_attach(struct drm_encoder *e,void *b,void *prev,int flags)
-{ (void)e;(void)b;assert(bound && !prev && flags==1);int ret=operation();if(!ret)attached=true;return ret; }
+static int component_bind_all(struct device *d,struct drm_encoder *e)
+{ (void)d;int ret=operation();if(!ret){ret=operation();if(!ret){bound=true;attached=true;e->bridge=e;}}return ret; }
+static struct drm_bridge *drm_bridge_chain_get_first_bridge(struct drm_encoder *e) { return e->bridge; }
+static void drm_bridge_put(struct drm_bridge *b) { assert(b); }
 static struct drm_connector *drm_bridge_connector_init(struct drm_device *d,struct drm_encoder *e)
 { (void)d;(void)e;return operation()?ERR_PTR(-EIO):calloc(1,sizeof(struct drm_connector)); }
 static int drm_connector_attach_encoder(struct drm_connector *c,struct drm_encoder *e)
@@ -103,7 +101,7 @@ static void fl2000_streaming_disable(struct usb_device *u) { (void)u;stops++; }
 static void drm_kms_helper_poll_fini(struct drm_device *d)
 { (void)d;assert(polling);polling=false;poll_fini++; }
 static void drm_encoder_cleanup(struct drm_encoder *e) { (void)e;attached=false;encoder_cleanup++; }
-static void component_unbind_all(struct device *d,struct fl2000_bridge *b)
+static void component_unbind_all(struct device *d,struct drm_encoder *b)
 { (void)d;(void)b;assert(bound && !attached);bound=false;unbound++; }
 static void drm_dev_put(struct drm_device *d)
 {
@@ -119,28 +117,25 @@ checks = r"""
 int main(void)
 {
  for(failure=1;failure<=11;failure++) {
-  struct fl2000_device device={0};struct usb_device usb={.dev={.data=&device}};
+  struct fl2000_device device={.bridge_owner=&provider};struct usb_device usb={.dev={.data=&device}};
   step=unregistered=unplugged=shutdowns=stops=poll_fini=encoder_cleanup=unbound=released=0;
   assert(fl2000_drm_bind(&usb.dev)==-EIO);
   assert(step==failure && !device.drm && !bound && !attached && !polling);
   assert(released==(failure>1));
-  assert(unbound==(failure>4));
+  assert(unbound==(failure>6));
   assert(poll_fini==(failure>8));
   assert(unregistered==(failure==11));
   assert(unplugged==(failure==11) && shutdowns==(failure==11) && stops==(failure==11));
  }
  failure=0;step=0;reject_provider=true;
- struct fl2000_device failed_device={0};struct usb_device failed_usb={.dev={.data=&failed_device}};
+ struct fl2000_device failed_device={.bridge_owner=&provider};struct usb_device failed_usb={.dev={.data=&failed_device}};
  assert(fl2000_drm_bind(&failed_usb.dev)==-ENODEV && !provider.refs && !bound);
  reject_provider=false;
  struct fl2000_drm_if output={0};
- struct fl2000_device device={0};struct usb_device usb={.dev={.data=&device}};
+ struct fl2000_device device={.bridge_owner=&provider};struct usb_device usb={.dev={.data=&device}};
  assert(fl2000_drm_hotplug(&usb)==-ENODEV);
  struct drm_connector connector={0};output.connector=&connector;
- supplied_irq=-ENODEV;step=0;
- assert(fl2000_drm_bind(&usb.dev)==-ENODEV && !device.drm && !bound && !provider.refs);
- supplied_irq=37;
- device.drm=&output.drm;output.bridge.bridge=&output;
+ device.drm=&output.drm;output.encoder.bridge=&output;
  assert(!fl2000_drm_hotplug(&usb) && hpd_calls==1 && hotplug_events==1);
  connector.status=detected;
  assert(!fl2000_drm_hotplug(&usb) && hpd_calls==2 && hotplug_events==1);
@@ -148,7 +143,7 @@ int main(void)
  assert(fl2000_drm_hotplug(&usb)==-EIO && hotplug_events==1);
  output.drm.unplugged=true;
  assert(fl2000_drm_hotplug(&usb)==-ENODEV && hpd_calls==3);
- puts("PASS: IRQ resource handoff, invalid IRQ cleanup, all DRM bind failure stages, single unregister on interrupt-start failure, preserved errno, balanced teardown");
+ puts("PASS: standard encoder attachment, all DRM bind failure stages, single unregister on interrupt-start failure, preserved errno, balanced teardown");
  return 0;
 }
 """
