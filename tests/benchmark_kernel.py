@@ -113,7 +113,7 @@ static int __init frame_bench_init(void)
   backend=0;
   if(path)fl2000_reorder_frame(expected,source,height,width,pitch,bpp,size);
   else fl2000_convert_frame(expected,source,height,width,pitch,bpp,size);
-  for(b=0;b<3;b++) {
+  for(b=0;b<(path?1:3);b++) {
    backend=b;
    for(j=0;j<5;j++) {
     if(path)fl2000_reorder_frame(dest[j],source,height,width,pitch,bpp,size);

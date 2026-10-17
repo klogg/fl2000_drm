@@ -166,24 +166,26 @@ four pixels into three dword writes; conversion to RGB565 packs pairs using
 integer operations. Native input uses a 64-bit rotate-and-copy loop, omitting
 row padding. Odd-width rows and partial wire words retain a scalar fallback.
 
-To compare computation and PLL helpers without hardware:
+To compare frame preparation computation without hardware:
 
 ```sh
 python3 tests/benchmark_cpu.py
 ```
 
-The userspace benchmark compares portable, SSSE3 and BMI2 XRGB8888 conversion
-with tightly packed and padded native inputs, including an experimental native
-SIMD candidate. It reports thread CPU time and an estimate for 60 updates per
-second on one core. It excludes kernel FPU protection, mapping, USB, DMA and
-scheduling costs; actual driver utilization needs measurements with the device
-attached. Native-format savings apply when userspace supplies RGB888/RGB565;
-fbdev still uses XRGB8888.
+The userspace benchmark compares production portable, SSSE3 and BMI2 XRGB8888
+conversion. Tightly packed and padded native inputs use the same portable
+reordering on every backend, so they are measured once. PLL search and
+abandoned SIMD experiments are excluded. It reports thread CPU time and an
+estimate for 60 updates per second on one core. It excludes kernel FPU
+protection, mapping, USB, DMA and scheduling costs; actual driver utilization
+needs measurements with the device attached. Native-format savings apply when
+userspace supplies RGB888/RGB565; fbdev still uses XRGB8888.
 
 `python3 tests/benchmark_kernel.py --output /tmp/fl2000-kernel-bench` builds a
 temporary benchmark module and loads it only inside hardware-free KVM. It
 extracts the actual driver helpers, uses real FPU protection, checks prepared
-bytes and measures computation with rotating cached buffers. Those buffers
+bytes and measures computation with rotating cached buffers. It also measures
+native reordering once through the production portable path. Those buffers
 differ from the live GEM/USB buffers, so this benchmark cannot replace
 end-to-end measurements. Framebuffer objects themselves use standard DRM shmem
 GEM helpers; the five driver-owned wire buffers are USB transport allocations,

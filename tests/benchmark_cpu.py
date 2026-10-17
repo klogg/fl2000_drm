@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0
-"""Benchmark actual conversion/PLL helpers without hardware.
+"""Benchmark production frame preparation helpers without hardware.
 
 Portable/SSSE3/BMI2 code, CPU thread time, rotating five destination buffers, padded
 unaligned input and three trials per case. CPU percentages assume 60 updates/sec
@@ -16,11 +16,9 @@ import tempfile
 from pathlib import Path
 
 from source_helpers import function as f
-from source_helpers import structure as struct
 
 root = Path(__file__).resolve().parents[1]
 stream = (root / "fl2000_streaming.c").read_text()
-drm = (root / "fl2000_drm.c").read_text()
 pre = r"""
 #define _GNU_SOURCE
 #include <stdint.h>
@@ -32,13 +30,6 @@ pre = r"""
 typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32; typedef uint64_t u64;
 #define cond_resched() ((void)0)
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
-#define BIT(n) (1U << (n))
-#define DRM_MODE_FLAG_INTERLACE BIT(0)
-#define DRM_MODE_FLAG_DBLSCAN BIT(1)
-#define DRM_MODE_FLAG_3D_MASK (BIT(2)|BIT(3))
-struct drm_display_mode {int clock,hdisplay,hsync_start,hsync_end,htotal; int vdisplay,vsync_start,vsync_end,vtotal; unsigned int flags; int vscan;};
-static void drm_mode_copy(struct drm_display_mode *d,const struct drm_display_mode *s){*d=*s;}
-static void drm_mode_set_crtcinfo(struct drm_display_mode *mode,int flags){(void)mode;(void)flags;}
 static void put_unaligned_le64(u64 v,u8 *p){memcpy(p,&v,8);}
 #define min(a,b) ((a)<(b)?(a):(b))
 #define max(a,b) ((a)>(b)?(a):(b))
@@ -59,6 +50,7 @@ int main(void){
   if(backend==1 && !__builtin_cpu_supports("ssse3"))continue;
   if(backend==2 && !__builtin_cpu_supports("bmi2"))continue;
  for(unsigned int k=0;k<ARRAY_SIZE(sizes);k++)for(unsigned int bpp=2;bpp<=3;bpp++)for(int path=0;path<3;path++){
+  if(path && backend)continue; /* Native formats share the portable reorder path. */
   const char *label=path==0 ? "conversion" : path==1 ? "native-tight" : "native-padded";
   unsigned int w=sizes[k][0],h=sizes[k][1],pitch=w*(path?bpp:4)+(path==1?0:16),size=(w*h*bpp+7)&~7U;
   u8 *src=malloc((size_t)pitch*h+1); memset(src,0xab,(size_t)pitch*h+1);
@@ -79,17 +71,6 @@ int main(void){
   }
   free(src);for(int j=0;j<5;j++)free(dst[j]);
  }
- }
- struct drm_display_mode mode={.clock=40000,.hdisplay=800,.hsync_start=840,.hsync_end=968,.htotal=1056,.vdisplay=600,.vsync_start=601,.vsync_end=605,.vtotal=628};
- struct drm_display_mode adjusted;struct fl2000_pll pll={0};
- for(int trial=0;trial<3;trial++){
-  unsigned long long start=ns();unsigned int n=0;
-  while(ns()-start<100000000){
-   /* Vary the input slightly to prevent loop invariant hoisting. */
-   mode.clock=40000+(n%2);sink+=fl2000_mode_calc(&mode,&adjusted,&pll);sink+=pll.divisor;n++;
-  }
-  double us=(double)(ns()-start)/n/1000;
-  printf("generic,PLL-search,800,600,-,%.2f,%.2f\n",us,us*60/10000);
  }
  return 0;
 }
@@ -119,23 +100,12 @@ parts = [
     simd,
     bmi,
     dispatch,
-    "\n".join(re.findall(r"^#define FL2000_.*$", drm, re.MULTILINE)),
-    struct((root / "fl2000.h").read_text(), "fl2000_pll"),
     f(stream, "fl2000_rgb565"),
     f(stream, "fl2000_rgb565_pair"),
     f(stream, "fl2000_convert_line"),
     f(stream, "fl2000_convert_frame"),
     f(stream, "fl2000_reorder_line"),
     f(stream, "fl2000_reorder_frame"),
-]
-parts += [
-    f(drm, n)
-    for n in (
-        "fl2000_pll_ppm_err",
-        "fl2000_pll_get_divisor",
-        "fl2000_pll_calc",
-        "fl2000_mode_calc",
-    )
 ]
 parts.append(main)
 with tempfile.TemporaryDirectory(prefix="fl2000-cpu-") as temp:
