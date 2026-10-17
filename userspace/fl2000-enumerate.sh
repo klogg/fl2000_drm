@@ -15,13 +15,18 @@ if [ "${1:-}" = --help ]; then
         'Requires i2ctransfer (i2c-tools), kmod, util-linux flock and base utilities.'
     exit 0
 fi
-[ "$#" -ge 1 ] && [ "$#" -le 2 ] || fail 'Expected adapter path and optional config path'
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+    fail 'Expected adapter path and optional config path'
+fi
 config=${2:-/etc/fl2000/enumerator.conf}
 sysfs=${SYSFS_ROOT:-/sys}
 locks=${LOCK_ROOT:-/run/lock}
 adapter=$(readlink -f -- "$1") || fail 'Cannot resolve adapter path'
 bus=${adapter##*/i2c-}
-case "$bus" in ''|*[!0-9]*) fail 'Expected an i2c-N adapter path' ;; esac
+case "$bus" in
+    ''|*[!0-9]*) fail 'Expected an i2c-N adapter path' ;;
+    *) ;;
+esac
 [ "$adapter" = "$(readlink -f -- "$sysfs/bus/i2c/devices/i2c-$bus")" ] ||
     fail 'Adapter is not registered on the I2C bus'
 
@@ -77,15 +82,18 @@ flock -x 9
 
 load_module()
 {
-    module_name=$(printf '%s' "$1" | tr '-' '_')
-    [ -d "$sysfs/module/$module_name" ] || modprobe -- "$1"
+    requested_module=$1
+    module_name=$(printf '%s' "$requested_module" | tr '-' '_')
+    [ -d "$sysfs/module/$module_name" ] || modprobe -- "$requested_module"
 }
 
 wait_for_binding()
 {
     remaining=$timeout
     while [ "$remaining" -gt 0 ]; do
-        [ -d "$adapter" ] && [ -d "$client" ] || fail 'Adapter or client disappeared'
+        if [ ! -d "$adapter" ] || [ ! -d "$client" ]; then
+            fail 'Adapter or client disappeared'
+        fi
         if [ -e "$client/driver" ]; then
             bound_driver=$(readlink -f -- "$client/driver")
             [ "${bound_driver##*/}" = "$driver" ] || fail 'Client bound to another driver'
@@ -149,6 +157,7 @@ for phase in existing probe; do
                 done
                 IFS=$saved_ifs
                 ;;
+            *) fail 'Unexpected validated configuration record' ;;
         esac
     done <<EOF_CONFIG
 $records

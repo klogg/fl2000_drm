@@ -89,6 +89,33 @@ fi
             check=False,
         )
 
+    def test_argument_limits_have_no_device_side_effects(self):
+        for arguments in ([], [str(self.adapter), str(self.config), "extra"]):
+            with self.subTest(arguments=arguments):
+                result = subprocess.run(
+                    [str(PROGRAM), *arguments],
+                    env=self.env,
+                    text=True,
+                    capture_output=True,
+                    timeout=5,
+                    check=False,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Expected adapter path", result.stderr)
+                self.assertEqual(self.log.read_text(), "")
+
+    def test_client_disappears_while_waiting(self):
+        self.config.write_text(CONFIG.replace("bind_timeout 1", "bind_timeout 2"))
+        self.env["TEST_MODE"] = "deferred"
+        self.tool(
+            "sleep",
+            'client="$SYSFS_ROOT/bus/i2c/devices/7-0039"\n'
+            'rm -- "$client/name"\nrmdir -- "$client"\n',
+        )
+        result = self.run_enumerator()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Adapter or client disappeared", result.stderr)
+
     def test_identify_before_creation_and_idempotence(self):
         result = self.run_enumerator()
         self.assertEqual(result.returncode, 0, result.stderr)
