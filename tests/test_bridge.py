@@ -190,6 +190,12 @@ int main(void)
  assert(it66121_bridge_mode_valid(&ctx.bridge,&connector.display_info,&mode)==MODE_BAD);
  fault_reg=IT66121_INPUT_MODE_REG;assert(it66121_configure_input(&ctx)==-EIO);
  fault_reg=IT66121_INT_MASK1_REG;assert(it66121_restore_interrupts(&ctx)==-EIO);
+ assert(IT66121_CLK_BANK_MASK==3 && IT66121_CLK_BANK_SELECT==1);
+ assert(IT66121_INPUT_MODE_COLOR_MASK==0xc0 && IT66121_INPUT_MODE_PCLK_DIV2==0x20);
+ assert(IT66121_INPUT_MODE_PCLK_DELAY_MASK==3 && IT66121_INPUT_MODE_PCLK_DELAY2==2);
+ assert(IT66121_INPUT_FIFO_REG==0x71 && IT66121_INPUT_FIFO_AUTO_RESET_EN==8);
+ assert(IT66121_INPUT_CSC_SELECT_MASK==3 && IT66121_INPUT_CSC_BTAT1004==4);
+ assert(IT66121_INT_HDMI_EN==0x20 && IT66121_INT_REF_CLK_DIV==0x0c);
  puts("PASS: bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors");
 }
 """

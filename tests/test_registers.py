@@ -109,6 +109,16 @@ int main(void)
  unsigned char storage[4];memcpy(storage,&stored,sizeof(storage));
  assert(storage[0]==0x12 && storage[1]==0x34 && storage[2]==0x56 && storage[3]==0x78);
 #endif
+ /* Independent manual bit positions, including the previously reversed labels. */
+ assert(FL2000_VGA_STATUS_LBUF_OVERFLOW==0x200);
+ assert(FL2000_VGA_STATUS_LBUF_UNDERFLOW==0x100);
+ assert(FL2000_VGA_TEST_PATTERN_MODE==0x0e && FL2000_VGA_TEST_PATTERN_EN==1);
+ assert(FL2000_VGA_PLL_PRE_DIV==0xff00);
+ assert((FL2000_VGA_CTRL3_EXT_MON_ACTIVE_HIGH | FL2000_VGA_CTRL3_EEPROM_SLOW_CLK |
+         FL2000_VGA_CTRL3_GPIO_OUTPUT | FL2000_VGA_CTRL3_WAKEUP_CLR_EN |
+         FL2000_VGA_CTRL3_EEPROM_BLOCKS | FL2000_VGA_CTRL3_SPI_CLK_SELECT |
+         FL2000_VGA_CTRL3_SPI_SLOW_READ | FL2000_VGA_CTRL3_SPI_INIT_EN |
+         FL2000_VGA_CTRL3_TEST_BUS_SELECT)==0xffff);
  struct usb_device usb={0};
  struct fl2000_pll pll={.prescaler=2,.multiplier=50,.divisor=10,.function=1};
  map.regs[0x803c/4]=UINT32_MAX;

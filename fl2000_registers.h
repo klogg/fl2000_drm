@@ -14,7 +14,7 @@
 /* Vendor USB register requests carry a 16-bit register offset. */
 #define FL2000_MAX_REGISTER GENMASK_U32(15, 0)
 
-/* #### USB Control Registers Bank #### */
+/* USB control registers. */
 /* USB setup retained from the vendor driver. These fields are not described
  * by the public VGA register manual; do not infer semantics for the quirk bit.
  */
@@ -29,8 +29,8 @@
 #define FL2000_USB_CTRL_REG	  (FL2000_USB_CONTROL_OFFSET + 0x78)
 #define FL2000_USB_CTRL_WAKE_NRDY BIT_U32(17)
 
-/* #### VGA Control Registers Bank #### */
-/* Taken from the 'FL200DX Memory Mapped Address Space Registers' spec */
+/* VGA control registers, manual sections 40.1.1.1-40.1.1.32. */
+/* Coverage and documented ambiguities: docs/REGISTERS.md. */
 
 #define FL2000_VGA_CONTROL_OFFSET 0x8000
 
@@ -43,8 +43,8 @@
 #define FL2000_VGA_STATUS_IRQ_PENDING	 BIT_U32(5) /* read self clear */
 #define FL2000_VGA_STATUS_PLL_STATUS	 BIT_U32(6)
 #define FL2000_VGA_STATUS_DAC_STATUS	 BIT_U32(7)
-#define FL2000_VGA_STATUS_LBUF_OVERFLOW	 BIT_U32(8)
-#define FL2000_VGA_STATUS_LBUF_UNDERFLOW BIT_U32(9)
+#define FL2000_VGA_STATUS_LBUF_OVERFLOW	 BIT_U32(9)
+#define FL2000_VGA_STATUS_LBUF_UNDERFLOW BIT_U32(8)
 #define FL2000_VGA_STATUS_FRAME_CNT	 GENMASK_U32(25, 10)
 #define FL2000_VGA_STATUS_HDMI_EVENT	 BIT_U32(26) /* read self clear */
 #define FL2000_VGA_STATUS_HDMI_STATUS	 BIT_U32(27)
@@ -96,7 +96,10 @@
 #define FL2000_VGA_VSYNC2_START_LATENCY GENMASK_U32(29, 20)
 #define FL2000_VGA_VSYNC2_BUF_ERROR_EN	BIT_U32(31)
 
-#define FL2000_VGA_TEST_REG		    (FL2000_VGA_CONTROL_OFFSET + 0x18)
+#define FL2000_VGA_TEST_REG	     (FL2000_VGA_CONTROL_OFFSET + 0x18)
+#define FL2000_VGA_TEST_PATTERN_MODE GENMASK_U32(3, 1)
+#define FL2000_VGA_TEST_PATTERN_EN   BIT_U32(0)
+
 #define FL2000_VGA_ISOCH_REG		    (FL2000_VGA_CONTROL_OFFSET + 0x1C)
 #define FL2000_VGA_ISOCH_START_MFRAME_CNT   GENMASK_U32(13, 0)
 #define FL2000_VGA_ISOCH_USE_MFRAME_MATCH   BIT_U32(14)
@@ -115,11 +118,16 @@
 #define FL2000_VGA_I2C_SC_EDID_DETECT	 BIT_U32(30)
 #define FL2000_VGA_I2C_SC_I2C_DONE	 BIT_U32(31)
 
-#define FL2000_VGA_I2C_RD_REG (FL2000_VGA_CONTROL_OFFSET + 0x24)
-#define FL2000_VGA_I2C_WR_REG (FL2000_VGA_CONTROL_OFFSET + 0x28)
+#define FL2000_VGA_I2C_RD_REG  (FL2000_VGA_CONTROL_OFFSET + 0x24)
+#define FL2000_VGA_I2C_RD_DATA GENMASK_U32(31, 0)
+#define FL2000_VGA_I2C_WR_REG  (FL2000_VGA_CONTROL_OFFSET + 0x28)
 
-#define FL2000_VGA_PLL_REG	       (FL2000_VGA_CONTROL_OFFSET + 0x2C)
-#define FL2000_VGA_PLL_DIVISOR	       GENMASK_U32(7, 0)
+#define FL2000_VGA_I2C_WR_DATA GENMASK_U32(31, 0)
+
+#define FL2000_VGA_PLL_REG     (FL2000_VGA_CONTROL_OFFSET + 0x2C)
+#define FL2000_VGA_PLL_DIVISOR GENMASK_U32(7, 0)
+/* The manual describes the combined pre-divider byte; vendor code splits it. */
+#define FL2000_VGA_PLL_PRE_DIV	       GENMASK_U32(15, 8)
 #define FL2000_VGA_PLL_PRESCALER       GENMASK_U32(9, 8)
 #define FL2000_VGA_PLL_FUNCTION	       GENMASK_U32(14, 13)
 #define FL2000_VGA_PLL_MULTIPLIER      GENMASK_U32(23, 16)
@@ -235,20 +243,24 @@
 #define FL2000_TEST_STAT2     (FL2000_VGA_CONTROL_OFFSET + 0x80)
 #define FL2000_TEST_STAT3     (FL2000_VGA_CONTROL_OFFSET + 0x84)
 
-#define FL2000_VGA_CTRL_REG_3	       (FL2000_VGA_CONTROL_OFFSET + 0x88)
-#define FL2000_VGA_CTRL3_WAKEUP_CLR_EN BIT_U32(10)
+#define FL2000_VGA_CTRL_REG_3		     (FL2000_VGA_CONTROL_OFFSET + 0x88)
+#define FL2000_VGA_CTRL3_EXT_MON_ACTIVE_HIGH BIT_U32(15)
+#define FL2000_VGA_CTRL3_EEPROM_SLOW_CLK     BIT_U32(14)
+#define FL2000_VGA_CTRL3_GPIO_OUTPUT	     GENMASK_U32(13, 11)
+#define FL2000_VGA_CTRL3_WAKEUP_CLR_EN	     BIT_U32(10)
+
+#define FL2000_VGA_CTRL3_EEPROM_BLOCKS	 GENMASK_U32(9, 7)
+#define FL2000_VGA_CTRL3_SPI_CLK_SELECT	 GENMASK_U32(6, 5)
+#define FL2000_VGA_CTRL3_SPI_SLOW_READ	 BIT_U32(4)
+#define FL2000_VGA_CTRL3_SPI_INIT_EN	 BIT_U32(3)
+#define FL2000_VGA_CTRL3_TEST_BUS_SELECT GENMASK_U32(2, 0)
 
 /* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x8C) */
 
-/* List of registers that shall not be read automatically (e.g. for cache update due to presence of
- * self-clear bits
- */
+/* Reading status acknowledges events; exclude it from incidental regmap reads. */
 static inline bool FL2000_REG_PRECIOUS(u32 reg)
 {
-	if (reg == FL2000_VGA_STATUS_REG)
-		return true;
-	else
-		return false;
+	return reg == FL2000_VGA_STATUS_REG;
 }
 
 /* List of volatile registers that shall not be cached */
