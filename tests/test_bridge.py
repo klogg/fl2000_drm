@@ -379,7 +379,22 @@ int main(void)
   fault_write_reg=(int)audio_faults[i];
   assert(it66121_audio_hw_params(&component,NULL,&fmt,&params)==-EIO);
  }
- puts("PASS: single-pass modesets across chip/wiring/output variants, enable failures preserve mute, IRQ request failure, handler delivery and rebind, bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors, audio rates/widths/channels");
+ fault_write_reg=-1;sample_cts=true;
+ for(unsigned int scenario=0;scenario<5;scenario++) {
+  for(unsigned int i=0;i<255;i++)
+   cts_samples[i]=scenario==0?0:scenario==1?0x12345:
+    scenario==2?(i<4?0:0x12345):scenario==3?1000+(i&1):100+(i&1)*100;
+  const unsigned int expected[]={0,0x12345,0x12345,1000,100};
+  const unsigned int samples[]={255,33,37,33,255};
+  cts_sample_count=0;
+  assert(it66121_audio_get_cts(&ctx)==expected[scenario]);
+  assert(cts_sample_count==samples[scenario]);
+  ctx.audio.auto_cts=true;cts_sample_count=0;
+  assert(!it661221_set_ncts(&ctx,2));
+  assert(((u32)map.values[0x130]|map.values[0x131]<<8|map.values[0x132]<<16)==expected[scenario]);
+  assert(cts_sample_count==samples[scenario]);
+ }
+ puts("PASS: single-pass modesets across chip/wiring/output variants, enable failures preserve mute, IRQ request failure, handler delivery and rebind, bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors, audio rates/widths/channels, CTS stability and bounded sampling");
 }
 """
 names = (
@@ -401,6 +416,7 @@ names = (
     "it66121_unbind",
     "it661221_set_chstat",
     "it661221_set_lpcm_audio",
+    "it66121_audio_get_cts",
     "it661221_set_ncts",
     "it661221_audio_ch_enable",
     "it66121_audio_hw_params",

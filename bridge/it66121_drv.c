@@ -980,6 +980,39 @@ static int it661221_set_lpcm_audio(struct it66121_ctx *ctx, unsigned int audio_s
 	return regmap_write(ctx->regmap, IT66121_AUD_HDAUDIO_REG, 0x00);
 }
 
+static unsigned int it66121_audio_get_cts(const struct it66121_ctx *ctx)
+{
+	unsigned int stable_count = 0;
+	unsigned int sum = 0;
+	unsigned int last = 0;
+
+	for (unsigned int i = 0; i < 255; i++) {
+		unsigned int cts;
+		unsigned int diff;
+		unsigned int val;
+
+		msleep(30);
+		regmap_read(ctx->regmap, IT66121_AUD_PKT_CTS_CNT2_REG, &val);
+		cts = val << 12;
+		regmap_read(ctx->regmap, IT66121_AUD_PKT_CTS_CNT1_REG, &val);
+		cts |= val << 4;
+		regmap_read(ctx->regmap, IT66121_AUD_PKT_CTS_CNT0_REG, &val);
+		cts |= val >> 4;
+		if (!cts)
+			continue;
+		diff = last > cts ? last - cts : cts - last;
+		last = cts;
+		if (diff >= 5) {
+			stable_count = 0;
+			sum = 0;
+			continue;
+		}
+		sum += cts;
+		if (++stable_count >= 32)
+			return sum >> 5;
+	}
+	return last;
+}
 static int it661221_set_ncts(struct it66121_ctx *ctx, u8 fs)
 {
 	int ret;
@@ -1015,7 +1048,7 @@ static int it661221_set_ncts(struct it66121_ctx *ctx, u8 fs)
 		break;
 	}
 
-	ret = regmap_write(ctx->regmap, IT66121_AUD_PKT_N0_REG, (u8)((n) & 0xFF));
+	ret = regmap_write(ctx->regmap, IT66121_AUD_PKT_N0_REG, (u8)(n & 0xFF));
 	if (ret)
 		return ret;
 
@@ -1028,49 +1061,11 @@ static int it661221_set_ncts(struct it66121_ctx *ctx, u8 fs)
 		return ret;
 
 	if (ctx->audio.auto_cts) {
-		u8 loop_cnt = 255;
-		u8 cts_stable_cnt = 0;
-		unsigned int sum_cts = 0;
-		unsigned int cts = 0;
-		unsigned int last_cts = 0;
-		unsigned int diff;
-		unsigned int val;
+		unsigned int cts = it66121_audio_get_cts(ctx);
 
-		while (loop_cnt--) {
-			msleep(30);
-			regmap_read(ctx->regmap, IT66121_AUD_PKT_CTS_CNT2_REG, &val);
-			cts = val << 12;
-			regmap_read(ctx->regmap, IT66121_AUD_PKT_CTS_CNT1_REG, &val);
-			cts |= val << 4;
-			regmap_read(ctx->regmap, IT66121_AUD_PKT_CTS_CNT0_REG, &val);
-			cts |= val >> 4;
-			if (cts == 0) {
-				continue;
-			} else {
-				if (last_cts > cts)
-					diff = last_cts - cts;
-				else
-					diff = cts - last_cts;
-				last_cts = cts;
-				if (diff < 5) {
-					cts_stable_cnt++;
-					sum_cts += cts;
-				} else {
-					cts_stable_cnt = 0;
-					sum_cts = 0;
-					continue;
-				}
-
-				if (cts_stable_cnt >= 32) {
-					last_cts = (sum_cts >> 5);
-					break;
-				}
-			}
-		}
-
-		regmap_write(ctx->regmap, IT66121_AUD_PKT_CTS0_REG, (u8)((last_cts) & 0xFF));
-		regmap_write(ctx->regmap, IT66121_AUD_PKT_CTS1_REG, (u8)((last_cts >> 8) & 0xFF));
-		regmap_write(ctx->regmap, IT66121_AUD_PKT_CTS2_REG, (u8)((last_cts >> 16) & 0x0F));
+		regmap_write(ctx->regmap, IT66121_AUD_PKT_CTS0_REG, (u8)(cts & 0xFF));
+		regmap_write(ctx->regmap, IT66121_AUD_PKT_CTS1_REG, (u8)((cts >> 8) & 0xFF));
+		regmap_write(ctx->regmap, IT66121_AUD_PKT_CTS2_REG, (u8)((cts >> 16) & 0x0F));
 	}
 
 	ret = regmap_write(ctx->regmap, 0xF8, 0xC3);
