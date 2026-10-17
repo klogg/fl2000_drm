@@ -16,8 +16,12 @@ pre = r"""
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 typedef unsigned char u8;
+#define __always_unused __attribute__((__unused__))
+struct device { int unused; };
 typedef int spinlock_t;
 struct mutex { int unused; };
 struct work_struct { bool pending; };
@@ -32,6 +36,7 @@ struct urb { int status,pipe;void *context;bool submitted; };
 #define dev_warn_ratelimited(...) (++logs)
 #define READ_ONCE(x) (x)
 #define WRITE_ONCE(x,v) ((x)=(v))
+#define xchg(p,v) ({ __typeof__(*(p)) old=*(p);*(p)=(v);old; })
 #define container_of(p,t,m) ((t *)((char *)(p)-offsetof(t,m)))
 #define spin_lock_irqsave(lock,flags) ((void)(lock),(flags)=0)
 #define spin_unlock_irqrestore(lock,flags) ((void)(lock),(void)(flags))
@@ -39,12 +44,32 @@ struct urb { int status,pipe;void *context;bool submitted; };
 #define mutex_lock(p) ((void)(p))
 #define mutex_unlock(p) ((void)(p))
 struct fl2000_interrupt;
-struct fl2000_device { struct fl2000_interrupt *interrupt; };
+typedef int atomic_t;
+#define atomic_read(p) (*(p))
+struct fl2000_device { struct fl2000_interrupt *interrupt; atomic_t i2c_errors; };
 static struct fl2000_device device;
+struct irq_domain { int unused; };
+struct fwnode_handle { int unused; };
+static int allocation_failure,allocation_step,live_nodes,live_domains,live_mappings;
+static const int fl2000_irq_domain_ops;
+#define GFP_KERNEL 0
+#define dev_name(dev) ((void)(dev), "fl2000-test")
+static struct fwnode_handle *irq_domain_alloc_named_fwnode(const char *name)
+{ assert(name);if(++allocation_step==allocation_failure)return NULL;live_nodes++;return calloc(1,sizeof(struct fwnode_handle)); }
+static struct irq_domain *irq_domain_create_linear(struct fwnode_handle *node,int size,const void *ops,void *data)
+{ assert(node && size==1 && ops==&fl2000_irq_domain_ops && data);if(++allocation_step==allocation_failure)return NULL;live_domains++;return calloc(1,sizeof(struct irq_domain)); }
+static unsigned int irq_create_mapping(struct irq_domain *domain,int hwirq)
+{ assert(domain && !hwirq);if(++allocation_step==allocation_failure)return 0;live_mappings++;return 37; }
+static void irq_dispose_mapping(unsigned int irq) { assert(irq==37 && live_mappings==1);live_mappings--; }
+static void irq_domain_remove(struct irq_domain *domain) { assert(domain && !live_mappings);live_domains--;free(domain); }
+static void irq_domain_free_fwnode(struct fwnode_handle *node) { if(node){assert(!live_domains);live_nodes--;free(node);} }
+static void usb_free_urb(struct urb *urb) { assert(!urb); }
+static void kfree(void *buf) { assert(!buf); }
 #define resource device.interrupt
-static void *dev_get_drvdata(void *dev) { (void)dev;return &device; }
+static void *dev_get_drvdata(const void *dev) { (void)dev;return &device; }
 static int submissions,submit_error,clear_count,clear_error,status_reads,status_result,hotplugs,logs;
-static int poll_enables,poll_disables,hotplug_result;
+static int poll_enables,poll_disables,hotplug_result,irq_calls;
+static bool irq_error;
 static bool polling_current;
 static void (*submit_hook)(void);
 static void fl2000_drm_set_polling(struct usb_device *usb,bool enabled)
@@ -62,10 +87,14 @@ static bool mod_delayed_work(void *queue,struct delayed_work *work,unsigned long
 { (void)queue;bool pending=work->work.pending;work->work.pending=true;work->delay=delay;return pending; }
 static void cancel_delayed_work_sync(struct delayed_work *work) { work->work.pending=false; }
 static int fl2000_check_interrupt(struct usb_device *usb) { (void)usb;status_reads++;return status_result; }
+static void handle_nested_irq(unsigned int irq)
+{ assert(irq==37);irq_calls++;if(irq_error)device.i2c_errors++; }
 static int fl2000_drm_hotplug(struct usb_device *usb) { (void)usb;hotplugs++;return hotplug_result; }
+struct irq_data { void *chip_data; };
+static void *irq_data_get_irq_chip_data(struct irq_data *data) { return data->chip_data; }
 static void fl2000_intr_completion(struct urb *urb);
 static void usb_kill_urb(struct urb *urb)
-{ if(urb->submitted){urb->submitted=false;urb->status=-ECONNRESET;fl2000_intr_completion(urb);} }
+{ if(urb && urb->submitted){urb->submitted=false;urb->status=-ECONNRESET;fl2000_intr_completion(urb);} }
 """
 checks = r"""
 static struct fl2000_interrupt *current;
@@ -81,7 +110,16 @@ static void complete(struct fl2000_interrupt *intr,int status)
 int main(void)
 {
  struct usb_device usb={0};struct urb urb={.pipe=3};
- struct fl2000_interrupt intr={.usb_dev=&usb,.urb=&urb,.enabled=true};
+ assert(fl2000_interrupt_irq(&usb)==-ENODEV);
+ for(allocation_failure=1;allocation_failure<=4;allocation_failure++) {
+  struct fl2000_interrupt allocated={.usb_dev=&usb};
+  allocation_step=0;
+  assert(fl2000_intr_irq_init(&allocated)==(allocation_failure<=3?-ENOMEM:0));
+  if(allocation_failure==4){resource=&allocated;assert(fl2000_interrupt_irq(&usb)==37);resource=NULL;}
+  fl2000_intr_release(NULL,&allocated);
+  assert(!live_nodes && !live_domains && !live_mappings);
+ }
+ struct fl2000_interrupt intr={.usb_dev=&usb,.urb=&urb,.irq=37,.enabled=true};
  urb.context=&intr;current=&intr;
  complete(&intr,-EPIPE);
  assert(intr.enabled && intr.stalled && intr.work.work.pending && !submissions);
@@ -199,7 +237,33 @@ int main(void)
  status_result=0;submit_error=-ENOMEM;run_work(&intr);
  assert(!intr.enabled && polling_current && !intr.work.work.pending);
  submit_error=0;fl2000_intr_stop(&intr);
- puts("PASS: status failures and bridge errors enable polling, delayed recovery without USB edges, retry cancellation, polling fallback and IRQ recovery, status acknowledgment before rearm, initial status acknowledgment, idempotent start, error propagation, bounded stall recovery, cancellation, no resubmission after stop");
+ /* Re-enabling an IRQ rescans even after its FL2000 event was cleared. */
+ struct irq_data irq_data={.chip_data=&intr};
+ status_result=0;urb.status=0;
+ assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+ int unmask_irqs=irq_calls;
+ fl2000_irq_unmask(&irq_data);
+ assert(intr.irq_rescan && intr.work.work.pending);
+ run_work(&intr);
+ assert(irq_calls==unmask_irqs+1 && !intr.irq_rescan && !intr.work.work.pending);
+ fl2000_intr_stop(&intr);
+ fl2000_irq_unmask(&irq_data);
+ assert(intr.irq_rescan && !intr.work.work.pending);
+ assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+ assert(irq_calls==unmask_irqs+2 && !intr.irq_rescan);
+ fl2000_intr_stop(&intr);
+ /* Acknowledgment can fail even when a later detect succeeds. */
+ urb.status=0;status_result=1;hotplug_result=0;irq_error=true;
+ assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+ assert(intr.status_polling && polling_current && intr.work.work.pending);
+ complete(&intr,0);run_work(&intr);
+ assert(!urb.submitted && intr.rearm && intr.status_polling);
+ int previous_irqs=irq_calls;
+ status_result=0;irq_error=false;run_work(&intr);
+ assert(irq_calls==previous_irqs+1 && urb.submitted && !intr.status_polling);
+ assert(!polling_current && !intr.work.work.pending);
+ fl2000_intr_stop(&intr);
+ puts("PASS: nested IRQ acknowledgment failures delay USB rearm; status failures and bridge errors enable polling, delayed recovery without USB edges, retry cancellation, polling fallback and IRQ recovery, status acknowledgment before rearm, initial status acknowledgment, idempotent start, error propagation, bounded stall recovery, cancellation, no resubmission after stop");
 }
 """
 parts = (
@@ -207,11 +271,15 @@ parts = (
     + [
         function(source, n)
         for n in (
+            "fl2000_irq_unmask",
             "fl2000_intr_recover_stall",
             "fl2000_intr_process_status",
             "fl2000_intr_work",
             "fl2000_intr_completion",
             "fl2000_intr_stop",
+            "fl2000_intr_irq_init",
+            "fl2000_interrupt_irq",
+            "fl2000_intr_release",
             "fl2000_enable_interrupt",
         )
     ]

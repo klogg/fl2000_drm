@@ -82,7 +82,7 @@ scripts/configure-bridge.sh it66121 0x4c
 The helper uses the kernel's standard I2C `new_device` interface. Supply an I2C
 bus number as the third argument when multiple FL2000 adapters are present.
 Use the device type and address for the attached hardware. A bridge driver must
-provide the component and interrupt integration described in
+provide the component binding and standard IRQ handling described in
 [the architecture](docs/ARCHITECTURE.md); I2C enumeration alone is insufficient.
 The QEMU startup script declares the current test fixture explicitly and accepts
 `BRIDGE_MODULE`, `BRIDGE_TYPE`, `BRIDGE_ADDR`, and `I2C_BUS` overrides.

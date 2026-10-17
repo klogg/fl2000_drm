@@ -8,6 +8,7 @@ config DRM_FL2000
 	select DRM_DISPLAY_HELPER
 	select DRM_BRIDGE_CONNECTOR
 	select REGMAP
+	select IRQ_DOMAIN
 	help
 	  DRM/KMS and I2C transport support for Fresco Logic FL2000 USB
 	  display adapters. Configure the attached bridge independently.

@@ -5,11 +5,12 @@ that adapter. Userspace explicitly creates the bridge's I2C client through
 `new_device`; the core does not scan chip IDs, select a bridge driver, or
 require Device Tree. Components are matched by their owning I2C adapter.
 Each dongle owns its own adapter and DRM device. The generic handoff interface
-is declared in `fl2000_bridge.h`; a bridge provider supplies attachment,
-module lifetime, and optional interrupt-processing callbacks.
+is declared in `fl2000_bridge.h`. The master supplies a Linux IRQ resource;
+the provider returns its DRM bridge and module owner. No interrupt callback
+or connector pointer is passed between the drivers.
 
 The supplied `it66121.ko` is one optional bridge provider. Current providers
-need this component/interrupt integration in addition to their normal I2C
+need component binding and an IRQ request in addition to their normal I2C
 probe; instantiating an arbitrary upstream I2C bridge alone does not supply it.
 
 The bridge core is rebased on Linux v7.0's
@@ -19,12 +20,25 @@ AVI infoframes, HPD detection, and interrupt acknowledgment. FL2000 adaptations
 retain USB component lifetime, the one-cycle parallel input delay, HDMI/DVI
 selection, aligned DWORD I2C/EDID reads, and restoration after encoder resets.
 Bridge registers are uncached because FL2000 controls their resets. Polling
-reads HPD without acknowledging interrupts; the USB event path owns
-acknowledgment. Normal connector detection uses HPD events from the USB
-interrupt worker instead of periodic polling. The worker updates cached DRM
-connector status before notifying clients. Endpoint errors enable
-connect/disconnect polling as a fallback; successful interrupt restart restores
-HPD-only detection.
+reads HPD without acknowledging interrupts; the bridge IRQ handler owns
+acknowledgment and calls `drm_bridge_hpd_notify()` for HPD events.
+
+FL2000 creates a one-input IRQ domain without Device Tree. Its USB worker
+calls `handle_nested_irq()` in sleepable context, so the bridge's normal
+threaded handler finishes before another interrupt URB is submitted. The bridge
+requests the IRQ during component binding and frees it during unbinding;
+userspace I2C `new_device` needs no IRQ extension. IRQ unmask schedules a
+bridge rescan so an already-consumed FL2000 event cannot strand a pending IRQ.
+Connector selection comes from atomic state when the bridge is enabled.
+
+A per-adapter I2C error counter preserves acknowledgment retry without a
+private bridge return value: a failed transfer during dispatch or detection
+holds USB rearming, enables connector polling, and schedules a delayed retry.
+An unrelated concurrent I2C failure can conservatively cause the same retry.
+Retries dispatch the IRQ even if the earlier status read cleared the event.
+Endpoint errors also enable polling; successful recovery restores HPD-only
+detection. Unbinding stops the USB worker before freeing the bridge IRQ, and
+the IRQ mapping and domain are released after component teardown.
 
 `drm_bridge_connector_init()` supplies connector detection, EDID handling,
 and HPD delivery. In-tree Kconfig selects its helpers. External builds can

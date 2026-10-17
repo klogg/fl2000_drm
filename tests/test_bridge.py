@@ -33,6 +33,14 @@ typedef uint32_t u32;
 #define mutex_unlock(p) ((void)(p))
 #define DRM_ERROR(...) ((void)0)
 #define dev_err(dev,...) ((void)(dev))
+#define dev_err_ratelimited(dev,...) ((void)(dev))
+#define dev_name(dev) ((void)(dev), "test-bridge")
+typedef int irqreturn_t;
+#define IRQ_NONE 0
+#define IRQ_HANDLED 1
+#define IRQF_ONESHOT 1
+#define IRQF_TRIGGER_LOW 2
+#define THIS_MODULE ((void *)3)
 #define DRM_MODE_FLAG_INTERLACE BIT(0)
 #define DRM_MODE_FLAG_DBLSCAN BIT(1)
 #define HDMI_INFOFRAME_HEADER_SIZE 4
@@ -40,7 +48,7 @@ typedef uint32_t u32;
 #define HDMI_INFOFRAME_SIZE(t) 17
 struct mutex { int unused; };
 struct device { int unused; };
-struct i2c_client;
+struct i2c_client { int irq; };
 struct i2c_adapter;
 struct drm_display_mode { unsigned int clock, flags; };
 struct drm_display_info { bool is_hdmi; };
@@ -93,6 +101,21 @@ static int hdmi_avi_infoframe_pack(struct hdmi_avi_infoframe *f,u8 *buf,unsigned
 {(void)f;assert(n==17);for(unsigned int i=0;i<n;i++)buf[i]=i+17;return n;}
 """
 ctx = structure(source, "it66121_ctx")
+irq_mocks = r"""
+struct fl2000_bridge { struct drm_bridge *bridge; void *owner; int irq; };
+static struct it66121_ctx *bound_ctx;
+static irqreturn_t (*requested_thread)(int,void *);
+static int requested_irq,request_error,irq_frees;
+static void *dev_get_drvdata(struct device *dev) { (void)dev;return bound_ctx; }
+static int request_threaded_irq(int irq,void *primary,irqreturn_t (*thread)(int,void *),int flags,const char *name,void *data)
+{
+ assert(!primary && flags==(IRQF_ONESHOT|IRQF_TRIGGER_LOW) && name && data==bound_ctx);
+ if(request_error)return request_error;
+ assert(!requested_irq);requested_irq=irq;requested_thread=thread;return 0;
+}
+static void free_irq(int irq,void *data)
+{ assert(irq==requested_irq && data==bound_ctx);requested_irq=0;requested_thread=NULL;irq_frees++; }
+"""
 checks = r"""
 int main(void)
 {
@@ -196,7 +219,23 @@ int main(void)
  assert(IT66121_INPUT_FIFO_REG==0x71 && IT66121_INPUT_FIFO_AUTO_RESET_EN==8);
  assert(IT66121_INPUT_CSC_SELECT_MASK==3 && IT66121_INPUT_CSC_BTAT1004==4);
  assert(IT66121_INT_HDMI_EN==0x20 && IT66121_INT_REF_CLK_DIV==0x0c);
- puts("PASS: bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors");
+ /* Binding owns a normal IRQ request and releases it before bridge removal. */
+ struct fl2000_bridge binding={.irq=37};struct device component={0};
+ bound_ctx=&ctx;fault_reg=-1;
+ binding.irq=0;assert(it66121_bind(&component,NULL,&binding)==-EINVAL);
+ binding.irq=37;request_error=-EBUSY;
+ assert(it66121_bind(&component,NULL,&binding)==-EBUSY && !binding.bridge && !requested_irq);
+ request_error=0;assert(!it66121_bind(&component,NULL,&binding));
+ assert(binding.bridge==&ctx.bridge && requested_irq==37 && requested_thread);
+ map.values[IT66121_SYS_STATUS_REG]=0xc0;map.values[IT66121_INT_STATUS1_REG]=1;
+ assert(requested_thread(37,&ctx)==IRQ_HANDLED);
+ fault_reg=IT66121_SYS_STATUS_REG;
+ assert(requested_thread(37,&ctx)==IRQ_NONE);
+ it66121_unbind(&component,NULL,&binding);
+ assert(!requested_irq && !binding.bridge && !binding.owner && !ctx.connector && irq_frees==1);
+ fault_reg=-1;assert(!it66121_bind(&component,NULL,&binding));
+ it66121_unbind(&component,NULL,&binding);assert(irq_frees==2);
+ puts("PASS: IRQ request failure, handler delivery and rebind, bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors");
 }
 """
 names = (
@@ -214,12 +253,16 @@ names = (
     "it66121_bridge_hpd_enable",
     "it66121_bridge_hpd_disable",
     "it66121_bridge_interrupt",
+    "it66121_irq_thread",
+    "it66121_bind",
+    "it66121_unbind",
 )
 parts = [
     prelude,
     '#include "bridge/it66121_registers.h"',
     "enum chip_id { ID_IT6610, ID_IT66121, ID_IT66122 };",
     ctx,
+    irq_mocks,
 ]
 parts += [function(source, name) for name in names]
 with tempfile.TemporaryDirectory(prefix="fl2000-bridge-") as temp:

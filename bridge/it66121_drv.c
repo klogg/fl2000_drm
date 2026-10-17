@@ -15,6 +15,7 @@
 #include <linux/device.h>
 #include <linux/hdmi.h>
 #include <linux/i2c.h>
+#include <linux/interrupt.h>
 #include <linux/ktime.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -43,6 +44,7 @@ struct it66121_ctx {
 	struct device *dev;
 	struct i2c_client *client;
 	struct i2c_adapter *adapter;
+	int irq;
 	u32 bus_width;
 	struct mutex lock; /* Serializes bridge register sequences. */
 	struct hdmi_avi_infoframe hdmi_avi_infoframe;
@@ -716,26 +718,44 @@ unlock:
 	return ret;
 }
 
-/* USB component glue: the bridge has no Device Tree graph or GPIO IRQ. */
+static irqreturn_t it66121_irq_thread(int irq __always_unused, void *data)
+{
+	struct it66121_ctx *ctx = data;
+
+	if (it66121_bridge_interrupt(&ctx->bridge)) {
+		dev_err_ratelimited(ctx->dev, "Interrupt acknowledgment failed\n");
+		return IRQ_NONE;
+	}
+	return IRQ_HANDLED;
+}
+
+/* Component binding supplies the IRQ resource on firmware-less USB adapters. */
 static int it66121_bind(struct device *comp, struct device *master __always_unused, void *data)
 {
 	struct fl2000_bridge *binding = data;
 	struct it66121_ctx *ctx = dev_get_drvdata(comp);
+	int ret;
 
+	ctx->irq = binding->irq;
+	if (ctx->irq <= 0)
+		return -EINVAL;
+	ret = request_threaded_irq(ctx->irq, NULL, it66121_irq_thread,
+				   IRQF_ONESHOT | IRQF_TRIGGER_LOW, dev_name(comp), ctx);
+	if (ret)
+		return ret;
 	binding->bridge = &ctx->bridge;
 	binding->owner = THIS_MODULE;
-	binding->connector = &ctx->connector;
-	binding->interrupt = it66121_bridge_interrupt;
 	return 0;
 }
 
-static void it66121_unbind(struct device *comp __always_unused,
-			   struct device *master __always_unused, void *data)
+static void it66121_unbind(struct device *comp, struct device *master __always_unused, void *data)
 {
 	struct fl2000_bridge *binding = data;
+	struct it66121_ctx *ctx = dev_get_drvdata(comp);
 
-	binding->interrupt = NULL;
-	binding->connector = NULL;
+	free_irq(ctx->irq, ctx);
+	ctx->irq = 0;
+	ctx->connector = NULL;
 	binding->bridge = NULL;
 	binding->owner = NULL;
 }
@@ -779,7 +799,7 @@ static int it66121_probe(struct i2c_client *client)
 	    (bytes[3] & IT66121_DEVICE_ID1_MASK) != IT66121_DEVICE_ID1)
 		return -ENODEV;
 	ctx->bridge.type = DRM_MODE_CONNECTOR_HDMIA;
-	/* The USB worker acknowledges HPD; the connector helper delivers events. */
+	/* The IRQ handler acknowledges HPD; the connector helper delivers events. */
 	ctx->bridge.ops = DRM_BRIDGE_OP_DETECT | DRM_BRIDGE_OP_EDID | DRM_BRIDGE_OP_HPD;
 	drm_bridge_add(&ctx->bridge);
 	i2c_set_clientdata(client, ctx);

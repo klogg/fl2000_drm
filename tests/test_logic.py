@@ -116,6 +116,11 @@ enum usb_device_speed { USB_SPEED_HIGH, USB_SPEED_SUPER, USB_SPEED_SUPER_PLUS };
 struct device { int unused; };
 struct usb_bus { unsigned int sg_tablesize; };
 struct usb_device { struct usb_bus *bus; struct device dev; enum usb_device_speed speed; };
+typedef int atomic_t;
+#define atomic_inc(p) (++*(p))
+struct fl2000_device { atomic_t i2c_errors; };
+static struct fl2000_device i2c_device;
+static void *dev_get_drvdata(struct device *dev) { (void)dev;return &i2c_device; }
 struct regmap { u32 aclk, ctrl2, pll, regs[0x10000/4]; };
 static struct regmap test_regmap;
 static int regmap_error, regmap_calls, detection_writes, detection_delay;
@@ -645,7 +650,7 @@ static void test_i2c(void)
  assert(!fl2000_i2c_verify_client(&usb,&client_dev));
  configured_adapter=NULL;client_dev.unused=1;
  assert(!fl2000_i2c_verify_client(&usb,&client_dev));
- struct i2c_adapter adapter = {0};
+ struct i2c_adapter adapter = {.algo_data=&usb};
  u8 reg = 0xff, value = 0;
  struct i2c_msg msgs[] = {
   { .addr = 0x4c, .len = 1, .buf = &reg },
@@ -704,8 +709,17 @@ static void test_i2c(void)
  assert(fl2000_i2c_xfer(&adapter, NULL, 0) == -EOPNOTSUPP);
  assert(calls == i2c_calls);
  msgs[1].addr = 0x4c;
+ int previous_errors=i2c_device.i2c_errors;
  i2c_result = -ENODEV;
  assert(fl2000_i2c_xfer(&adapter, msgs, 2) == -ENODEV);
+ assert(i2c_device.i2c_errors==previous_errors+1);
+ u8 failed_word[]={0xfc,1,2,3,4};
+ struct i2c_msg failed_write={.addr=0x4c,.len=5,.buf=failed_word};
+ assert(fl2000_i2c_xfer(&adapter,&failed_write,1)==-ENODEV);
+ assert(i2c_device.i2c_errors==previous_errors+2);
+ failed_write.len=2;
+ assert(fl2000_i2c_xfer(&adapter,&failed_write,1)==-ENODEV);
+ assert(i2c_device.i2c_errors==previous_errors+3);
  i2c_result = 0;
  u8 write[] = {0xff, 0xab};
  msgs[0].len = 2; msgs[0].buf = write;

@@ -8,6 +8,7 @@
 #define __FL2000_DRM_H__
 
 #include <linux/module.h>
+#include <linux/atomic.h>
 #include <linux/types.h>
 #include <linux/math64.h>
 #include <linux/kernel.h>
@@ -89,6 +90,7 @@ int fl2000_streaming_enable(struct usb_device *usb_dev);
 void fl2000_streaming_disable(struct usb_device *usb_dev);
 
 /* Interrupt polling task creation */
+int fl2000_interrupt_irq(const struct usb_device *usb_dev);
 int fl2000_interrupt_create(struct usb_interface *interface);
 void fl2000_interrupt_destroy(struct usb_interface *interface);
 int fl2000_enable_interrupt(struct usb_device *usb_dev);
@@ -131,6 +133,7 @@ struct fl2000_device {
 	struct fl2000_stream *stream;
 	struct fl2000_interrupt *interrupt;
 	struct i2c_adapter *i2c;
+	atomic_t i2c_errors; /* Failed bridge transactions, including IRQ acknowledgment. */
 	struct usb_interface *interfaces[FL2000_USBIF_INTERRUPT + 1];
 	unsigned long active_interfaces;
 	bool master_registered;

@@ -44,6 +44,8 @@ static bool fl2000_i2c_xfer_valid(const struct i2c_msg *msgs, int num)
 
 static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num)
 {
+	struct usb_device *usb_dev = adapter->algo_data;
+	struct fl2000_device *device;
 	int ret;
 	bool read;
 	u16 addr;
@@ -51,20 +53,24 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 	u8 offset;
 	u32 data;
 
-	if (!fl2000_i2c_xfer_valid(msgs, num))
-		return -EOPNOTSUPP;
+	if (!fl2000_i2c_xfer_valid(msgs, num)) {
+		ret = -EOPNOTSUPP;
+		goto error;
+	}
 	read = num == 2;
 	addr = msgs[0].addr;
 	offset = msgs[0].buf[0] & I2C_XFER_ADDR_MASK;
 	idx = msgs[0].buf[0] - offset;
 
-	if ((read ? msgs[1].len == 4 : msgs[0].len == 5) && idx)
-		return -EOPNOTSUPP;
+	if ((read ? msgs[1].len == 4 : msgs[0].len == 5) && idx) {
+		ret = -EOPNOTSUPP;
+		goto error;
+	}
 
 	if (read) {
 		ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data);
 		if (ret)
-			return ret;
+			goto error;
 
 		for (unsigned int i = 0; i < msgs[1].len; i++)
 			msgs[1].buf[i] = (data >> ((idx + i) * 8)) & 0xff;
@@ -76,16 +82,20 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 		} else {
 			ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data);
 			if (ret)
-				return ret;
+				goto error;
 			data = (data & ~(0xffU << (idx * 8))) | ((u32)msgs[0].buf[1] << (idx * 8));
 		}
 
 		ret = fl2000_i2c_write_dword(adapter->algo_data, addr, offset, &data);
 		if (ret)
-			return ret;
+			goto error;
 	}
 
 	return num;
+error:
+	device = dev_get_drvdata(&usb_dev->dev);
+	atomic_inc(&device->i2c_errors);
+	return ret;
 }
 
 static u32 fl2000_i2c_func(struct i2c_adapter *adap __always_unused)

@@ -108,6 +108,7 @@ static int fl2000_probe(struct usb_interface *interface,
 			return ret;
 		}
 		mutex_init(&device->lock);
+		atomic_set(&device->i2c_errors, 0);
 		dev_set_drvdata(&usb_dev->dev, device);
 	}
 	mutex_lock(&device->lock);

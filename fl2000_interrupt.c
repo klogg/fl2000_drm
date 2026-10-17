@@ -4,12 +4,18 @@
  * (C) Copyright 2018-2020, Artem Mygaiev
  */
 #include "fl2000.h"
+#include <linux/interrupt.h>
+#include <linux/irq.h>
+#include <linux/irqdomain.h>
 
 #define FL2000_INTR_STALL_RETRIES   3
 #define FL2000_INTR_STATUS_RETRY_MS 1000
 
 struct fl2000_interrupt {
 	struct usb_device *usb_dev;
+	struct irq_domain *domain;
+	struct fwnode_handle *fwnode;
+	unsigned int irq;
 	struct urb *urb;
 	u8 *buf;
 	struct delayed_work work;
@@ -19,9 +25,74 @@ struct fl2000_interrupt {
 	bool stalled;
 	bool rearm;
 	bool fallback;
+	bool irq_rescan; /* Recheck bridge status after IRQ unmask. */
 	bool status_polling; /* Owned by the worker; reset after cancellation. */
 	bool enabled;
 };
+
+static void fl2000_irq_mask(struct irq_data *data __always_unused)
+{
+	/* IRQ core masks nested dispatch; the USB worker owns packet submission. */
+}
+
+static void fl2000_irq_unmask(struct irq_data *data)
+{
+	struct fl2000_interrupt *intr = irq_data_get_irq_chip_data(data);
+	unsigned long flags;
+
+	spin_lock_irqsave(&intr->lock, flags);
+	WRITE_ONCE(intr->irq_rescan, true);
+	if (intr->enabled)
+		mod_delayed_work(system_wq, &intr->work, 0);
+	spin_unlock_irqrestore(&intr->lock, flags);
+}
+
+static int fl2000_irq_set_type(struct irq_data *data __always_unused, unsigned int type)
+{
+	return type == IRQ_TYPE_NONE || type == IRQ_TYPE_LEVEL_LOW ? 0 : -EINVAL;
+}
+
+static const struct irq_chip fl2000_irq_chip = {
+	.name = "fl2000",
+	.irq_mask = fl2000_irq_mask,
+	.irq_unmask = fl2000_irq_unmask,
+	.irq_set_type = fl2000_irq_set_type,
+};
+
+static int fl2000_irq_map(struct irq_domain *domain, unsigned int irq,
+			  irq_hw_number_t hwirq __always_unused)
+{
+	irq_set_chip_data(irq, domain->host_data);
+	irq_set_chip_and_handler(irq, &fl2000_irq_chip, handle_simple_irq);
+	irq_set_nested_thread(irq, true);
+	irq_set_noprobe(irq);
+	return 0;
+}
+
+static const struct irq_domain_ops fl2000_irq_domain_ops = {
+	.map = fl2000_irq_map,
+};
+
+static int fl2000_intr_irq_init(struct fl2000_interrupt *intr)
+{
+	intr->fwnode = irq_domain_alloc_named_fwnode(dev_name(&intr->usb_dev->dev));
+	if (!intr->fwnode)
+		return -ENOMEM;
+	intr->domain = irq_domain_create_linear(intr->fwnode, 1, &fl2000_irq_domain_ops, intr);
+	if (!intr->domain)
+		return -ENOMEM;
+	intr->irq = irq_create_mapping(intr->domain, 0);
+	return intr->irq ? 0 : -ENOMEM;
+}
+
+int fl2000_interrupt_irq(const struct usb_device *usb_dev)
+{
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
+	if (!device->interrupt)
+		return -ENODEV;
+	return device->interrupt->irq;
+}
 
 static void fl2000_intr_recover_stall(struct fl2000_interrupt *intr)
 {
@@ -58,12 +129,22 @@ unlock:
 
 static int fl2000_intr_process_status(struct fl2000_interrupt *intr)
 {
+	struct fl2000_device *device = dev_get_drvdata(&intr->usb_dev->dev);
+	bool rescan = xchg(&intr->irq_rescan, false);
+	int errors;
 	int ret;
 
 	ret = fl2000_check_interrupt(intr->usb_dev);
 	/* A previous failed read may already have cleared the FL2000 event bit. */
-	if (ret >= 0 && (ret > 0 || intr->status_polling))
+	if (ret >= 0 && (ret > 0 || intr->status_polling || rescan)) {
+		errors = atomic_read(&device->i2c_errors);
+		/* Nested dispatch finishes bridge acknowledgment before USB rearm. */
+		handle_nested_irq(intr->irq);
 		ret = fl2000_drm_hotplug(intr->usb_dev);
+		/* IRQ handlers return irqreturn_t, not an I2C transfer errno. */
+		if (atomic_read(&device->i2c_errors) != errors)
+			ret = -EIO;
+	}
 	if (ret < 0) {
 		if (!intr->status_polling) {
 			intr->status_polling = true;
@@ -180,6 +261,11 @@ static void fl2000_intr_release(struct device *dev __always_unused, void *res)
 
 	mutex_lock(&intr->mutex);
 	fl2000_intr_stop(intr);
+	if (intr->irq)
+		irq_dispose_mapping(intr->irq);
+	if (intr->domain)
+		irq_domain_remove(intr->domain);
+	irq_domain_free_fwnode(intr->fwnode);
 	usb_free_urb(intr->urb);
 	kfree(intr->buf);
 	mutex_unlock(&intr->mutex);
@@ -262,15 +348,21 @@ int fl2000_interrupt_create(struct usb_interface *interface)
 	intr->urb = usb_alloc_urb(0, GFP_KERNEL);
 	intr->buf = kmalloc(1, GFP_KERNEL);
 	if (!intr->urb || !intr->buf) {
-		fl2000_intr_release(&usb_dev->dev, intr);
-		devres_free(intr);
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto release;
 	}
+	ret = fl2000_intr_irq_init(intr);
+	if (ret)
+		goto release;
 	usb_fill_int_urb(intr->urb, usb_dev, usb_rcvintpipe(usb_dev, INTERRUPT_EP), intr->buf, 1,
 			 fl2000_intr_completion, intr, ep->bInterval);
 	devres_add(&usb_dev->dev, intr);
 	device->interrupt = intr;
 	return 0;
+release:
+	fl2000_intr_release(&usb_dev->dev, intr);
+	devres_free(intr);
+	return ret;
 }
 
 void fl2000_interrupt_destroy(struct usb_interface *interface)

@@ -715,19 +715,13 @@ int fl2000_drm_hotplug(const struct usb_device *usb_dev)
 
 	if (drm && drm_dev_enter(drm, &idx)) {
 		struct fl2000_drm_if *drm_if = container_of(drm, struct fl2000_drm_if, drm);
+		enum drm_connector_status status;
 
-		ret = drm_if->bridge.interrupt ? drm_if->bridge.interrupt(drm_if->bridge.bridge) :
-						 0;
-		if (!ret) {
-			enum drm_connector_status status;
-
-			/* Recovery can follow an acknowledgment that already cleared HPD. */
-			status = drm_bridge_detect(drm_if->bridge.bridge, drm_if->connector);
-			if (status == connector_status_unknown)
-				ret = -EIO;
-			else if (status != READ_ONCE(drm_if->connector->status))
-				drm_bridge_hpd_notify(drm_if->bridge.bridge, status);
-		}
+		/* Recovery can follow an acknowledgment that already cleared HPD. */
+		status = drm_bridge_detect(drm_if->bridge.bridge, drm_if->connector);
+		ret = status == connector_status_unknown ? -EIO : 0;
+		if (!ret && status != READ_ONCE(drm_if->connector->status))
+			drm_bridge_hpd_notify(drm_if->bridge.bridge, status);
 		drm_dev_exit(idx);
 	}
 	return ret;
@@ -794,6 +788,11 @@ static int fl2000_drm_bind(struct device *master)
 	ret = fl2000_pipeline_init(drm_if);
 	if (ret)
 		goto put;
+	drm_if->bridge.irq = fl2000_interrupt_irq(usb_dev);
+	if (drm_if->bridge.irq < 0) {
+		ret = drm_if->bridge.irq;
+		goto put;
+	}
 	ret = component_bind_all(master, &drm_if->bridge);
 	if (ret)
 		goto put;
@@ -818,7 +817,6 @@ static int fl2000_drm_bind(struct device *master)
 	ret = drm_connector_attach_encoder(connector, &drm_if->encoder);
 	if (ret)
 		goto detach_encoder;
-	*drm_if->bridge.connector = connector;
 	drm_mode_config_reset(drm);
 	drm_kms_helper_poll_init(drm);
 	WRITE_ONCE(device->drm, drm);

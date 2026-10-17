@@ -7,16 +7,14 @@
 #define FL2000_BRIDGE_H
 
 struct drm_bridge;
-struct drm_connector;
 struct module;
 
 /* Component handoff from the USB-attached bridge to the FL2000 DRM master. */
 struct fl2000_bridge {
 	struct drm_bridge *bridge;
 	struct module *owner;
-	struct drm_connector **connector;
-	/* Return zero after status processing, or a negative errno for retry. */
-	int (*interrupt)(struct drm_bridge *bridge);
+	/* IRQ resource supplied by the master before component binding. */
+	int irq;
 };
 
 #endif /* FL2000_BRIDGE_H */
