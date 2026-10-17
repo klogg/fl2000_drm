@@ -33,6 +33,7 @@ typedef uint32_t u32;
 #define mutex_unlock(p) ((void)(p))
 #define DRM_ERROR(...) ((void)0)
 #define dev_err(dev,...) ((void)(dev))
+#define dev_dbg(dev,...) ((void)(dev))
 #define dev_err_ratelimited(dev,...) ((void)(dev))
 #define dev_name(dev) ((void)(dev), "test-bridge")
 typedef int irqreturn_t;
@@ -58,18 +59,29 @@ struct drm_encoder { void *crtc; };
 struct drm_bridge { struct drm_encoder *encoder; void *dev; };
 struct drm_atomic_state { struct drm_connector *connector; struct drm_crtc_state *crtc; };
 struct hdmi_avi_infoframe { int unused; };
+#define HDMI_I2S 0
+struct hdmi_codec_daifmt { int fmt; };
+struct hdmi_codec_params { int sample_rate,sample_width,channels; };
 enum drm_connector_status { connector_status_connected, connector_status_disconnected, connector_status_unknown };
 enum drm_mode_status { MODE_OK, MODE_BAD, MODE_CLOCK_HIGH, MODE_CLOCK_LOW };
 struct regmap { u8 values[512]; };
 static int fault_reg=-1, fault_write_reg=-1, writes, notifications;
 static bool unplugged;
+static unsigned int cts_samples[255],cts_sample_count;
+static bool sample_cts;
+static void msleep(unsigned int delay) { assert(delay==30);cts_sample_count++; }
 static unsigned int register_writes[512];
 static enum drm_connector_status notified_status;
 static int regmap_read(struct regmap *map,unsigned int r,unsigned int *v)
 {
  assert(r<512);
  if ((int)r==fault_reg) return -EIO;
- *v=map->values[r];return 0;
+ if(sample_cts && r>=0x1a0 && r<=0x1a2) {
+  assert(cts_sample_count && cts_sample_count<=255);
+  unsigned int cts=cts_samples[cts_sample_count-1];
+  *v=r==0x1a0?(cts&15)<<4:r==0x1a1?(cts>>4)&255:cts>>12;
+ } else *v=map->values[r];
+ return 0;
 }
 static int regmap_write(struct regmap *map,unsigned int r,unsigned int v)
 {
@@ -333,7 +345,41 @@ int main(void)
  attach_error=0;
  fault_reg=-1;assert(!it66121_bind(&component,NULL,&encoder));
  it66121_unbind(&component,NULL,&encoder);assert(irq_frees==3);
- puts("PASS: single-pass modesets across chip/wiring/output variants, enable failures preserve mute, IRQ request failure, handler delivery and rebind, bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors");
+ /* Audio register programming remains valid for every advertised channel count. */
+ fault_reg=fault_write_reg=-1;bound_ctx=&ctx;ctx.audio.auto_cts=false;
+ struct hdmi_codec_daifmt fmt={.fmt=HDMI_I2S};
+ const struct { int rate;unsigned int n,fs; } rates[]={
+  {32000,4096,3},{44100,6272,0},{48000,6144,2},{88200,12544,8},
+  {96000,12288,10},{176400,25088,12},{192000,24576,14},{768000,24576,9}};
+ const struct { int width;unsigned int swl; } widths[]={
+  {16,2},{17,12},{18,4},{19,8},{20,3},{21,13},{22,5},{23,9},{24,11}};
+ for(unsigned int r=0;r<sizeof(rates)/sizeof(rates[0]);r++)
+  for(unsigned int w=0;w<sizeof(widths)/sizeof(widths[0]);w++)
+   for(int channels=1;channels<=8;channels++) {
+    struct hdmi_codec_params params={rates[r].rate,widths[w].width,channels};
+    memset(map.values,0,sizeof(map.values));
+    assert(!it66121_audio_hw_params(&component,NULL,&fmt,&params));
+    assert(((u32)map.values[0x133]|map.values[0x134]<<8|map.values[0x135]<<16)==rates[r].n);
+    assert(map.values[0x193]==(unsigned int)(channels+1)/2);
+    assert(map.values[0x194]==channels);
+    assert(map.values[0x198]==rates[r].fs);
+    assert(map.values[0x199]==(((~rates[r].fs<<4)&0xf0)|widths[w].swl));
+   }
+ struct hdmi_codec_params params={48000,24,2};
+ for(int channels=0;channels<=9;channels+=9) {
+  params.channels=channels;writes=0;
+  assert(it66121_audio_hw_params(&component,NULL,&fmt,&params)==-EINVAL && !writes);
+ }
+ params.channels=2;fmt.fmt=1;writes=0;
+ assert(it66121_audio_hw_params(&component,NULL,&fmt,&params)==-EINVAL && !writes);
+ fmt.fmt=HDMI_I2S;
+ /* Clock and audio register failures propagate rather than enabling output. */
+ const unsigned int audio_faults[]={0x58,0x133,0xe1,0x191};
+ for(unsigned int i=0;i<sizeof(audio_faults)/sizeof(audio_faults[0]);i++) {
+  fault_write_reg=(int)audio_faults[i];
+  assert(it66121_audio_hw_params(&component,NULL,&fmt,&params)==-EIO);
+ }
+ puts("PASS: single-pass modesets across chip/wiring/output variants, enable failures preserve mute, IRQ request failure, handler delivery and rebind, bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors, audio rates/widths/channels");
 }
 """
 names = (
@@ -353,6 +399,11 @@ names = (
     "it66121_irq_thread",
     "it66121_bind",
     "it66121_unbind",
+    "it661221_set_chstat",
+    "it661221_set_lpcm_audio",
+    "it661221_set_ncts",
+    "it661221_audio_ch_enable",
+    "it66121_audio_hw_params",
 )
 parts = [
     prelude,
@@ -375,6 +426,7 @@ with tempfile.TemporaryDirectory(prefix="fl2000-bridge-") as temp:
             "-Werror",
             "-Wno-unused-parameter",
             "-fsanitize=address,undefined",
+            "-fno-sanitize-recover=all",
             "-fno-omit-frame-pointer",
             "-no-pie",
             "-I",

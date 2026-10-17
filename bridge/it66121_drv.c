@@ -884,7 +884,7 @@ static const struct component_ops it66121_component_ops = {
 	.unbind = it66121_unbind,
 };
 
-static int it661221_set_chstat(struct it66121_ctx *ctx, u8 iec60958_chstat[])
+static int it661221_set_chstat(struct it66121_ctx *ctx, const u8 iec60958_chstat[])
 {
 	int ret;
 
@@ -912,10 +912,11 @@ static int it661221_set_chstat(struct it66121_ctx *ctx, u8 iec60958_chstat[])
 	return regmap_write(ctx->regmap, IT66121_AUD_CHST_OFS_WL_REG, iec60958_chstat[4]);
 }
 
-static int it661221_set_lpcm_audio(struct it66121_ctx *ctx, u8 audio_src_num, u8 audio_swl)
+static int it661221_set_lpcm_audio(struct it66121_ctx *ctx, unsigned int audio_src_num,
+				   unsigned int audio_swl)
 {
 	int ret;
-	unsigned int audio_enable = 0;
+	u8 audio_enable = 0;
 	unsigned int audio_format = 0;
 
 	switch (audio_swl) {
@@ -1154,19 +1155,18 @@ static int it66121_audio_hw_params(struct device *dev, void *data __always_unuse
 	unsigned int sample_rate = params->sample_rate;
 	unsigned int sample_width = params->sample_width;
 
+	if (!channels || channels > 8)
+		return -EINVAL;
 	mutex_lock(&ctx->lock);
 	dev_dbg(dev, "%s: %u, %u, %u, %u\n", __func__, daifmt->fmt, sample_rate, sample_width,
 		channels);
 
-	switch (daifmt->fmt) {
-	case HDMI_I2S:
-		dev_dbg(dev, "Using HDMI I2S\n");
-		break;
-	default:
+	if (daifmt->fmt != HDMI_I2S) {
 		dev_err(dev, "Invalid or unsupported DAI format %d\n", daifmt->fmt);
 		ret = -EINVAL;
 		goto out;
 	}
+	dev_dbg(dev, "Using HDMI I2S\n");
 
 	// Set audio clock recovery (N/CTS)
 	ret = regmap_write(ctx->regmap, IT66121_CLK_CTRL0_REG,
@@ -1230,7 +1230,7 @@ static int it66121_audio_hw_params(struct device *dev, void *data __always_unuse
 		iec60958_chstat[0] |= 0x1;
 	iec60958_chstat[0] &= ~(1 << 1);
 	iec60958_chstat[1] = 0;
-	iec60958_chstat[2] = (channels + 1) / 2;
+	iec60958_chstat[2] = (u8)((channels + 1) / 2);
 	iec60958_chstat[2] |= (channels << 4) & 0xF0;
 	iec60958_chstat[3] = fs;
 
@@ -1267,7 +1267,7 @@ static int it66121_audio_hw_params(struct device *dev, void *data __always_unuse
 		break;
 	}
 
-	iec60958_chstat[4] = (((~fs) << 4) & 0xF0) | swl;
+	iec60958_chstat[4] = ((~(unsigned int)fs << 4) & 0xF0) | swl;
 	ret = it661221_set_chstat(ctx, iec60958_chstat);
 	if (ret) {
 		dev_err(dev, "Failed to set channel status: %d\n", ret);

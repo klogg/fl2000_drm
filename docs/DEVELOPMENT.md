@@ -36,6 +36,10 @@ formatting. `scripts/checkpatch.sh` remains strict, with two narrow exceptions:
 
 The exceptions do not apply to other files or disable other checks.
 
+CI sets `UBSAN_OPTIONS=halt_on_error=1` for sanitizer regressions so undefined
+behavior fails the job rather than producing diagnostics followed by success.
+The bridge harness also disables sanitizer recovery when compiled directly.
+
 ## USB capture without a GUI
 
 The supplied base initramfs must include its own guest usbmon module, capture

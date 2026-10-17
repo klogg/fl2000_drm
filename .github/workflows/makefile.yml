@@ -71,6 +71,8 @@ jobs:
           sudo --preserve-env=DEBIAN_FRONTEND apt-get install -y --no-install-recommends \
             build-essential libdrm-dev pkg-config python3 lua5.4 tshark shellcheck
       - name: Run sanitizer-backed logic regressions
+        env:
+          UBSAN_OPTIONS: halt_on_error=1
         run: |
           python3 tests/test_logic.py
           python3 tests/test_register_locking.py
