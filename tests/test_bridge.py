@@ -277,29 +277,29 @@ int main(void)
  it66121_bridge_hpd_disable(&ctx.bridge);
  assert(map.values[IT66121_INT_MASK1_REG]&IT66121_INT_MASK1_HPD);
  /* The interrupt path owns acknowledgment and only notifies real HPD events. */
- assert(!it66121_bridge_interrupt(&ctx.bridge));
+ assert(!it66121_interrupt(&ctx));
  assert(notifications==1 && notified_status==connector_status_connected);
  assert(!(map.values[IT66121_INT_STATUS1_REG]&1));
  assert(!(map.values[IT66121_SYS_STATUS_REG]&0x80));
- writes=0;assert(!it66121_bridge_interrupt(&ctx.bridge));
+ writes=0;assert(!it66121_interrupt(&ctx));
  assert(notifications==1 && writes==0);
  map.values[IT66121_SYS_STATUS_REG]=0x80;
  map.values[IT66121_INT_STATUS1_REG]=1;
- assert(!it66121_bridge_interrupt(&ctx.bridge));
+ assert(!it66121_interrupt(&ctx));
  assert(notifications==2 && notified_status==connector_status_disconnected);
  /* Failed status reads and acknowledgments must reach the USB worker. */
  const unsigned int irq_regs[]={IT66121_SYS_STATUS_REG,IT66121_INT_STATUS1_REG,IT66121_INT_CLR1_REG};
  for(unsigned int i=0;i<sizeof(irq_regs)/sizeof(irq_regs[0]);i++) {
   map.values[IT66121_SYS_STATUS_REG]=0xc0;map.values[IT66121_INT_STATUS1_REG]=1;
   fault_reg=(int)irq_regs[i];int previous=notifications;
-  assert(it66121_bridge_interrupt(&ctx.bridge)==-EIO && notifications==previous);
+  assert(it66121_interrupt(&ctx)==-EIO && notifications==previous);
  }
  fault_reg=-1;
  map.values[IT66121_SYS_STATUS_REG]=0xc0;map.values[IT66121_INT_STATUS1_REG]=1;
  fault_write_reg=IT66121_SYS_STATUS_REG;int before_ack=notifications;
- assert(it66121_bridge_interrupt(&ctx.bridge)==-EIO && notifications==before_ack);
+ assert(it66121_interrupt(&ctx)==-EIO && notifications==before_ack);
  fault_write_reg=-1;
- assert(!it66121_bridge_interrupt(&ctx.bridge) && notifications==before_ack);
+ assert(!it66121_interrupt(&ctx) && notifications==before_ack);
  /* AFE clock selection changes only bit 4 of register 0x68. */
  struct drm_display_mode afe_mode={.clock=148500};
  map.values[IT66121_AFE_XP_EC1_REG]=0xb5;
@@ -410,7 +410,7 @@ names = (
     "it66121_bridge_detect",
     "it66121_bridge_hpd_enable",
     "it66121_bridge_hpd_disable",
-    "it66121_bridge_interrupt",
+    "it66121_interrupt",
     "it66121_irq_thread",
     "it66121_bind",
     "it66121_unbind",

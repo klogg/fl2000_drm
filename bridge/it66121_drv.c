@@ -795,9 +795,8 @@ static const struct drm_bridge_funcs it66121_bridge_funcs = {
 	.hpd_disable = it66121_bridge_hpd_disable,
 };
 
-static int it66121_bridge_interrupt(struct drm_bridge *bridge)
+static int it66121_interrupt(struct it66121_ctx *ctx)
 {
-	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	enum drm_connector_status status;
 	unsigned int val;
 	bool event = false;
@@ -834,7 +833,7 @@ static irqreturn_t it66121_irq_thread(int irq __always_unused, void *data)
 {
 	struct it66121_ctx *ctx = data;
 
-	if (it66121_bridge_interrupt(&ctx->bridge)) {
+	if (it66121_interrupt(ctx)) {
 		dev_err_ratelimited(ctx->dev, "Interrupt acknowledgment failed\n");
 		return ctx->retry_irq_ack ? IRQ_NONE : IRQ_HANDLED;
 	}
