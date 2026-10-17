@@ -330,15 +330,11 @@ local function menuable_tap()
     local fl2k_tap = Listener.new(nil, "fl2k")
 
     local function remove()
-        -- this way we remove the listener that otherwise will remain running indefinitely
         fl2k_tap:remove();
     end
 
-    -- we tell the window to call the remove() function when closed
     win:set_atclose(remove)
 
-    -- this function will be called whenever a reset is needed
-    -- e.g. when reloading the capture file
     function fl2k_tap.reset()
         win:clear()
 
@@ -410,8 +406,6 @@ local function menuable_tap()
     retap_packets()
 end
 
--- using this function we register our function
--- to be called when the user selects the Tools->Test->Packets menu
 if gui_enabled() then
     register_menu("FL2000 Analysis", menuable_tap, MENU_TOOLS_UNSORTED)
 end

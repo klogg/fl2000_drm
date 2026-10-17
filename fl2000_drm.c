@@ -18,7 +18,7 @@
 #define DRM_DRIVER_MINOR      0
 #define DRM_DRIVER_PATCHLEVEL 1
 
-/* Maximum supported resolution, out-of-the-blue numbers */
+/* Conservative DRM framebuffer dimension limits. */
 #define FL20000_MAX_WIDTH  4000
 #define FL20000_MAX_HEIGHT 4000
 

@@ -228,18 +228,17 @@ out:
 	return ret;
 }
 
-int fl2000_disable_interrupt(const struct usb_device *usb_dev)
+void fl2000_disable_interrupt(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct fl2000_interrupt *intr;
 
 	intr = device->interrupt;
 	if (!intr)
-		return 0;
+		return;
 	mutex_lock(&intr->mutex);
 	fl2000_intr_stop(intr);
 	mutex_unlock(&intr->mutex);
-	return 0;
 }
 
 int fl2000_interrupt_create(struct usb_interface *interface)

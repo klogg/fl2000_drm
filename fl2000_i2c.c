@@ -12,7 +12,6 @@
  */
 #define I2C_CMESSAGES_NUM  2
 #define I2C_REG_ADDR_SIZE  (sizeof(u8))
-#define I2C_REG_DATA_SIZE  (sizeof(u8))
 #define I2C_XFER_ADDR_MASK (~0x3ul)
 
 static inline int fl2000_i2c_read_dword(struct usb_device *usb_dev, u16 addr, u8 offset, u32 *data)
@@ -51,10 +50,7 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 	u16 addr;
 	u8 idx;
 	u8 offset;
-	union {
-		u32 w;
-		u8 b[4];
-	} data;
+	u32 data;
 
 	if (!fl2000_i2c_xfer_valid(msgs, num))
 		return -EOPNOTSUPP;
@@ -67,26 +63,25 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 		return -EOPNOTSUPP;
 
 	if (read) {
-		ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data.w);
+		ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data);
 		if (ret)
 			return ret;
 
 		for (unsigned int i = 0; i < msgs[1].len; i++)
-			msgs[1].buf[i] = (data.w >> ((idx + i) * 8)) & 0xff;
+			msgs[1].buf[i] = (data >> ((idx + i) * 8)) & 0xff;
 	} else {
 		if (msgs[0].len == 5) {
-			data.w = 0;
+			data = 0;
 			for (unsigned int i = 0; i < 4; i++)
-				data.w |= (u32)msgs[0].buf[i + 1] << (i * 8);
+				data |= (u32)msgs[0].buf[i + 1] << (i * 8);
 		} else {
-			ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data.w);
+			ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data);
 			if (ret)
 				return ret;
-			data.w = (data.w & ~(0xffU << (idx * 8))) |
-				 ((u32)msgs[0].buf[1] << (idx * 8));
+			data = (data & ~(0xffU << (idx * 8))) | ((u32)msgs[0].buf[1] << (idx * 8));
 		}
 
-		ret = fl2000_i2c_write_dword(adapter->algo_data, addr, offset, &data.w);
+		ret = fl2000_i2c_write_dword(adapter->algo_data, addr, offset, &data);
 		if (ret)
 			return ret;
 	}

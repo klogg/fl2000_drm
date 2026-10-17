@@ -245,16 +245,7 @@ static int it66121_abort_ddc_ops(struct it66121_ctx *priv)
 {
 	int ret;
 
-	/* Prior to DDC abort command there was also a reset of HDCP:
-	 *  1. HDCP_DESIRE clear bit CP DESIRE
-	 *  2. SW_RST set bit HDCP_RST
-	 * it seems wrong to keep them reset, i.e. without restoring initial state, but somehow this
-	 * is how it was implemented. This sequence is removed since HDCP is not supported
-	 */
-
-	/* From original driver: According to 2009/01/15 modification by Jau-Chih.Tseng@ite.com.tw
-	 * do abort DDC twice
-	 */
+	/* The vendor DDC recovery sequence issues ABORT twice. */
 	for (int i = 0; i < 2; i++) {
 		ret = it66121_ddc_write(priv, IT66121_DDC_SEGMENT, 0, DDC_CMD_ABORT, 0, 0);
 		if (ret)
