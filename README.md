@@ -96,9 +96,9 @@ is removed; the I2C core removes its clients automatically.
 
 A bridge driver still needs the component binding and standard IRQ handling
 described in [the architecture](docs/ARCHITECTURE.md). Enumeration alone does
-not adapt an arbitrary upstream bridge driver.
-The QEMU startup script declares the current test fixture explicitly and accepts
-`BRIDGE_MODULE`, `BRIDGE_TYPE`, `BRIDGE_ADDR`, and `I2C_BUS` overrides.
+not adapt an arbitrary upstream bridge driver. The QEMU startup fixture uses
+the same enumerator and configuration in its minimal guest. Supply
+`--i2ctransfer PATH` if i2c-tools is not installed on the host.
 
 ## Isolated QEMU testing
 

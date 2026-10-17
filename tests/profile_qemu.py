@@ -21,6 +21,7 @@ from qemu_utils import (
     add_qemu_arguments,
     check_modules,
     dependency_overlay,
+    enumeration_overlay,
     qemu_command,
     write_initramfs,
 )
@@ -41,6 +42,9 @@ parser.add_argument("--hostport", default="2")
 parser.add_argument("--profiler", type=Path, required=True)
 parser.add_argument("--sampler", type=Path)
 parser.add_argument("--output", type=Path, required=True)
+parser.add_argument(
+    "--i2ctransfer", type=Path, help="i2c-tools executable to include in the guest"
+)
 args = parser.parse_args()
 if args.repeat < 1 or not 1 <= args.duration <= 120:
     parser.error("repeat must be positive; duration must be between 1 and 120")
@@ -63,12 +67,8 @@ entries = [
 entries += [
     ("it66121.ko", bridge.read_bytes(), 0o100644),
     ("kms-profile", args.profiler.read_bytes(), 0o100755),
-    (
-        "fl2000-configure-bridge",
-        (ROOT / "scripts/configure-bridge.sh").read_bytes(),
-        0o100755,
-    ),
 ]
+entries += enumeration_overlay(args.i2ctransfer)
 if args.sampler:
     entries.append(("kernel-sample", args.sampler.read_bytes(), 0o100755))
 entries += dependency_overlay([path for _, path in modules] + [bridge], args.kernel)
@@ -127,14 +127,25 @@ script = [
     "mount -t debugfs none /sys/kernel/debug",
     "/kms-profile --baseline",
     "/fl2000-load-deps",
-    "insmod /it66121.ko",
+    "[ -d /sys/bus/i2c/drivers/it66121 ] || insmod /it66121.ko",
+    "enumerate() {",
+    ' expected=$(sed -n "s/^adapter_name //p" /etc/fl2000/enumerator.conf)',
+    " found=0",
+    " for adapter in /sys/bus/i2c/devices/i2c-*; do",
+    '  [ -r "$adapter/name" ] || continue',
+    '  [ "$(cat "$adapter/name")" = "$expected" ] || continue',
+    '  /fl2000-enumerate "$adapter" || return 1',
+    "  found=1",
+    " done",
+    ' [ "$found" -eq 1 ]',
+    "}",
 ]
 for trial in range(args.repeat):
     for label, _ in modules if trial % 2 == 0 else modules[::-1]:
         script += [
             f"echo BACKEND {label} trial-{trial + 1}",
             f"insmod /fl2000-{label}.ko",
-            "/fl2000-configure-bridge it66121 0x4c",
+            "enumerate",
             f"/kms-profile --quick --duration={args.duration}",
             "rmmod fl2000",
         ]
@@ -143,7 +154,7 @@ if args.profile_label:
     script += [
         f"echo BACKEND {label} static",
         f"insmod /fl2000-{label}.ko",
-        "/fl2000-configure-bridge it66121 0x4c",
+        "enumerate",
         f"/kms-profile --static-only --duration={args.duration}",
         f"echo BACKEND {label} fpu-check",
         "/kms-profile --full-only --duration=1 --check-fpu",
@@ -207,7 +218,7 @@ with (
             buffer += value
             if not sent and "# " in buffer:
                 console.sendall(
-                    b"stty -echo 2>/dev/null || true\necho PERF_CONSOLE_READY\n"
+                    b"stty -echo 2>/dev/null || true\nPS1= PS2=\necho PERF_CONSOLE_READY\n"
                 )
                 sent = 1
             while "\n" in buffer:

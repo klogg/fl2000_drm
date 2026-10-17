@@ -161,3 +161,49 @@ def dependency_overlay(modules, kernel):
         )
     )
     return entries
+
+
+def enumeration_overlay(i2ctransfer):
+    """Supply the production enumerator and its approved I2C utility to a guest."""
+    executable = Path(i2ctransfer or shutil.which("i2ctransfer") or "")
+    if not executable.is_file():
+        raise FileNotFoundError("Install i2c-tools or supply --i2ctransfer PATH")
+    files = {"usr/sbin/i2ctransfer": executable}
+    # Include shared libraries without installing anything on the host or guest.
+    for binary in (executable, Path(shutil.which("flock") or "")):
+        if not binary.is_file():
+            raise FileNotFoundError("util-linux flock is required")
+        if binary != executable:
+            files["usr/bin/flock"] = binary
+        output = subprocess.check_output(["ldd", str(binary)], text=True)
+        for line in output.splitlines():
+            for token in line.split():
+                if token.startswith("/"):
+                    files[
+                        "usr/" + token.lstrip("/")
+                        if token.startswith(("/lib/", "/lib64/"))
+                        else token.lstrip("/")
+                    ] = Path(token)
+    directories = {"etc", "etc/fl2000", "usr", "usr/bin", "usr/sbin"}
+    for name in files:
+        directories.update(
+            str(parent) for parent in PurePosixPath(name).parents if str(parent) != "."
+        )
+    entries = [
+        (name, b"", 0o40755)
+        for name in sorted(directories, key=lambda name: (name.count("/"), name))
+    ]
+    entries += [(name, path.read_bytes(), 0o100755) for name, path in files.items()]
+    entries += [
+        (
+            "fl2000-enumerate",
+            (ROOT / "userspace/fl2000-enumerate.sh").read_bytes(),
+            0o100755,
+        ),
+        (
+            "etc/fl2000/enumerator.conf",
+            (ROOT / "userspace/enumerator.conf").read_bytes(),
+            0o100644,
+        ),
+    ]
+    return entries

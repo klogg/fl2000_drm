@@ -13,6 +13,7 @@ from qemu_utils import (
     add_qemu_arguments,
     check_modules,
     dependency_overlay,
+    enumeration_overlay,
     qemu_command,
     write_initramfs,
 )
@@ -31,6 +32,9 @@ parser.add_argument(
     action="store_true",
     help="Attach the USB port later from the QEMU monitor",
 )
+parser.add_argument(
+    "--i2ctransfer", type=Path, help="i2c-tools executable to include in the guest"
+)
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
 run = Path(tempfile.mkdtemp(prefix="hardware-", dir=args.output))
@@ -39,14 +43,10 @@ entries = [
     for name in ("fl2000.ko", "it66121.ko")
 ]
 entries += [
-    (
-        "fl2000-configure-bridge",
-        (ROOT / "scripts/configure-bridge.sh").read_bytes(),
-        0o100755,
-    ),
     ("fl2000-test-guest", b"FL2000 QEMU test guest\n", 0o100644),
     ("fl2000-startup", (ROOT / "scripts/startup.sh").read_bytes(), 0o100755),
 ]
+entries += enumeration_overlay(args.i2ctransfer)
 check_modules(
     [args.modules / name for name in ("fl2000.ko", "it66121.ko")], args.kernel
 )
