@@ -482,29 +482,6 @@ static int it66121_restore_interrupts(struct it66121_ctx *ctx)
 				 IT66121_INT_MASK1_ALL & ~IT66121_INT_MASK1_HPD);
 }
 
-static void it66121_bridge_mode_set(struct drm_bridge *bridge, const struct drm_display_mode *mode,
-				    const struct drm_display_mode *adjusted_mode);
-
-static void
-it66121_bridge_enable(struct drm_bridge *bridge,
-		      struct drm_atomic_state *state) /* NOSONAR: Kernel callback ABI. */
-{
-	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
-	const struct drm_crtc_state *crtc_state;
-
-	mutex_lock(&ctx->lock);
-	ctx->connector = drm_atomic_get_new_connector_for_encoder(state, bridge->encoder);
-	mutex_unlock(&ctx->lock);
-	/* The encoder's enable callback resets FL2000 and its attached bridge. */
-	crtc_state = drm_atomic_get_new_crtc_state(state, bridge->encoder->crtc);
-	if (crtc_state)
-		it66121_bridge_mode_set(bridge, &crtc_state->mode, &crtc_state->adjusted_mode);
-	mutex_lock(&ctx->lock);
-	if (it66121_restore_interrupts(ctx) || it66121_set_mute(ctx, false))
-		dev_err(ctx->dev, "Failed to enable HDMI output\n");
-	mutex_unlock(&ctx->lock);
-}
-
 static void it66121_bridge_disable(struct drm_bridge *bridge,
 				   struct drm_atomic_state *state __always_unused)
 {
@@ -569,38 +546,55 @@ static int it66121_configure_hdmi(struct it66121_ctx *ctx, const struct drm_disp
 	return regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, IT66121_HDMI_MODE_HDMI);
 }
 
-static void it66121_bridge_mode_set(struct drm_bridge *bridge,
-				    const struct drm_display_mode *mode __always_unused,
-				    const struct drm_display_mode *adjusted_mode)
+static void
+it66121_bridge_enable(struct drm_bridge *bridge,
+		      struct drm_atomic_state *state) /* NOSONAR: Kernel callback ABI. */
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
+	const struct drm_crtc_state *crtc_state;
+	struct drm_connector *connector;
+	int ret;
+
+	connector = drm_atomic_get_new_connector_for_encoder(state, bridge->encoder);
+	crtc_state = drm_atomic_get_new_crtc_state(state, bridge->encoder->crtc);
+	if (!connector || !crtc_state) {
+		dev_err(ctx->dev, "Missing atomic display state\n");
+		return;
+	}
 
 	mutex_lock(&ctx->lock);
-	/* FL2000 owns resets; restore transport-facing masks after modesets. */
-	if (!ctx->connector || it66121_configure_hdmi(ctx, adjusted_mode))
+	ctx->connector = connector;
+	/* Program after the CRTC enable callback has reset the transport. */
+	ret = it66121_configure_hdmi(ctx, &crtc_state->adjusted_mode);
+	if (ret)
 		goto unlock;
 
-	if ((ctx->id == ID_IT66121 || ctx->id == ID_IT66122) &&
-	    regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG, IT66121_CLK_BANK_PWROFF_TXCLK,
-			      IT66121_CLK_BANK_PWROFF_TXCLK)) {
-		goto unlock;
+	if (ctx->id == ID_IT66121 || ctx->id == ID_IT66122) {
+		ret = regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG,
+					IT66121_CLK_BANK_PWROFF_TXCLK,
+					IT66121_CLK_BANK_PWROFF_TXCLK);
+		if (ret)
+			goto unlock;
 	}
-
-	if (it66121_configure_input(ctx))
+	ret = it66121_configure_input(ctx);
+	if (ret)
+		goto unlock;
+	ret = it66121_configure_afe(ctx, &crtc_state->adjusted_mode);
+	if (ret)
 		goto unlock;
 
-	if (it66121_configure_afe(ctx, adjusted_mode))
-		goto unlock;
-
-	if ((ctx->id == ID_IT66121 || ctx->id == ID_IT66122) &&
-	    regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG, IT66121_CLK_BANK_PWROFF_TXCLK,
-			      0)) {
-		goto unlock;
+	if (ctx->id == ID_IT66121 || ctx->id == ID_IT66122) {
+		ret = regmap_write_bits(ctx->regmap, IT66121_CLK_BANK_REG,
+					IT66121_CLK_BANK_PWROFF_TXCLK, 0);
+		if (ret)
+			goto unlock;
 	}
-
-	if (it66121_restore_interrupts(ctx))
-		dev_err(ctx->dev, "Failed to restore HPD interrupts\n");
+	ret = it66121_restore_interrupts(ctx);
+	if (!ret)
+		ret = it66121_set_mute(ctx, false);
 unlock:
+	if (ret)
+		dev_err(ctx->dev, "Failed to enable HDMI output: %d\n", ret);
 	mutex_unlock(&ctx->lock);
 }
 
@@ -676,7 +670,6 @@ static const struct drm_bridge_funcs it66121_bridge_funcs = {
 	.atomic_enable = it66121_bridge_enable,
 	.atomic_disable = it66121_bridge_disable,
 	.atomic_check = it66121_bridge_check,
-	.mode_set = it66121_bridge_mode_set,
 	.mode_valid = it66121_bridge_mode_valid,
 	.detect = it66121_bridge_detect,
 	.edid_read = it66121_bridge_edid_read,

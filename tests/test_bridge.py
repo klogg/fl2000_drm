@@ -63,6 +63,7 @@ enum drm_mode_status { MODE_OK, MODE_BAD, MODE_CLOCK_HIGH, MODE_CLOCK_LOW };
 struct regmap { u8 values[512]; };
 static int fault_reg=-1, fault_write_reg=-1, writes, notifications;
 static bool unplugged;
+static unsigned int register_writes[512];
 static enum drm_connector_status notified_status;
 static int regmap_read(struct regmap *map,unsigned int r,unsigned int *v)
 {
@@ -74,7 +75,7 @@ static int regmap_write(struct regmap *map,unsigned int r,unsigned int v)
 {
  assert(r<512);
  if ((int)r==fault_reg || (int)r==fault_write_reg) return -EIO;
- writes++;map->values[r]=v;
+ writes++;register_writes[r]++;map->values[r]=v;
  if(r==0x0c && (v&1))map->values[6]&=~1;
  if(r==0x0e && (v&1))map->values[0x0e]&=~0x80;
  return 0;
@@ -100,6 +101,7 @@ static int drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *f
 static int hdmi_avi_infoframe_pack(struct hdmi_avi_infoframe *f,u8 *buf,unsigned int n)
 {(void)f;assert(n==17);for(unsigned int i=0;i<n;i++)buf[i]=i+17;return n;}
 """
+assert not re.search(r"\.mode_set\s*=", source), "Mode programming must run only in atomic enable"
 ctx = structure(source, "it66121_ctx")
 irq_mocks = r"""
 #define EPROBE_DEFER 517
@@ -166,6 +168,48 @@ int main(void)
  assert(map.values[IT66121_AVI_INFO_PKT_REG]==0);
  assert(map.values[IT66121_INPUT_MODE_REG]==1);
  assert(map.values[IT66121_INT_MASK1_REG]==0xfe);
+ /* Preserve every chip, wiring width, output type, and AFE clock branch. */
+ for (unsigned int id=ID_IT6610;id<=ID_IT66122;id++) {
+  for (unsigned int width=12;width<=24;width+=12) {
+   for (unsigned int hdmi=0;hdmi<2;hdmi++) {
+    for (unsigned int high=0;high<2;high++) {
+     ctx.id=id;ctx.bus_width=width;connector.display_info.is_hdmi=hdmi;
+     crtc.adjusted_mode.clock=high?148500:32000;
+     memset(map.values,0xff,sizeof(map.values));
+     memset(register_writes,0,sizeof(register_writes));
+     it66121_bridge_enable(&ctx.bridge,&state);
+     assert(register_writes[IT66121_INPUT_MODE_REG]==1);
+     assert(register_writes[IT66121_INT_MASK1_REG]==1);
+     assert(register_writes[IT66121_INT_REG]==1);
+     assert(register_writes[IT66121_AV_MUTE_REG]==1);
+     assert(register_writes[IT66121_CLK_BANK_REG]==(id==ID_IT6610?0U:2U));
+     assert(map.values[IT66121_INPUT_MODE_REG]==(1U|(width==12?IT66121_INPUT_MODE_DDR:0U)));
+     assert(map.values[IT66121_HDMI_MODE_REG]==hdmi);
+     assert(map.values[IT66121_INT_MASK1_REG]==0xfe);
+     assert(!(map.values[IT66121_AV_MUTE_REG]&IT66121_AV_MUTE_ON));
+     assert(!!(map.values[IT66121_AFE_XP_REG]&IT66121_AFE_XP_GAINBIT)==!!high);
+     assert(!!(map.values[IT66121_AFE_IP_REG]&IT66121_AFE_IP_GAINBIT)==!!high);
+    }
+   }
+  }
+ }
+ ctx.id=ID_IT66121;ctx.bus_width=24;connector.display_info.is_hdmi=true;
+ crtc.adjusted_mode.clock=32000;
+ /* An incomplete atomic state must never touch the bridge. */
+ writes=0;state.connector=NULL;it66121_bridge_enable(&ctx.bridge,&state);assert(!writes);
+ state.connector=&connector;state.crtc=NULL;it66121_bridge_enable(&ctx.bridge,&state);assert(!writes);
+ state.crtc=&crtc;
+ /* A programming failure must not continue to unmute a partial configuration. */
+ const unsigned int enable_faults[]={IT66121_HDMI_MODE_REG,IT66121_INPUT_MODE_REG,
+  IT66121_AFE_DRV_REG,IT66121_INT_REG,IT66121_INT_MASK1_REG};
+ for (unsigned int i=0;i<sizeof(enable_faults)/sizeof(enable_faults[0]);i++) {
+  memset(map.values,0xff,sizeof(map.values));
+  memset(register_writes,0,sizeof(register_writes));fault_write_reg=(int)enable_faults[i];
+  it66121_bridge_enable(&ctx.bridge,&state);
+  assert(!register_writes[IT66121_AV_MUTE_REG]);
+  assert(map.values[IT66121_AV_MUTE_REG]&IT66121_AV_MUTE_ON);
+ }
+ fault_write_reg=-1;
  /* Polling must leave a latched IRQ untouched. */
  map.values[IT66121_SYS_STATUS_REG]=0xc0;
  map.values[IT66121_INT_STATUS1_REG]=1;
@@ -253,7 +297,7 @@ int main(void)
  attach_error=0;
  fault_reg=-1;assert(!it66121_bind(&component,NULL,&encoder));
  it66121_unbind(&component,NULL,&encoder);assert(irq_frees==3);
- puts("PASS: IRQ request failure, handler delivery and rebind, bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors");
+ puts("PASS: single-pass modesets across chip/wiring/output variants, enable failures preserve mute, IRQ request failure, handler delivery and rebind, bridge reset restoration, HDMI/DVI, input timing, polling without acknowledgment, HPD IRQ handling, mode limits, I/O errors");
 }
 """
 names = (
@@ -263,7 +307,6 @@ names = (
     "it66121_set_mute",
     "it66121_restore_interrupts",
     "it66121_configure_hdmi",
-    "it66121_bridge_mode_set",
     "it66121_bridge_enable",
     "it66121_bridge_disable",
     "it66121_bridge_mode_valid",
