@@ -233,6 +233,9 @@ static int usb_submit_urb(struct urb *urb, int flags)
 static int usb_sndbulkpipe(struct usb_device *usb, int ep) { (void)usb; return ep; }
 static int usb_clear_halt(struct usb_device *usb, int pipe) { (void)usb; (void)pipe; return 0; }
 static void usb_kill_urb(struct urb *urb);
+static unsigned int urb_frees;
+static void usb_free_urb(struct urb *urb)
+{ if(urb){assert(!urb->submitted);urb_frees++;free(urb);} }
 static struct fl2000_stream *test_stream;
 static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev);
 #define I2C_M_RD 1
@@ -957,6 +960,26 @@ static void complete(struct urb *urb, int status)
  urb->actual_length = urb->transfer_buffer_length;
  fl2000_data_completion(urb);
 }
+static void test_stream_release(void)
+{
+ struct usb_bus bus={.sg_tablesize=1024};
+ struct usb_device usb={.bus=&bus};
+ for(unsigned int allocated=0;allocated<=FL2000_QUEUE_DEPTH;allocated++) {
+  struct fl2000_stream stream={.usb_dev=&usb,.buf_size=8,.enabled=true};
+  unsigned int freed=urb_frees;
+  assert(!fl2000_alloc_frame(&usb,&stream.frames[0],8));
+  stream.latest=&stream.frames[0];
+  for(unsigned int i=0;i<allocated;i++) {
+   struct fl2000_transfer *t=&stream.transfers[i];
+   t->stream=&stream;t->urb=calloc(1,sizeof(*t->urb));assert(t->urb);
+   t->urb->context=t;assert(!sg_alloc_table(&t->sgt,1,GFP_KERNEL));
+   assert(!fl2000_submit_transfer(t));
+  }
+  assert(stream.frames[0].users==allocated);
+  fl2000_streaming_release(NULL,&stream);
+  assert(!stream.enabled && urb_frees==freed+allocated && !stream.frames[0].vaddr);
+ }
+}
 static void test_queue(void)
 {
  struct fl2000_stream stream = { .buf_size = 8 };
@@ -1025,7 +1048,7 @@ static void test_queue(void)
 }
 int main(void)
 {
- test_damage_simd_boundaries(); test_partial_damage(); test_conversion(); test_native_reordering(); test_native_formats(); test_native_crop(); test_modes(); test_i2c(); test_register_io(); test_queue(); test_atomic_state(); test_frame_allocation(); test_stream_preparation();
+ test_damage_simd_boundaries(); test_partial_damage(); test_conversion(); test_native_reordering(); test_native_formats(); test_native_crop(); test_modes(); test_i2c(); test_register_io(); test_queue(); test_atomic_state(); test_frame_allocation(); test_stream_preparation(); test_stream_release();
 #ifdef TEST_SIMD
  assert(!fpu_depth);
  simd_cpu_available=false;
@@ -1033,7 +1056,7 @@ int main(void)
  simd_cpu_available=true; simd_context_available=false;
  test_damage_simd_boundaries(); test_conversion(); test_native_reordering();
 #endif
- puts("PASS: conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, persistent DMA, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers, atomic buffer preparation/failure/unwind");
+ puts("PASS: conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, persistent DMA, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers, atomic buffer preparation/failure/unwind, active and partial stream release");
  return 0;
 }
 """
@@ -1097,6 +1120,7 @@ parts += [
         "fl2000_submit_transfer",
         "fl2000_data_completion",
         "fl2000_stop_stream",
+        "fl2000_streaming_release",
         "fl2000_streaming_free_buffers",
         "fl2000_streaming_prepare",
         "fl2000_streaming_mode_set",

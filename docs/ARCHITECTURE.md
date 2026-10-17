@@ -34,6 +34,13 @@ agreement between the master and provider; DRM does not automatically impose
 that contract on other bridge drivers. The provider requests its IRQ and
 attaches its bridge during bind, then frees the IRQ during unbind. The master
 stops USB interrupt work and detaches the encoder before provider unbind.
+DRM unbind owns quiescence before bridge detachment: it drains interrupt work,
+stops connector polling, unplugs DRM, shuts down the display, and drains streaming
+before cleaning up the encoder and unbinding the provider. The explicit streaming
+stop also covers atomic shutdown failures. USB cleanup removes the component
+master and then releases interface resources without repeating those outer
+stops. Resource release callbacks still drain their own URBs and work so partial
+probe failures and an unmatched component master remain safe.
 
 DRM registration currently waits for an external bridge component. Native
 VGA through the integrated FL2000 DAC would need a separate output path and

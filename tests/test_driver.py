@@ -92,8 +92,6 @@ static void fl2000_interrupt_destroy(struct usb_interface *i)
 static int fl2000_drm_init(struct usb_device *usb)
 { (void)usb;assert(live==15 && !drm);int r=operation();if(!r)drm=1;return r; }
 static void fl2000_drm_cleanup(struct usb_device *usb) { (void)usb;assert(drm);drm=0; }
-static void fl2000_disable_interrupt(struct usb_device *usb) { (void)usb;assert(!drm && (live&8)); }
-static void fl2000_streaming_disable(struct usb_device *usb) { (void)usb;assert(!drm && (live&4)); }
 static int fl2000_drm_suspend(struct usb_device *usb) { (void)usb;suspend_count++;return 0; }
 static int fl2000_drm_resume(struct usb_device *usb) { (void)usb;resume_count++;return 0; }
 """

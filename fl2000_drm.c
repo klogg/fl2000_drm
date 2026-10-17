@@ -875,10 +875,12 @@ static void fl2000_drm_unbind(struct device *master)
 	if (!drm)
 		return;
 	drm_if = container_of(drm, struct fl2000_drm_if, drm);
+	/* Quiesce nested IRQ delivery before detaching the bridge. */
 	fl2000_disable_interrupt(usb_dev);
 	drm_kms_helper_poll_fini(drm);
 	drm_dev_unplug(drm);
 	drm_atomic_helper_shutdown(drm);
+	/* Atomic shutdown can fail; drain transfers before detaching anyway. */
 	fl2000_streaming_disable(usb_dev);
 	/* Encoder cleanup owns bridge detachment; do it before its I2C driver can go away. */
 	drm_encoder_cleanup(&drm_if->encoder);
@@ -915,7 +917,6 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 
 void fl2000_drm_cleanup(struct usb_device *usb_dev)
 {
-	fl2000_disable_interrupt(usb_dev);
 	component_master_del(&usb_dev->dev, &fl2000_master_ops);
 }
 

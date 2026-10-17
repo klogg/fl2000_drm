@@ -50,6 +50,10 @@ static int fl2000_drm_driver,fl2000_mode_config_funcs;
 mocks = r"""
 static int failure,step,unregistered,unplugged,shutdowns,stops,poll_fini,encoder_cleanup,unbound,released;
 static bool bound,attached,polling;
+static bool irq_active,stream_active,shutdown_failure;
+static unsigned int irq_stops,master_deletes;
+static const int fl2000_master_ops;
+static void fl2000_drm_unbind(struct device *master);
 static struct module provider;
 static bool reject_provider;
 static void (*release_owner)(struct drm_device *,void *);
@@ -89,20 +93,25 @@ static void drm_kms_helper_poll_init(struct drm_device *d) { (void)d;assert(!pol
 static int fl2000_enable_interrupts(struct usb_device *u) { (void)u;return operation(); }
 static int drm_dev_register(struct drm_device *d,int flags)
 { assert(!flags && !d->registered);int ret=operation();if(!ret)d->registered=true;return ret; }
-static void drm_client_setup_with_fourcc(struct drm_device *d,int format) { assert(d->registered && format==1); }
-static int fl2000_enable_interrupt(struct usb_device *u) { (void)u;return operation(); }
+static void drm_client_setup_with_fourcc(struct drm_device *d,int format) { assert(d->registered && format==1);stream_active=true; }
+static int fl2000_enable_interrupt(struct usb_device *u)
+{ (void)u;int ret=operation();irq_active=!ret;return ret; }
+static void fl2000_disable_interrupt(struct usb_device *u)
+{ (void)u;irq_active=false;irq_stops++; }
+static void component_master_del(struct device *d,const void *ops)
+{ assert(ops==&fl2000_master_ops);master_deletes++;if(bound)fl2000_drm_unbind(d); }
 static void drm_dev_unregister(struct drm_device *d)
 { assert(d->registered);d->registered=false;unregistered++; }
 static void drm_dev_unplug(struct drm_device *d)
 { d->unplugged=true;unplugged++;drm_dev_unregister(d); }
 static void drm_atomic_helper_shutdown(struct drm_device *d)
-{ assert(d->unplugged && !d->registered);shutdowns++; }
-static void fl2000_streaming_disable(struct usb_device *u) { (void)u;stops++; }
+{ assert(d->unplugged && !d->registered);assert(!irq_active);shutdowns++;if(!shutdown_failure)stream_active=false; }
+static void fl2000_streaming_disable(struct usb_device *u) { (void)u;stream_active=false;stops++; }
 static void drm_kms_helper_poll_fini(struct drm_device *d)
 { (void)d;assert(polling);polling=false;poll_fini++; }
-static void drm_encoder_cleanup(struct drm_encoder *e) { (void)e;attached=false;encoder_cleanup++; }
+static void drm_encoder_cleanup(struct drm_encoder *e) { (void)e;assert(!irq_active && !stream_active);attached=false;encoder_cleanup++; }
 static void component_unbind_all(struct device *d,struct drm_encoder *b)
-{ (void)d;(void)b;assert(bound && !attached);bound=false;unbound++; }
+{ (void)d;(void)b;assert(bound && !attached && !irq_active && !stream_active);bound=false;unbound++; }
 static void drm_dev_put(struct drm_device *d)
 {
  struct fl2000_drm_if *output=(void *)d;
@@ -131,6 +140,26 @@ int main(void)
  struct fl2000_device failed_device={.bridge_owner=&provider};struct usb_device failed_usb={.dev={.data=&failed_device}};
  assert(fl2000_drm_bind(&failed_usb.dev)==-ENODEV && !provider.refs && !bound);
  reject_provider=false;
+ /* Master removal and direct provider removal share one quiescence owner. */
+ for(int direct=0;direct<2;direct++)for(int fail_shutdown=0;fail_shutdown<2;fail_shutdown++) {
+  struct fl2000_device live_device={.bridge_owner=&provider};
+  struct usb_device live_usb={.dev={.data=&live_device}};
+  step=0;assert(!fl2000_drm_bind(&live_usb.dev));
+  assert(bound && irq_active && stream_active && live_device.drm);
+  shutdown_failure=fail_shutdown;irq_stops=0;stops=0;
+  if(direct)fl2000_drm_unbind(&live_usb.dev);
+  fl2000_drm_cleanup(&live_usb);
+  assert(!bound && !irq_active && !stream_active && !live_device.drm);
+  assert(irq_stops==1 && stops==1);
+  fl2000_drm_unbind(&live_usb.dev);assert(irq_stops==1 && stops==1);
+ }
+ shutdown_failure=false;
+ /* An unmatched master never started I/O; resource release owns its drain. */
+ struct fl2000_device idle_device={.bridge_owner=&provider};
+ struct usb_device idle_usb={.dev={.data=&idle_device}};
+ irq_stops=0;stops=0;unsigned int deletes=master_deletes;
+ fl2000_drm_cleanup(&idle_usb);
+ assert(master_deletes==deletes+1 && !irq_stops && !stops);
  struct fl2000_drm_if output={0};
  struct fl2000_device device={.bridge_owner=&provider};struct usb_device usb={.dev={.data=&device}};
  assert(fl2000_drm_hotplug(&usb)==-ENODEV);
@@ -143,7 +172,7 @@ int main(void)
  assert(fl2000_drm_hotplug(&usb)==-EIO && hotplug_events==1);
  output.drm.unplugged=true;
  assert(fl2000_drm_hotplug(&usb)==-ENODEV && hpd_calls==3);
- puts("PASS: standard encoder attachment, all DRM bind failure stages, single unregister on interrupt-start failure, preserved errno, balanced teardown");
+ puts("PASS: standard encoder attachment, all DRM bind failure stages, single unregister on interrupt-start failure, preserved errno, quiescence before bridge detach, shutdown failure fallback, unmatched master, balanced teardown");
  return 0;
 }
 """
@@ -159,6 +188,8 @@ with tempfile.TemporaryDirectory(prefix="fl2000-drm-") as temp:
                 function(source, "fl2000_bridge_module_put"),
                 function(source, "fl2000_drm_bind"),
                 function(source, "fl2000_drm_hotplug"),
+                function(source, "fl2000_drm_unbind"),
+                function(source, "fl2000_drm_cleanup"),
                 checks,
             ]
         )

@@ -65,7 +65,7 @@ static unsigned int irq_create_mapping(struct irq_domain *domain,int hwirq)
 { assert(domain && !hwirq);if(++allocation_step==allocation_failure)return 0;live_mappings++;return 37; }
 static void irq_dispose_mapping(unsigned int irq) { assert(irq==37 && live_mappings==1);live_mappings--; }
 static void irq_domain_remove(struct irq_domain *domain) { assert(domain && !live_mappings);live_domains--;free(domain); }
-static void usb_free_urb(struct urb *urb) { assert(!urb); }
+static void usb_free_urb(struct urb *urb) { assert(!urb || !urb->submitted); }
 static void kfree(void *buf) { assert(!buf); }
 #define resource device.interrupt
 static void *dev_get_drvdata(const void *dev) { (void)dev;return &device; }
@@ -264,6 +264,10 @@ int main(void)
  assert(irq_calls==previous_irqs+1 && urb.submitted && !intr.status_polling);
  assert(!polling_current && !intr.work.work.pending);
  fl2000_intr_stop(&intr);
+ /* Resource release drains active URBs and queued work without outer disable. */
+ intr.irq=0;intr.enabled=true;urb.submitted=true;intr.work.work.pending=true;
+ fl2000_intr_release(NULL,&intr);
+ assert(!intr.enabled && !urb.submitted && !intr.work.work.pending);
  puts("PASS: nested IRQ acknowledgment failures delay USB rearm; status failures and bridge errors enable polling, delayed recovery without USB edges, retry cancellation, polling fallback and IRQ recovery, status acknowledgment before rearm, initial status acknowledgment, idempotent start, error propagation, bounded stall recovery, cancellation, no resubmission after stop");
 }
 """

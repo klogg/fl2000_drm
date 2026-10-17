@@ -80,10 +80,6 @@ static void fl2000_cleanup(struct usb_device *usb_dev, struct fl2000_device *dev
 		fl2000_drm_cleanup(usb_dev);
 		device->master_registered = false;
 	}
-	if (device->active_interfaces & BIT(FL2000_USBIF_INTERRUPT))
-		fl2000_disable_interrupt(usb_dev);
-	if (device->active_interfaces & BIT(FL2000_USBIF_STREAMING))
-		fl2000_streaming_disable(usb_dev);
 	for (unsigned int i = ARRAY_SIZE(device->interfaces); i-- > 0;)
 		if (device->active_interfaces & BIT(i))
 			fl2000_destroy_interface(device->interfaces[i]);
