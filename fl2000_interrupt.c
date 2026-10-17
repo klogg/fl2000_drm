@@ -125,7 +125,7 @@ unlock:
 
 static int fl2000_intr_process_status(struct fl2000_interrupt *intr)
 {
-	struct fl2000_device *device = dev_get_drvdata(&intr->usb_dev->dev);
+	const struct fl2000_device *device = dev_get_drvdata(&intr->usb_dev->dev);
 	bool rescan = xchg(&intr->irq_rescan, false);
 	int errors;
 	int ret;

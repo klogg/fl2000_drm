@@ -120,7 +120,7 @@ typedef int atomic_t;
 #define atomic_inc(p) (++*(p))
 struct fl2000_device { atomic_t i2c_errors; };
 static struct fl2000_device i2c_device;
-static void *dev_get_drvdata(struct device *dev) { (void)dev;return &i2c_device; }
+static void *dev_get_drvdata(const struct device *dev) { (void)dev;return &i2c_device; }
 struct regmap { u32 aclk, ctrl2, pll, regs[0x10000/4]; };
 static struct regmap test_regmap;
 static int regmap_error, regmap_calls, detection_writes, detection_delay;
@@ -237,7 +237,7 @@ static unsigned int urb_frees;
 static void usb_free_urb(struct urb *urb)
 { if(urb){assert(!urb->submitted);urb_frees++;free(urb);} }
 static struct fl2000_stream *test_stream;
-static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev);
+static struct fl2000_stream *fl2000_find_stream(const struct usb_device *usb_dev);
 #define I2C_M_RD 1
 #define I2C_M_DMA_SAFE 0x0200
 #define I2C_XFER_ADDR_MASK (~0x3ul)
@@ -941,7 +941,7 @@ static void test_register_io(void)
  }
 }
 
-static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev)
+static struct fl2000_stream *fl2000_find_stream(const struct usb_device *usb_dev)
 { (void)usb_dev; return test_stream; }
 static void usb_kill_urb(struct urb *urb)
 {
@@ -1145,6 +1145,7 @@ parts += [
         "fl2000_i2c_read_dword",
         "fl2000_i2c_write_dword",
         "fl2000_i2c_xfer_valid",
+        "fl2000_i2c_write_value",
         "fl2000_i2c_xfer",
     )
 ]

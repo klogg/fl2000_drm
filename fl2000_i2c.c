@@ -46,9 +46,27 @@ static bool fl2000_i2c_xfer_valid(const struct i2c_msg *msgs, int num)
 	return true;
 }
 
+static int fl2000_i2c_write_value(const struct i2c_adapter *adapter, const struct i2c_msg *msg,
+				  u16 addr, u8 offset, u8 idx, u32 *data)
+{
+	int ret;
+
+	if (msg->len == 5) {
+		*data = 0;
+		for (unsigned int i = 0; i < 4; i++)
+			*data |= (u32)msg->buf[i + 1] << (i * 8);
+		return 0;
+	}
+	ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, data);
+	if (ret)
+		return ret;
+	*data = (*data & ~(0xffU << (idx * 8))) | ((u32)msg->buf[1] << (idx * 8));
+	return 0;
+}
+
 static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num)
 {
-	struct usb_device *usb_dev = adapter->algo_data;
+	const struct usb_device *usb_dev = adapter->algo_data;
 	struct fl2000_device *device;
 	int ret;
 	bool read;
@@ -79,16 +97,9 @@ static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, in
 		for (unsigned int i = 0; i < msgs[1].len; i++)
 			msgs[1].buf[i] = (data >> ((idx + i) * 8)) & 0xff;
 	} else {
-		if (msgs[0].len == 5) {
-			data = 0;
-			for (unsigned int i = 0; i < 4; i++)
-				data |= (u32)msgs[0].buf[i + 1] << (i * 8);
-		} else {
-			ret = fl2000_i2c_read_dword(adapter->algo_data, addr, offset, &data);
-			if (ret)
-				goto error;
-			data = (data & ~(0xffU << (idx * 8))) | ((u32)msgs[0].buf[1] << (idx * 8));
-		}
+		ret = fl2000_i2c_write_value(adapter, &msgs[0], addr, offset, idx, &data);
+		if (ret)
+			goto error;
 
 		ret = fl2000_i2c_write_dword(adapter->algo_data, addr, offset, &data);
 		if (ret)
@@ -182,7 +193,7 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	fwnode = fwnode_create_software_node(fl2000_i2c_properties, NULL);
 	if (IS_ERR(fwnode)) {
 		devres_free(adapter);
-		return PTR_ERR(fwnode);
+		return PTR_ERR_OR_ZERO(fwnode);
 	}
 	device_set_node(&adapter->dev, fwnode);
 	ret = i2c_add_adapter(adapter);

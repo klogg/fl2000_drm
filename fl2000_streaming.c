@@ -425,7 +425,7 @@ static struct fl2000_frame *fl2000_find_free_frame(struct fl2000_stream *stream)
 	return frame;
 }
 
-int fl2000_streaming_update(struct usb_device *usb_dev, void *src, unsigned int height,
+int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigned int height,
 			    unsigned int width, unsigned int pitch, u32 format,
 			    const struct drm_rect *damage)
 {
@@ -614,7 +614,7 @@ out:
 	return ret;
 }
 
-void fl2000_streaming_disable(struct usb_device *usb_dev)
+void fl2000_streaming_disable(const struct usb_device *usb_dev)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
 

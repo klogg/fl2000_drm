@@ -896,7 +896,7 @@ static const struct component_master_ops fl2000_master_ops = {
 
 static int fl2000_component_compare(struct device *client_dev, void *data)
 {
-	struct usb_device *usb_dev = data;
+	const struct usb_device *usb_dev = data;
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 
 	if (!fl2000_i2c_verify_client(usb_dev, client_dev))
