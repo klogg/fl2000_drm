@@ -10,7 +10,8 @@ fl2000-y := \
 it66121-y := \
 	bridge/it66121_drv.o
 
-obj-$(CONFIG_DRM_FL2000) += fl2000.o it66121.o
+obj-$(CONFIG_DRM_FL2000) += fl2000.o
+obj-$(CONFIG_DRM_FL2000_IT66121) += it66121.o
 
 # Add new architecture backends here; generic always retains the scalar path.
 ifneq ($(KBUILD_EXTMOD),)

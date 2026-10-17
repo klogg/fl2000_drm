@@ -9,7 +9,7 @@
  * FL2000 adaptations: USB component lifetime, aligned DWORD I2C/EDID,
  * fixed parallel input timing, reset restoration, and polling fallback.
  */
-#include "it66121.h"
+#include "../fl2000_bridge.h"
 #include <linux/component.h>
 #include <linux/delay.h>
 #include <linux/device.h>

@@ -235,21 +235,19 @@ static struct fl2000_stream *fl2000_find_stream(struct usb_device *usb_dev);
 #define I2C_XFER_ADDR_MASK (~0x3ul)
 struct i2c_adapter { void *algo_data; };
 #define I2C_LOCK_ROOT_ADAPTER 1
-static struct i2c_adapter *fl2000_i2c_adapter(struct usb_device *usb) { (void)usb;return NULL; }
+static struct i2c_adapter *configured_adapter;
+static struct i2c_adapter *fl2000_i2c_adapter(const struct usb_device *usb) { (void)usb;return configured_adapter; }
+struct i2c_client { struct i2c_adapter *adapter; };
+static struct i2c_client configured_client;
+static struct i2c_client *i2c_verify_client(struct device *dev) { return dev->unused ? &configured_client : NULL; }
 static void i2c_lock_bus(struct i2c_adapter *a,int flags) { (void)a;(void)flags;assert(false); }
 static void i2c_unlock_bus(struct i2c_adapter *a,int flags) { (void)a;(void)flags;assert(false); }
 struct i2c_msg { u16 addr, flags, len; u8 *buf; };
 static int i2c_calls, i2c_result;
 static u32 i2c_value;
-static int detect_bad_id, detect_short;
 static int fl2000_i2c_dword(struct usb_device *usb, bool read, u16 addr, u8 offset, u32 *data)
 {
  (void)usb;
- if(offset==0) {
-  assert(read);
-  if(addr==0x4d)return -EIO;
-  assert(addr==0x4c);*data=detect_bad_id ? 0x06120000 : 0x06124954;return 0;
- }
  assert(addr == 0x4c); assert(offset == 0xfc);
  i2c_calls++;
  if (i2c_result) return i2c_result;
@@ -637,14 +635,16 @@ static void test_modes(void)
 
 static void test_i2c(void)
 {
- struct i2c_adapter probe_adapter={0};
- assert(fl2000_bridge_detect(&probe_adapter,0x4c)==1);
- assert(fl2000_bridge_detect(&probe_adapter,0x4d)==0);
- detect_bad_id=1;
- assert(fl2000_bridge_detect(&probe_adapter,0x4c)==0);
- detect_bad_id=0;detect_short=1;
- assert(fl2000_bridge_detect(&probe_adapter,0x4c)==0);
- detect_short=0;
+ struct usb_device usb={0}; struct device client_dev={.unused=1};
+ struct i2c_adapter local={0},other={0};
+ configured_adapter=&local;configured_client.adapter=&local;
+ assert(fl2000_i2c_verify_client(&usb,&client_dev));
+ configured_client.adapter=&other;
+ assert(!fl2000_i2c_verify_client(&usb,&client_dev));
+ client_dev.unused=0;
+ assert(!fl2000_i2c_verify_client(&usb,&client_dev));
+ configured_adapter=NULL;client_dev.unused=1;
+ assert(!fl2000_i2c_verify_client(&usb,&client_dev));
  struct i2c_adapter adapter = {0};
  u8 reg = 0xff, value = 0;
  struct i2c_msg msgs[] = {
@@ -1028,7 +1028,6 @@ parts = [
     defines,
     '#include "tests/register_helpers.h"',
     register_header((ROOT / "fl2000_registers.h").read_text()),
-    '#include "bridge/it66121_registers.h"',
     structure(header, "fl2000_pll"),
 ]
 parts += [
@@ -1104,16 +1103,13 @@ parts.append(function(drm, "fl2000_plane_atomic_update"))
 parts += [
     function(i2c, name)
     for name in (
+        "fl2000_i2c_verify_client",
         "fl2000_i2c_read_dword",
         "fl2000_i2c_write_dword",
         "fl2000_i2c_xfer_valid",
         "fl2000_i2c_xfer",
     )
 ]
-parts.append(
-    "static int i2c_transfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num) { return detect_short ? 0 : fl2000_i2c_xfer(adapter, msgs, num); }"
-)
-parts.append(function(i2c, "fl2000_bridge_detect"))
 parts += [function(registers, name) for name in ("fl2000_reg_read", "fl2000_reg_write")]
 parts += [
     function(registers, name)

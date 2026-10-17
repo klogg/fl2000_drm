@@ -39,8 +39,8 @@ make KSRC=/usr/src/linux-headers-7.0.0-38-generic
 
 The resulting modules are `fl2000.ko` and `it66121.ko`. Use this repository's
 adapted bridge module; the stock upstream module is not interchangeable.
-The driver creates its own bridge client at I2C address 0x4c or 0x4d, so an
-`i2c_bus_num` parameter is not needed.
+The FL2000 core creates the I2C adapter; configure its bridge client explicitly
+as described below. There is no bridge-selection module parameter.
 
 `FL2000_FRAME_BACKEND=auto` selects SSSE3 for x86-64 target kernels and portable
 code elsewhere. Explicit choices are `ssse3`, `bmi2`, and `generic`. Optimized
@@ -63,9 +63,29 @@ Merge this repository's `MAINTAINERS` entry into the kernel's file.
 
 Enable `CONFIG_DRM_FL2000` and choose its frame preparation backend. Kconfig
 selects the DRM bridge-connector and shmem helpers and limits accelerated
-backends to supported architectures. The adapted IT66121 module shares the
-standard module name, so `CONFIG_DRM_ITE_IT66121` must be disabled.
+backends to supported architectures. Select `CONFIG_DRM_FL2000_IT66121`
+separately when using the supplied bridge.
+It shares the standard module name, so `CONFIG_DRM_ITE_IT66121` must be disabled
+only when that optional adaptation is selected.
 The external build continues to accept `FL2000_FRAME_BACKEND` overrides.
+
+## Bridge configuration on x86
+
+FL2000 registers an I2C adapter without assuming which bridge is attached.
+Configure the actual bridge explicitly; Device Tree is not required. For the
+IT66121 test adapter at address 0x4c, after loading its bridge driver and FL2000:
+
+```sh
+scripts/configure-bridge.sh it66121 0x4c
+```
+
+The helper uses the kernel's standard I2C `new_device` interface. Supply an I2C
+bus number as the third argument when multiple FL2000 adapters are present.
+Use the device type and address for the attached hardware. A bridge driver must
+provide the component and interrupt integration described in
+[the architecture](docs/ARCHITECTURE.md); I2C enumeration alone is insufficient.
+The QEMU startup script declares the current test fixture explicitly and accepts
+`BRIDGE_MODULE`, `BRIDGE_TYPE`, `BRIDGE_ADDR`, and `I2C_BUS` overrides.
 
 ## Isolated QEMU testing
 

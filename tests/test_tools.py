@@ -25,6 +25,58 @@ from qemu_utils import (
 
 
 class ToolTests(unittest.TestCase):
+    def test_explicit_bridge_configuration(self):
+        helper = ROOT / "scripts/configure-bridge.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            devices = root / "bus/i2c/devices"
+            devices.mkdir(parents=True)
+
+            def adapter(number, name="FL2000 bridge I2C bus"):
+                path = devices / f"i2c-{number}"
+                path.mkdir()
+                (path / "name").write_text(name + "\n")
+                (path / "new_device").write_text("")
+                return path
+
+            def configure(*args):
+                return subprocess.run(
+                    [str(helper), *args],
+                    env={**os.environ, "SYSFS_ROOT": str(root)},
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            self.assertNotEqual(configure("example_bridge", "0x39").returncode, 0)
+            unrelated = adapter(2, "unrelated controller")
+            target = adapter(7)
+            self.assertEqual(configure("example_bridge", "0x39").returncode, 0)
+            self.assertEqual(
+                (target / "new_device").read_text(), "example_bridge 0x39\n"
+            )
+            self.assertEqual((unrelated / "new_device").read_text(), "")
+            other = adapter(8)
+            self.assertNotEqual(configure("another_bridge", "0x40").returncode, 0)
+            self.assertEqual(configure("another_bridge", "0x40", "8").returncode, 0)
+            self.assertEqual(
+                (other / "new_device").read_text(), "another_bridge 0x40\n"
+            )
+            self.assertNotEqual(configure("example_bridge", "0x39", "2").returncode, 0)
+            for address in ("0x00", "0x80", "0xgg", "57"):
+                self.assertNotEqual(
+                    configure("example_bridge", address, "7").returncode, 0
+                )
+            client = devices / "7-0039"
+            client.mkdir()
+            (client / "name").write_text("example_bridge\n")
+            (target / "new_device").write_text("")
+            self.assertEqual(configure("example_bridge", "0x39", "7").returncode, 0)
+            self.assertEqual((target / "new_device").read_text(), "")
+            self.assertNotEqual(
+                configure("different_bridge", "0x39", "7").returncode, 0
+            )
+
     def test_dependency_overlay(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

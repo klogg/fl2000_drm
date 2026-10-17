@@ -5,7 +5,6 @@
  */
 
 #include "fl2000.h"
-#include "bridge/it66121_registers.h"
 
 /* The controller transfers aligned four-byte register groups. Byte writes
  * require read-modify-write; full groups avoid destructive side-effect reads.
@@ -127,72 +126,19 @@ struct i2c_adapter *fl2000_i2c_adapter(const struct usb_device *usb_dev)
 	return device->i2c;
 }
 
-/**
- * fl2000_i2c_verify_client - Verify I2C client
- *
- * @usb_dev: USB device
- * @client_dev: Device to verify
- * @client_name: Expected I2C client name
- *
- * @return: true if client is verified, false otherwise
- */
-bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_dev,
-			      const char *client_name)
+bool fl2000_i2c_verify_client(const struct usb_device *usb_dev, struct device *client_dev)
 {
-	const struct i2c_adapter *adapter;
-	const struct i2c_client *client;
-	const struct device_driver *driver;
+	const struct i2c_client *client = i2c_verify_client(client_dev);
 
-	adapter = fl2000_i2c_adapter(usb_dev);
-	if (!adapter)
-		return false;
-
-	client = i2c_verify_client(client_dev);
-	if (!client)
-		return false;
-
-	driver = client_dev->driver;
-	if (!driver || strcmp(driver->name, client_name))
-		return false;
-
-	if (client->adapter != adapter)
-		return false;
-
-	return true;
-}
-
-static int fl2000_bridge_detect(struct i2c_adapter *adapter, unsigned short addr)
-{
-	/* i2c_new_scanned_device expects 1 for a match, 0 otherwise. */
-	u8 bytes[4];
-	int ret;
-
-	for (unsigned int i = 0; i < sizeof(bytes); i++) {
-		u8 reg = (u8)i;
-		struct i2c_msg msgs[] = {
-			{ .addr = addr, .len = 1, .buf = &reg },
-			{ .addr = addr, .flags = I2C_M_RD, .len = 1, .buf = &bytes[i] },
-		};
-
-		ret = i2c_transfer(adapter, msgs, ARRAY_SIZE(msgs));
-		if (ret != ARRAY_SIZE(msgs))
-			return 0;
-	}
-	return bytes[0] == IT66121_VENDOR_ID0 && bytes[1] == IT66121_VENDOR_ID1 &&
-	       bytes[2] == IT66121_DEVICE_ID0 &&
-	       (bytes[3] & IT66121_DEVICE_ID1_MASK) == IT66121_DEVICE_ID1;
+	return client && client->adapter == fl2000_i2c_adapter(usb_dev);
 }
 
 int fl2000_i2c_init(struct usb_device *usb_dev)
 {
-	static const unsigned short addresses[] = { 0x4c, 0x4d, I2C_CLIENT_END };
-	struct i2c_board_info info = { I2C_BOARD_INFO("it66121", 0) };
-	struct i2c_client *client;
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	int ret;
 	struct i2c_adapter *adapter;
 
-	/* Adapter must be allocated before anything else */
 	adapter = devres_alloc(fl2000_i2c_adapter_release, sizeof(*adapter), GFP_KERNEL);
 	if (!adapter) {
 		dev_err(&usb_dev->dev, "Cannot allocate adapter!");
@@ -200,7 +146,6 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	}
 
 	adapter->owner = THIS_MODULE;
-	adapter->class = I2C_CLASS_DEPRECATED;
 	adapter->algo = &fl2000_i2c_algorithm;
 	adapter->quirks = &fl2000_i2c_quirks;
 	adapter->algo_data = usb_dev;
@@ -216,13 +161,6 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 
 	devres_add(&usb_dev->dev, adapter);
 	device->i2c = adapter;
-	client = i2c_new_scanned_device(adapter, &info, addresses, fl2000_bridge_detect);
-	if (IS_ERR(client)) {
-		ret = PTR_ERR_OR_ZERO(client);
-		devres_release(&usb_dev->dev, fl2000_i2c_adapter_release, NULL, NULL);
-		device->i2c = NULL;
-		return ret;
-	}
 	return 0;
 }
 

@@ -39,6 +39,11 @@ entries = [
     for name in ("fl2000.ko", "it66121.ko")
 ]
 entries += [
+    (
+        "fl2000-configure-bridge",
+        (ROOT / "scripts/configure-bridge.sh").read_bytes(),
+        0o100755,
+    ),
     ("fl2000-test-guest", b"FL2000 QEMU test guest\n", 0o100644),
     ("fl2000-startup", (ROOT / "scripts/startup.sh").read_bytes(), 0o100755),
 ]

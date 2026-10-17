@@ -1,8 +1,16 @@
 # Driver architecture
 
-The bridge module is named `it66121.ko`. The FL2000 driver discovers the bridge
-on its own adapter at I2C address 0x4c or 0x4d; no `i2c_bus_num` parameter is
-needed. Each dongle has its own bridge client and DRM device.
+The FL2000 core registers an I2C adapter and waits for a bridge component on
+that adapter. Userspace explicitly creates the bridge's I2C client through
+`new_device`; the core does not scan chip IDs, select a bridge driver, or
+require Device Tree. Components are matched by their owning I2C adapter.
+Each dongle owns its own adapter and DRM device. The generic handoff interface
+is declared in `fl2000_bridge.h`; a bridge provider supplies attachment,
+module lifetime, and optional interrupt-processing callbacks.
+
+The supplied `it66121.ko` is one optional bridge provider. Current providers
+need this component/interrupt integration in addition to their normal I2C
+probe; instantiating an arbitrary upstream I2C bridge alone does not supply it.
 
 The bridge core is rebased on Linux v7.0's
 [IT66121 driver](https://github.com/torvalds/linux/blob/v7.0/drivers/gpu/drm/bridge/ite-it66121.c).
@@ -25,7 +33,7 @@ The connector retains bridge references until the final DRM device release;
 a DRM-managed module reference keeps the bridge callbacks available until then.
 Detection and EDID callbacks check the requesting connector's unplug state,
 even after the bridge has been detached or attached to a replacement DRM device.
-The USB-created bridge needs no Device Tree graph, regulator devices, or separate
+The explicitly instantiated bridge needs no Device Tree graph, regulators, or separate
 reset GPIO; the FL2000 driver owns power/reset.
 
 Each adapter owns its lifecycle mutex and explicit streaming, interrupt, and
@@ -34,7 +42,7 @@ publication. Independent adapters do not share a lifecycle lock.
 
 ## Atomic display pipeline
 
-The display pipeline uses an explicit primary plane, CRTC, and TMDS encoder.
+The display pipeline uses an explicit primary plane, CRTC, and parallel RGB encoder.
 CRTC-only atomic commits include the primary plane in validation and updates.
 Plane checks enforce fullscreen output without scaling or positioning, and
 GEM shadow-plane state retains framebuffer mappings from preparation through

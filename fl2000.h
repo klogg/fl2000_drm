@@ -98,8 +98,7 @@ void fl2000_disable_interrupt(const struct usb_device *usb_dev);
 struct i2c_adapter *fl2000_i2c_adapter(const struct usb_device *usb_dev);
 int fl2000_i2c_init(struct usb_device *usb_dev);
 void fl2000_i2c_cleanup(struct usb_device *usb_dev);
-bool fl2000_i2c_verify_client(struct usb_device *usb_dev, struct device *client_dev,
-			      const char *client_name);
+bool fl2000_i2c_verify_client(const struct usb_device *usb_dev, struct device *client_dev);
 
 /* Register map creation */
 int fl2000_regmap_init(struct usb_device *usb_dev);

@@ -2,20 +2,18 @@
 config DRM_FL2000
 	tristate "Fresco Logic FL2000 USB display adapters"
 	depends on DRM && USB && I2C && MMU
-	depends on DRM_ITE_IT66121 = n
 	select DRM_KMS_HELPER
 	select DRM_GEM_SHMEM_HELPER
 	select DRM_BRIDGE
 	select DRM_DISPLAY_HELPER
 	select DRM_BRIDGE_CONNECTOR
 	select REGMAP
-	select REGMAP_I2C
 	help
-	  DRM/KMS support for Fresco Logic FL2000 USB display adapters
-	  with an IT66121 HDMI bridge. The transport-adapted bridge replaces
-	  the standard IT66121 driver, so the two cannot be enabled together.
+	  DRM/KMS and I2C transport support for Fresco Logic FL2000 USB
+	  display adapters. Configure the attached bridge independently.
+	  The FL2000 transport does not identify or instantiate a bridge.
 
-	  If built as modules, these are called fl2000 and it66121.
+	  If built as a module, this is called fl2000.
 
 choice
 	prompt "FL2000 frame preparation backend"
@@ -39,3 +37,15 @@ config DRM_FL2000_FRAME_BMI2
 	depends on X86_64
 
 endchoice
+
+config DRM_FL2000_IT66121
+	tristate "IT66121 bridge with FL2000 transport adaptations"
+	depends on DRM_FL2000
+	depends on DRM_ITE_IT66121 = n
+	select REGMAP_I2C
+	help
+	  Optional transport-adapted IT66121 bridge. Instantiate its I2C
+	  client explicitly on the FL2000 adapter. This module shares the
+	  standard IT66121 module name and cannot be enabled alongside it.
+
+	  If built as a module, this is called it66121.

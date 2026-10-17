@@ -6,13 +6,13 @@
 
 #include "fl2000.h"
 #include <drm/drm_atomic.h>
-#include "bridge/it66121.h"
+#include "fl2000_bridge.h"
 #include <drm/drm_bridge.h>
 #include <drm/drm_bridge_connector.h>
 #include <drm/drm_plane_helper.h>
 
 #define DRM_DRIVER_NAME "fl2000_drm"
-#define DRM_DRIVER_DESC "USB-HDMI"
+#define DRM_DRIVER_DESC "USB display"
 
 #define DRM_DRIVER_MAJOR      0
 #define DRM_DRIVER_MINOR      0
@@ -29,12 +29,7 @@ static const u32 fl2000_pixel_formats[] = {
 	DRM_FORMAT_RGB565,
 };
 
-/* XXX: Shall this has to come from driver parameters? */
-static const char *const fl2000_bridges[] = {
-	"it66121",
-};
-
-/* Match the upstream IT66121 driver's 24-bit input clock range. */
+/* Conservative pixel-clock policy; the bridge validates its own limits. */
 #define FL2000_MIN_PIXCLOCK 25000000
 #define FL2000_MAX_PIXCLOCK 148500000
 
@@ -703,7 +698,7 @@ static int fl2000_pipeline_init(struct fl2000_drm_if *drm_if)
 	if (ret)
 		return ret;
 	drm_crtc_helper_add(&drm_if->crtc, &fl2000_crtc_helper_funcs);
-	ret = drm_encoder_init(drm, &drm_if->encoder, &fl2000_encoder_funcs, DRM_MODE_ENCODER_TMDS,
+	ret = drm_encoder_init(drm, &drm_if->encoder, &fl2000_encoder_funcs, DRM_MODE_ENCODER_DPI,
 			       NULL);
 	if (ret)
 		return ret;
@@ -885,7 +880,7 @@ static const struct component_master_ops fl2000_master_ops = {
 
 static int fl2000_component_compare(struct device *client_dev, void *data)
 {
-	return fl2000_i2c_verify_client(data, client_dev, fl2000_bridges[0]);
+	return fl2000_i2c_verify_client(data, client_dev);
 }
 
 int fl2000_drm_init(struct usb_device *usb_dev)

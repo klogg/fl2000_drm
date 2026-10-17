@@ -63,6 +63,11 @@ entries = [
 entries += [
     ("it66121.ko", bridge.read_bytes(), 0o100644),
     ("kms-profile", args.profiler.read_bytes(), 0o100755),
+    (
+        "fl2000-configure-bridge",
+        (ROOT / "scripts/configure-bridge.sh").read_bytes(),
+        0o100755,
+    ),
 ]
 if args.sampler:
     entries.append(("kernel-sample", args.sampler.read_bytes(), 0o100755))
@@ -129,6 +134,7 @@ for trial in range(args.repeat):
         script += [
             f"echo BACKEND {label} trial-{trial + 1}",
             f"insmod /fl2000-{label}.ko",
+            "/fl2000-configure-bridge it66121 0x4c",
             f"/kms-profile --quick --duration={args.duration}",
             "rmmod fl2000",
         ]
@@ -137,6 +143,7 @@ if args.profile_label:
     script += [
         f"echo BACKEND {label} static",
         f"insmod /fl2000-{label}.ko",
+        "/fl2000-configure-bridge it66121 0x4c",
         f"/kms-profile --static-only --duration={args.duration}",
         f"echo BACKEND {label} fpu-check",
         "/kms-profile --full-only --duration=1 --check-fpu",

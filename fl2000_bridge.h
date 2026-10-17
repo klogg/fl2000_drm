@@ -3,8 +3,8 @@
  * (C) Copyright 2019, Artem Mygaiev
  */
 
-#ifndef __IT66121_H__
-#define __IT66121_H__
+#ifndef FL2000_BRIDGE_H
+#define FL2000_BRIDGE_H
 
 struct drm_bridge;
 struct drm_connector;
@@ -19,4 +19,4 @@ struct fl2000_bridge {
 	int (*interrupt)(struct drm_bridge *bridge);
 };
 
-#endif /* __IT66121_H__ */
+#endif /* FL2000_BRIDGE_H */
