@@ -110,7 +110,7 @@ BMI2 backend uses PEXT on general-purpose registers and requires no FPU
 protection; it checks CPU BMI2 support and falls back to portable code when
 unavailable. Contiguous XRGB8888 rows are grouped into bounded spans of up to
 4096 pixels, reducing per-row dispatch and FPU transitions while preserving
-padding and crops. New backends implement the two prefix-processing functions in
+padding and crops. New backends implement the conversion prefix function in
 `fl2000_frame.h`, add their objects to Kbuild and their architecture selection
 to Kconfig, and
 define `FL2000_FRAME_ACCELERATED`. Returning zero uses the existing portable

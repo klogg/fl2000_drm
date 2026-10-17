@@ -66,8 +66,6 @@ struct drm_rect { int x1,y1,x2,y2; };
 #ifndef TEST_SIMD
 static unsigned int fl2000_frame_convert(u8 *d, const u8 *s, unsigned int n, unsigned int b)
 { (void)d; (void)s; (void)n; (void)b; return 0; }
-static unsigned int fl2000_frame_reorder(u8 *d, const u8 *s, unsigned int n)
-{ (void)d; (void)s; (void)n; return 0; }
 #endif
 #define spin_lock_irqsave(lock, flags) ((void)(lock), (flags) = 0)
 #define spin_unlock_irqrestore(lock, flags) ((void)(lock), (void)(flags))

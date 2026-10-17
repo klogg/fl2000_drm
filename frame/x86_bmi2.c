@@ -15,9 +15,3 @@ unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels,
 	fl2000_bmi2_convert(dst, src, count, bytes_pix);
 	return count;
 }
-
-unsigned int fl2000_frame_reorder(u8 *dst __always_unused, const u8 *src __always_unused,
-				  unsigned int bytes __always_unused)
-{
-	return 0;
-}

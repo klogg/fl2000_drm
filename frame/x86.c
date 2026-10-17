@@ -18,10 +18,3 @@ unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels,
 	kernel_fpu_end();
 	return count;
 }
-
-unsigned int fl2000_frame_reorder(u8 *dst __always_unused, const u8 *src __always_unused,
-				  unsigned int bytes __always_unused)
-{
-	/* Native reordering showed no repeatable benefit in the complete workload. */
-	return 0;
-}

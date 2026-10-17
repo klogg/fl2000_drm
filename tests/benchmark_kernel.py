@@ -4,7 +4,7 @@
 
 Extracts the real conversion helpers and backends. Includes real kernel FPU
 protection and rotating vmalloc buffers, but excludes DRM/USB/DMA and compositor
-costs. Native SSSE3 reordering is an experimental benchmark-only candidate.
+costs. Native formats use the production portable reordering path.
 """
 
 import argparse
@@ -58,19 +58,13 @@ parts.append(
     )
 )
 parts.append(r"""
-void fl2000_ssse3_reorder(u8 *dst, const u8 *src, unsigned int bytes);
 static unsigned int fl2000_frame_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned int bpp)
 {
  if(backend==1)return bench_ssse3_convert(dst,src,pixels,bpp);
  if(backend==2)return bench_bmi2_convert(dst,src,pixels,bpp);
  return 0;
 }
-static unsigned int fl2000_frame_reorder(u8 *dst, const u8 *src, unsigned int bytes)
-{
- unsigned int count=min(bytes&~15U,65536U);
- if(backend!=1 || count<128 || !boot_cpu_has(X86_FEATURE_SSSE3) || !irq_fpu_usable())return 0;
- kernel_fpu_begin();fl2000_ssse3_reorder(dst,src,count);kernel_fpu_end();return count;
-}
+
 """)
 for name in (
     "fl2000_rgb565",
@@ -157,17 +151,10 @@ MODULE_DESCRIPTION("Isolated FL2000 frame preparation benchmark");
 (args.output / "bench.c").write_text("\n\n".join(parts))
 for name in ("ssse3.c", "ssse3.h", "bmi2.c", "bmi2.h"):
     shutil.copyfile(ROOT / "frame" / name, args.output / name)
-with (args.output / "ssse3.c").open("a") as output:
-    output.write(
-        "\nvoid fl2000_ssse3_reorder(u8 *dst, const u8 *src, unsigned int bytes);\n"
-    )
-    output.write(
-        function((ROOT / "tests/benchmark_cpu.py").read_text(), "fl2000_ssse3_reorder")
-    )
 (args.output / "Makefile").write_text("""obj-m := frame_bench.o
 frame_bench-y := bench.o ssse3.o bmi2.o
-CFLAGS_REMOVE_ssse3.o += -mno-sse -mno-sse2
-CFLAGS_ssse3.o += -mssse3 -mno-avx
+CFLAGS_REMOVE_ssse3.o += $(CC_FLAGS_NO_FPU)
+CFLAGS_ssse3.o += $(CC_FLAGS_FPU) -mssse3 -mno-avx
 CFLAGS_bmi2.o += -mbmi2
 """)
 subprocess.run(

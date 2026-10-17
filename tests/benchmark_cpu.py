@@ -38,6 +38,7 @@ typedef uint8_t u8; typedef uint16_t u16; typedef uint32_t u32; typedef uint64_t
 #define DRM_MODE_FLAG_3D_MASK (BIT(2)|BIT(3))
 struct drm_display_mode {int clock,hdisplay,hsync_start,hsync_end,htotal; int vdisplay,vsync_start,vsync_end,vtotal; unsigned int flags; int vscan;};
 static void drm_mode_copy(struct drm_display_mode *d,const struct drm_display_mode *s){*d=*s;}
+static void drm_mode_set_crtcinfo(struct drm_display_mode *mode,int flags){(void)mode;(void)flags;}
 static void put_unaligned_le64(u64 v,u8 *p){memcpy(p,&v,8);}
 #define min(a,b) ((a)<(b)?(a):(b))
 #define max(a,b) ((a)>(b)?(a):(b))
@@ -103,17 +104,6 @@ bmi = (root / "frame/bmi2.c").read_text()
 bmi = re.sub(r"^#include <linux/.*$", "", bmi, flags=re.MULTILINE).replace(
     '#include "bmi2.h"', '#include "frame/bmi2.h"'
 )
-simd += r"""
-void fl2000_ssse3_reorder(u8 *dst, const u8 *src, unsigned int bytes)
-{
-	const v16qi wire = {4, 5, 6, 7, 0, 1, 2, 3,
-			   12, 13, 14, 15, 8, 9, 10, 11};
-	unsigned int i;
-
-	for (i = 0; i < bytes; i += 16)
-		store(dst + i, __builtin_ia32_pshufb128(load(src + i), wire));
-}
-"""
 dispatch = r"""
 static unsigned int backend;
 static unsigned int fl2000_frame_convert(u8 *dst,const u8 *src,unsigned int pixels,unsigned int bpp){
@@ -122,10 +112,7 @@ static unsigned int fl2000_frame_convert(u8 *dst,const u8 *src,unsigned int pixe
  else fl2000_bmi2_convert(dst,src,count,bpp);
  return count;
 }
-static unsigned int fl2000_frame_reorder(u8 *dst,const u8 *src,unsigned int bytes){
- unsigned int count=min(bytes&~15U,65536U);if(count<128 || backend!=1)return 0;
- fl2000_ssse3_reorder(dst,src,count);return count;
-}
+
 """
 parts = [
     pre,

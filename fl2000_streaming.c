@@ -249,12 +249,6 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width, uns
 
 	if (bytes_pix == 2) {
 		x = 0;
-		if ((offset & 3) && width) {
-			put_unaligned_le16(fl2000_rgb565(get_unaligned_le32(line)),
-					   dst + (offset ^ 4));
-			x++;
-			offset += 2;
-		}
 		for (; x + 2 <= width; x += 2, offset += 4) {
 			u64 pixels = get_unaligned_le64(line + x * 4);
 
@@ -266,14 +260,6 @@ static void fl2000_convert_line(u8 *dst, const u8 *line, unsigned int width, uns
 		}
 	} else {
 		x = 0;
-		/* Odd-width rows may start inside a wire dword. */
-		while (x < width && (offset & 3)) {
-			u32 pixel = get_unaligned_le32(line + x++ * 4);
-
-			dst[offset++ ^ 4] = (u8)pixel;
-			dst[offset++ ^ 4] = (u8)(pixel >> 8);
-			dst[offset++ ^ 4] = (u8)(pixel >> 16);
-		}
 		for (; x + 4 <= width; x += 4, offset += 12) {
 			u32 a = get_unaligned_le32(line + x * 4);
 			u32 b = get_unaligned_le32(line + (x + 1) * 4);
@@ -322,16 +308,7 @@ static void fl2000_reorder_line(u8 *dst, const u8 *line, unsigned int remaining,
 		remaining--;
 	}
 	while (remaining >= 8) {
-		unsigned int prepared = fl2000_frame_reorder(dst + offset, line, remaining);
 		unsigned int count = min_t(unsigned int, remaining & ~7U, 65536);
-
-		if (prepared) {
-			line += prepared;
-			offset += prepared;
-			remaining -= prepared;
-			cond_resched();
-			continue;
-		}
 
 		for (unsigned int i = 0; i < count; i += 8) {
 			u64 word = get_unaligned_le64(line + i);
