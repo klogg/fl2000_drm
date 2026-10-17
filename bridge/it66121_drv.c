@@ -57,7 +57,13 @@ struct it66121_ctx {
 	struct i2c_client *client;
 	struct i2c_adapter *adapter;
 	int irq;
-	bool fl2000;
+	/* Aligned reads consume adjacent registers; byte writes use RMW. */
+	bool aligned_i2c;
+	bool reset_by_controller;
+	bool component_binding;
+	bool retry_irq_ack;
+	u8 input_clock_delay;
+	u8 irq_output_mode;
 	bool hpd_enabled;
 	struct gpio_desc *gpio_reset;
 	struct {
@@ -95,25 +101,25 @@ static struct regmap *it66121_init_regmap(struct it66121_ctx *ctx)
 		.ranges = it66121_regmap_banks,
 		.num_ranges = ARRAY_SIZE(it66121_regmap_banks),
 		.cache_type = REGCACHE_NONE,
-		.use_single_read = ctx->fl2000,
-		.use_single_write = ctx->fl2000,
+		.use_single_read = ctx->aligned_i2c,
+		.use_single_write = ctx->aligned_i2c,
 	};
 
 	return devm_regmap_init_i2c(ctx->client, &config);
 }
 
 /* FL2000 DWORD transport consumes three bytes before each EDID payload. */
-#define EDID_SLEEP		1000
-#define EDID_TIMEOUT		200000
-#define EDID_FIFO_SIZE		32
-#define FL2000_EDID_FIFO_SKIP	3
-#define EDID_DDC_ADDR		IT66121_DDC_HEADER_EDID
-#define IT66121_DDC_CONTROL	IT66121_MASTER_SEL_REG
-#define IT66121_DDC_SEGMENT	IT66121_DDC_SEGMENT_REG
-#define IT66121_DDC_MASTER_HOST IT66121_MASTER_SEL_HOST
-#define DDC_CMD_FIFO_CLEAR	IT66121_DDC_COMMAND_FIFO_CLR
-#define DDC_CMD_ABORT		IT66121_DDC_COMMAND_ABORT
-#define DDC_CMD_EDID_READ	IT66121_DDC_COMMAND_EDID_READ
+#define EDID_SLEEP		  1000
+#define EDID_TIMEOUT		  200000
+#define EDID_FIFO_SIZE		  32
+#define IT66121_ALIGNED_FIFO_SKIP 3
+#define EDID_DDC_ADDR		  IT66121_DDC_HEADER_EDID
+#define IT66121_DDC_CONTROL	  IT66121_MASTER_SEL_REG
+#define IT66121_DDC_SEGMENT	  IT66121_DDC_SEGMENT_REG
+#define IT66121_DDC_MASTER_HOST	  IT66121_MASTER_SEL_HOST
+#define DDC_CMD_FIFO_CLEAR	  IT66121_DDC_COMMAND_FIFO_CLR
+#define DDC_CMD_ABORT		  IT66121_DDC_COMMAND_ABORT
+#define DDC_CMD_EDID_READ	  IT66121_DDC_COMMAND_EDID_READ
 
 static inline int it66121_preamble_ddc(struct it66121_ctx *ctx)
 {
@@ -128,11 +134,7 @@ static inline int it66121_fire_afe(struct it66121_ctx *ctx)
 static int it66121_configure_input(struct it66121_ctx *ctx)
 {
 	int ret;
-	/* Preserve the input-clock delay setting validated on FL2000 adapters. */
-	u8 mode = IT66121_INPUT_MODE_RGB;
-
-	if (ctx->fl2000)
-		mode |= IT66121_INPUT_MODE_PCLK_DELAY1;
+	u8 mode = IT66121_INPUT_MODE_RGB | ctx->input_clock_delay;
 
 	if (ctx->bus_width == 12)
 		mode |= IT66121_INPUT_MODE_DDR;
@@ -267,7 +269,7 @@ static inline int it66121_wait_ddc_ready(struct it66121_ctx *ctx)
 		    IT66121_DDC_STATUS_ARBI_LOSE;
 	u32 done = IT66121_DDC_STATUS_TX_DONE;
 
-	if (ctx->fl2000)
+	if (ctx->aligned_i2c)
 		return it66121_ddc_collect(ctx, NULL, 0);
 
 	ret = regmap_read_poll_timeout(ctx->regmap, IT66121_DDC_STATUS_REG, val,
@@ -286,7 +288,7 @@ static int it66121_ddc_command(struct it66121_ctx *ctx, u8 command, u8 segment)
 {
 	int ret;
 
-	if (ctx->fl2000)
+	if (ctx->aligned_i2c)
 		return it66121_ddc_write(ctx, IT66121_DDC_SEGMENT, segment, command, 0, 0);
 	if (command == DDC_CMD_EDID_READ) {
 		ret = regmap_write(ctx->regmap, IT66121_DDC_SEGMENT_REG, segment);
@@ -301,7 +303,7 @@ static int it66121_abort_ddc_ops(struct it66121_ctx *ctx)
 	unsigned int swreset, cpdesire;
 	int ret;
 
-	if (!ctx->fl2000) {
+	if (!ctx->aligned_i2c) {
 		ret = regmap_read(ctx->regmap, IT66121_SW_RST_REG, &swreset);
 		if (ret)
 			return ret;
@@ -320,7 +322,7 @@ static int it66121_abort_ddc_ops(struct it66121_ctx *ctx)
 			return ret;
 	}
 	/* FL2000's vendor recovery sequence requires ABORT twice. */
-	for (unsigned int i = 0; i < (ctx->fl2000 ? 2 : 1); i++) {
+	for (unsigned int i = 0; i < (ctx->aligned_i2c ? 2 : 1); i++) {
 		ret = it66121_ddc_command(ctx, DDC_CMD_ABORT, 0);
 		if (ret)
 			return ret;
@@ -335,7 +337,7 @@ static int it66121_ddc_prepare(struct it66121_ctx *ctx)
 {
 	int ret;
 
-	if (ctx->fl2000)
+	if (ctx->aligned_i2c)
 		return it66121_ddc_write(ctx, IT66121_DDC_CONTROL, IT66121_DDC_MASTER_HOST,
 					 EDID_DDC_ADDR, 0, 0);
 	ret = it66121_preamble_ddc(ctx);
@@ -348,7 +350,7 @@ static int it66121_ddc_set_request(struct it66121_ctx *ctx, u8 offset, u8 count)
 {
 	int ret;
 
-	if (ctx->fl2000)
+	if (ctx->aligned_i2c)
 		return it66121_ddc_write(ctx, IT66121_DDC_CONTROL, IT66121_DDC_MASTER_HOST,
 					 EDID_DDC_ADDR, offset, count);
 	ret = regmap_write(ctx->regmap, IT66121_DDC_OFFSET_REG, offset);
@@ -361,7 +363,7 @@ static int it66121_ddc_read_fifo(struct it66121_ctx *ctx, u8 *buf, size_t count)
 {
 	int ret;
 
-	if (ctx->fl2000) {
+	if (ctx->aligned_i2c) {
 		/* A word snapshot consumes FIFO data; let the burst arrive first. */
 		usleep_range(20000, 25000);
 		return it66121_ddc_collect(ctx, buf, count);
@@ -379,7 +381,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 	struct it66121_ctx *ctx = context;
 	unsigned int offset = (block & 1) * 128;
 	unsigned int segment = block >> 1;
-	unsigned int skip = ctx->fl2000 ? FL2000_EDID_FIFO_SKIP : 0;
+	unsigned int skip = ctx->aligned_i2c ? IT66121_ALIGNED_FIFO_SKIP : 0;
 	int ret;
 
 	if (!buf || !len || len > 128 || segment > 255)
@@ -387,7 +389,7 @@ static int it66121_get_edid_block(void *context, u8 *buf, unsigned int block, si
 	ret = it66121_ddc_prepare(ctx);
 	if (ret)
 		return ret;
-	if (ctx->fl2000) {
+	if (ctx->aligned_i2c) {
 		ret = it66121_abort_ddc_ops(ctx);
 		if (ret)
 			return ret;
@@ -587,11 +589,12 @@ static int it66121_restore_interrupts(struct it66121_ctx *ctx)
 {
 	int ret;
 
-	if (!ctx->fl2000)
+	if (!ctx->reset_by_controller)
 		return 0;
-	/* The FL2000 transport owns resets and uses active-low push-pull INT#. */
+	/* Restore settings lost when the display controller resets the bridge. */
 	ret = regmap_write_bits(ctx->regmap, IT66121_INT_REG,
-				IT66121_INT_ACTIVE_HIGH | IT66121_INT_OPEN_DRAIN, 0);
+				IT66121_INT_ACTIVE_HIGH | IT66121_INT_OPEN_DRAIN,
+				ctx->irq_output_mode);
 	if (ret)
 		return ret;
 	return regmap_write_bits(ctx->regmap, IT66121_INT_MASK1_REG, IT66121_INT_MASK1_ALL,
@@ -833,7 +836,7 @@ static irqreturn_t it66121_irq_thread(int irq __always_unused, void *data)
 
 	if (it66121_bridge_interrupt(&ctx->bridge)) {
 		dev_err_ratelimited(ctx->dev, "Interrupt acknowledgment failed\n");
-		return ctx->fl2000 ? IRQ_NONE : IRQ_HANDLED;
+		return ctx->retry_irq_ack ? IRQ_NONE : IRQ_HANDLED;
 	}
 	return IRQ_HANDLED;
 }
@@ -846,7 +849,7 @@ static int it66121_bind(struct device *comp, struct device *master __always_unus
 	struct it66121_ctx *ctx = dev_get_drvdata(comp);
 	int ret;
 
-	if (!ctx->fl2000)
+	if (!ctx->component_binding)
 		return -ENODEV;
 	domain = irq_find_matching_fwnode(dev_fwnode(&ctx->adapter->dev), DOMAIN_BUS_ANY);
 	if (!domain)
@@ -1446,6 +1449,50 @@ static int it66121_probe_firmware(struct it66121_ctx *ctx)
 	return 0;
 }
 
+/* Adapter properties describe transport limits and controller-owned wiring.
+ * They are independent of adapter identity and are not inferred from a lack
+ * of firmware. Existing firmware graph users retain their configuration.
+ */
+static int it66121_probe_properties(struct it66121_ctx *ctx)
+{
+	struct device *adapter = &ctx->adapter->dev;
+	u32 alignment = 1, delay = 0;
+	int ret;
+
+	if (device_property_present(adapter, "i2c-register-access-alignment")) {
+		ret = device_property_read_u32(adapter, "i2c-register-access-alignment",
+					       &alignment);
+		if (ret)
+			return ret;
+		if (alignment != 1 && alignment != 4)
+			return -EINVAL;
+	}
+	ctx->aligned_i2c = alignment == 4;
+	ctx->reset_by_controller = device_property_read_bool(adapter, "display-controller-reset");
+	ctx->component_binding = device_property_read_bool(adapter, "drm-component-attachment");
+	ctx->retry_irq_ack = device_property_read_bool(adapter, "interrupt-ack-retry");
+	if (device_property_read_bool(adapter, "interrupt-active-high"))
+		ctx->irq_output_mode |= IT66121_INT_ACTIVE_HIGH;
+	if (device_property_read_bool(adapter, "interrupt-open-drain"))
+		ctx->irq_output_mode |= IT66121_INT_OPEN_DRAIN;
+	if (device_property_present(adapter, "display-input-clock-delay")) {
+		ret = device_property_read_u32(adapter, "display-input-clock-delay", &delay);
+		if (ret)
+			return ret;
+		if (delay > IT66121_INPUT_MODE_PCLK_DELAY_MASK)
+			return -EINVAL;
+	}
+	ctx->input_clock_delay = delay;
+	if (!ctx->component_binding)
+		return it66121_probe_firmware(ctx);
+	ret = device_property_read_u32(adapter, "display-input-bus-width", &ctx->bus_width);
+	if (ret)
+		return ret;
+	if (ctx->bus_width != 12 && ctx->bus_width != 24)
+		return -EINVAL;
+	return 0;
+}
+
 static int it66121_probe(struct i2c_client *client)
 {
 	struct it66121_ctx *ctx;
@@ -1463,16 +1510,9 @@ static int it66121_probe(struct i2c_client *client)
 	ctx->dev = &client->dev;
 	ctx->client = client;
 	ctx->adapter = client->adapter;
-	/* Adapter metadata opts in; missing firmware alone never selects quirks. */
-	ctx->fl2000 = device_property_match_string(&client->adapter->dev, "compatible",
-						   "fresco,fl2000-i2c") >= 0;
-	if (ctx->fl2000) {
-		ctx->bus_width = 24;
-	} else {
-		ret = it66121_probe_firmware(ctx);
-		if (ret)
-			return dev_err_probe(ctx->dev, ret, "Firmware setup failed\n");
-	}
+	ret = it66121_probe_properties(ctx);
+	if (ret)
+		return dev_err_probe(ctx->dev, ret, "Device configuration failed\n");
 	mutex_init(&ctx->lock);
 	ctx->regmap = it66121_init_regmap(ctx);
 	if (IS_ERR(ctx->regmap))
@@ -1498,9 +1538,9 @@ static int it66121_probe(struct i2c_client *client)
 	ctx->bridge.type = DRM_MODE_CONNECTOR_HDMIA;
 	ctx->bridge.ops = DRM_BRIDGE_OP_DETECT | DRM_BRIDGE_OP_EDID;
 	i2c_set_clientdata(client, ctx);
-	if (ctx->fl2000 || client->irq > 0)
+	if (ctx->component_binding || client->irq > 0)
 		ctx->bridge.ops |= DRM_BRIDGE_OP_HPD;
-	if (!ctx->fl2000 && client->irq > 0) {
+	if (!ctx->component_binding && client->irq > 0) {
 		ret = devm_request_threaded_irq(ctx->dev, client->irq, NULL, it66121_irq_thread,
 						IRQF_ONESHOT, dev_name(ctx->dev), ctx);
 		if (ret)
@@ -1510,7 +1550,7 @@ static int it66121_probe(struct i2c_client *client)
 	if (ret)
 		return ret;
 	drm_bridge_add(&ctx->bridge);
-	if (ctx->fl2000) {
+	if (ctx->component_binding) {
 		ret = component_add(ctx->dev, &it66121_component_ops);
 		if (ret)
 			drm_bridge_remove(&ctx->bridge);
@@ -1524,7 +1564,7 @@ static void it66121_remove(struct i2c_client *client)
 {
 	struct it66121_ctx *ctx = i2c_get_clientdata(client);
 
-	if (ctx->fl2000)
+	if (ctx->component_binding)
 		component_del(&client->dev, &it66121_component_ops);
 	drm_bridge_remove(&ctx->bridge);
 }

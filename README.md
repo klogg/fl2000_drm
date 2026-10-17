@@ -74,6 +74,11 @@ The external build continues to accept `FL2000_FRAME_BACKEND` overrides.
 
 FL2000 registers an I2C adapter without assuming which bridge is attached.
 Device Tree and a kernel rebuild are not required for userspace enumeration.
+The core supplies adapter software-node properties for transport constraints,
+pixel input wiring, reset ownership, and interrupt and attachment settings.
+The bridge consumes these settings without identifying the controller. This
+is a local module interface, documented in [the architecture](docs/ARCHITECTURE.md);
+standard I2C quirks separately describe transfer limits.
 Install the four enumeration components after installing the driver modules:
 
 ```sh

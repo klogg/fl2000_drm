@@ -16,11 +16,12 @@ or bridge payload between the drivers.
 The supplied `it66121.ko` is one optional bridge provider. Providers on FL2000
 need component binding and an IRQ request in addition to their normal I2C
 probe; instantiating an arbitrary upstream I2C bridge alone does not supply it.
-The adapter software node identifies its controller as `fresco,fl2000-i2c`
-before registration. This identity explicitly selects the transport-specific
-DDC access, reset, timing, and component adaptations; absence of Device Tree
-does not.
-The core publishes no IT66121-specific settings.
+Before registration, the adapter receives a software node describing its
+register access constraints, parallel input wiring, reset ownership, and
+attachment and interrupt requirements. The bridge reads these properties
+without matching an adapter name, compatible string, or controller identity.
+Missing Device Tree data does not select transport quirks. The property
+interface and current FL2000 values are documented below.
 
 The component framework remains responsible for readiness and bind/unbind
 ordering. Passing a `struct drm_encoder *` as component bind data is the
@@ -47,14 +48,55 @@ is no separate FL2000 EDID algorithm.
 Normal firmware-described boards retain OF matching and graph lookup,
 regulator/reset control, detected IT6610/21/22 identities, 12/24-bit input,
 `client->irq` or polling, ordinary I2C EDID reads, and HDMI audio. Component
-registration and transport IRQ lookup apply only to FL2000. Audio codec
-resources are released with the parent device.
+registration and adapter IRQ lookup are selected by the explicit attachment
+property. Audio codec resources are released with the parent device.
 Bridge mode programming runs once in atomic enable, after the CRTC has reset
 and configured FL2000. The bridge restores its interrupt configuration before
 unmuting; it has no legacy `mode_set` callback. Generic boards retain the
 upstream input clock phase and interrupt configuration. FL2000 restores its
 active-low push-pull output and HPD mask according to the framework's last
 HPD enable/disable request. Disabling a bridge clears the active connector.
+The bridge never identifies its I2C adapter. Adapter software-node properties
+provide independent settings for aligned I2C access, pixel-clock delay, controller
+reset ownership, interrupt output mode, acknowledgment retry, and component
+attachment. Parallel input width is independent of I2C transfer width. Standard
+I2C adapter quirks describe transfer lengths but do not describe destructive
+aligned register reads, so that requirement remains an explicit transport quirk.
+The following adapter software-node properties form a local module interface;
+they are not existing upstream firmware bindings. With no adapter properties,
+the bridge retains the normal firmware graph,
+power/reset, and IRQ configuration. These values are read from the adapter,
+not inherited automatically from it by the I2C client.
+
+| Property | Meaning |
+| --- | --- |
+| `i2c-register-access-alignment` | Access granularity: 1 or 4 bytes. |
+| `display-controller-reset` | Restore settings after controller reset. |
+| `drm-component-attachment` | Use component binding and adapter IRQ domain. |
+| `interrupt-ack-retry` | Report acknowledgment failure to the parent. |
+| `interrupt-active-high` | Restore an active-high IRQ output. |
+| `interrupt-open-drain` | Restore an open-drain IRQ output. |
+| `display-input-clock-delay` | Clock delay selector, 0–3; default 0. |
+| `display-input-bus-width` | Parallel pixel bus width: 12 or 24. |
+
+Alignment defaults to 1; a value of 4 selects aligned group access and FIFO
+handling. Input bus width is required for component attachment. IRQ output
+properties apply when restoring configuration after a controller-owned reset.
+Acknowledgment retry returns an unhandled IRQ so the parent can retry.
+
+The FL2000 adapter supplies alignment 4, clock delay selector 1, and input
+bus width 24. It sets controller reset, component attachment, and acknowledgment
+retry to true. Both electrical IRQ properties are absent, selecting active-low,
+push-pull output when configuration is restored. Absent boolean properties
+are false; their presence means true. Clock delay is a hardware selector,
+not a duration in nanoseconds.
+
+Unsupported alignment, clock delay, or component input width fails probe;
+malformed numeric properties also fail probe. Without component attachment,
+input width and downstream attachment still come from the existing OF graph.
+The adapter's standard I2C quirks separately enforce message counts and lengths;
+they cannot establish whether aligned reads consume adjacent FIFO registers.
+
 Bridge registers are uncached because FL2000 controls their resets. Polling
 reads HPD without acknowledging interrupts; the bridge IRQ handler owns
 acknowledgment and calls `drm_bridge_hpd_notify()` for HPD events.

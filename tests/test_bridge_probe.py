@@ -79,8 +79,26 @@ static struct it66121_ctx *allocate_ctx(struct device *dev)
 #define devm_drm_bridge_alloc(dev,type,member,funcs) ((void)(funcs),allocate_ctx(dev))
 static bool i2c_check_functionality(struct i2c_adapter *a,int flags)
 { assert(a==&adapter && flags==1);return true; }
-static int device_property_match_string(struct device *dev,const char *name,const char *value)
-{ assert(dev==&adapter.dev && !strcmp(name,"compatible") && !strcmp(value,"fresco,fl2000-i2c"));return transport?0:-EINVAL; }
+static unsigned int alignment=4,delay=1;
+static int property_error;
+static bool device_property_present(struct device *dev,const char *name)
+{ assert(dev==&adapter.dev);return transport && (!strcmp(name,"i2c-register-access-alignment") || !strcmp(name,"display-input-clock-delay")); }
+static bool device_property_read_bool(struct device *dev,const char *name)
+{
+ assert(dev==&adapter.dev);
+ if(!strcmp(name,"interrupt-active-high") || !strcmp(name,"interrupt-open-drain"))return false;
+ assert(!strcmp(name,"display-controller-reset") || !strcmp(name,"drm-component-attachment") || !strcmp(name,"interrupt-ack-retry"));
+ return transport;
+}
+static int device_property_read_u32(struct device *dev,const char *name,u32 *value)
+{
+ assert(dev==&adapter.dev && transport);
+ if(property_error)return property_error;
+ if(!strcmp(name,"i2c-register-access-alignment"))*value=alignment;
+ else if(!strcmp(name,"display-input-clock-delay"))*value=delay;
+ else {assert(!strcmp(name,"display-input-bus-width"));*value=width;}
+ return 0;
+}
 static struct device_node *of_graph_get_endpoint_by_regs(struct device_node *n,int port,int endpoint)
 { assert(!port && !endpoint);return n; }
 static int of_property_read_u32(struct device_node *n,const char *name,u32 *value)
@@ -99,7 +117,7 @@ static void gpiod_set_value_cansleep(struct gpio_desc *g,int value)
 static void msleep(int delay) { assert(delay==20); }
 static void mutex_init(struct mutex *m) { (void)m; }
 static struct regmap *devm_regmap_init_i2c(struct i2c_client *client,const void *config)
-{ (void)client;const struct regmap_config *c=config;assert(c->use_single_read==transport && c->use_single_write==transport);return &map; }
+{ (void)client;const struct regmap_config *c=config;assert(c->use_single_read==(transport && alignment==4) && c->use_single_write==(transport && alignment==4));return &map; }
 static const int it66121_regmap_banks[]={0};
 static int dev_err_probe(struct device *dev,int error,const char *format,...)
 { (void)dev;(void)format;return error; }
@@ -142,7 +160,7 @@ static void cleanup(void)
  free(allocated);allocated=NULL;
  regulator_error=gpio_error=irq_error=codec_error=action_error=component_error=read_error=0;
  supplies=resets=irq_requests=codec_creates=codec_removes=components=component_removes=bridges=bridge_removes=0;
- transport=false;ready=has_audio=gpio_present=true;width=24;chip=ID_IT66121;
+ alignment=4;delay=1;property_error=0;transport=false;ready=has_audio=gpio_present=true;width=24;chip=ID_IT66121;
 }
 int main(void)
 {
@@ -151,7 +169,9 @@ int main(void)
   unsigned int saved_chip=chip,saved_width=width;
   client.irq=irq?37:0;
   assert(!it66121_probe(&client));
-  assert(allocated->id==chip && allocated->bus_width==width && !allocated->fl2000);
+  assert(allocated->id==chip && allocated->bus_width==width && !allocated->aligned_i2c);
+  assert(!allocated->reset_by_controller && !allocated->component_binding && !allocated->retry_irq_ack);
+  assert(!allocated->input_clock_delay && !allocated->irq_output_mode);
   assert(allocated->bridge.of_node==&node && allocated->bridge.next_bridge==&downstream);
   assert(supplies==1 && resets==2 && irq_requests==irq && codec_creates==1 && release_codec);
   assert(!!(allocated->bridge.ops&DRM_BRIDGE_OP_HPD)==!!irq && !components && bridges==1);
@@ -174,12 +194,21 @@ int main(void)
  client.dev.of_node=NULL;
  assert(it66121_probe(&client)==-EINVAL && !components && !supplies);cleanup();
  transport=true;assert(!it66121_probe(&client));
- assert(allocated->fl2000 && allocated->bus_width==24 && components==1 && bridges==1);
+ assert(allocated->aligned_i2c && allocated->bus_width==24 && components==1 && bridges==1);
  assert(!supplies && !resets && !irq_requests && !codec_creates);
+ assert(allocated->reset_by_controller && allocated->component_binding && allocated->retry_irq_ack);
+ assert(allocated->input_clock_delay==IT66121_INPUT_MODE_PCLK_DELAY1 && !allocated->irq_output_mode);
  it66121_remove(&client);assert(component_removes==1 && bridge_removes==1);cleanup();
+ transport=true;alignment=2;assert(it66121_probe(&client)==-EINVAL && !bridges);cleanup();
+ transport=true;delay=4;assert(it66121_probe(&client)==-EINVAL && !bridges);cleanup();
+ transport=true;width=8;assert(it66121_probe(&client)==-EINVAL && !bridges);cleanup();
+ transport=true;property_error=-EIO;assert(it66121_probe(&client)==-EIO && !bridges);cleanup();
+ transport=true;alignment=1;delay=0;width=12;assert(!it66121_probe(&client));
+ assert(!allocated->aligned_i2c && !allocated->input_clock_delay && allocated->bus_width==12);
+ assert(allocated->component_binding && allocated->reset_by_controller);cleanup();
  transport=true;component_error=-EPROBE_DEFER;
  assert(it66121_probe(&client)==-EPROBE_DEFER && bridges==1 && bridge_removes==1);cleanup();
- puts("PASS: firmware graph, three chips, both bus widths, native/absent IRQ, power/reset, managed audio, probe failures, explicit FL2000 opt-in and teardown");
+ puts("PASS: firmware graph, three chips, both bus widths, native/absent IRQ, power/reset, managed audio, probe failures, explicit adapter properties and teardown");
 }
 """
 with tempfile.TemporaryDirectory(prefix="it66121-probe-") as temp:
@@ -190,6 +219,7 @@ with tempfile.TemporaryDirectory(prefix="it66121-probe-") as temp:
         "it66121_audio_codec_init",
         "it66121_init_regmap",
         "it66121_probe_firmware",
+        "it66121_probe_properties",
         "it66121_probe",
         "it66121_remove",
     )

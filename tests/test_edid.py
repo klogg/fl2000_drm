@@ -28,7 +28,7 @@ typedef uint32_t u32;
 #define EDID_SLEEP 1000
 #define EDID_TIMEOUT 200000
 #define EDID_FIFO_SIZE 32
-#define FL2000_EDID_FIFO_SKIP 3
+#define IT66121_ALIGNED_FIFO_SKIP 3
 #define EDID_DDC_ADDR IT66121_DDC_HEADER_EDID
 #define IT66121_DDC_CONTROL IT66121_MASTER_SEL_REG
 #define IT66121_DDC_SEGMENT IT66121_DDC_SEGMENT_REG
@@ -47,7 +47,7 @@ struct i2c_adapter { int unused; };
 struct i2c_client { unsigned short addr; };
 struct i2c_msg { unsigned short addr, flags, len; u8 *buf; };
 struct regmap { int unused; };
-struct it66121_priv { struct i2c_client *client; struct i2c_adapter *adapter; struct regmap *regmap; bool fl2000; };
+struct it66121_priv { struct i2c_client *client; struct i2c_adapter *adapter; struct regmap *regmap; bool aligned_i2c; };
 static long long now;
 static ktime_t ktime_get(void) { now += 100; return now; }
 static ktime_t ktime_add_us(ktime_t t, int us) { return t + us; }
@@ -113,7 +113,7 @@ int main(void)
 {
  struct i2c_client client={.addr=0x4c};
  struct i2c_adapter adapter={0};
- struct it66121_priv priv={.client=&client,.adapter=&adapter,.fl2000=true};
+ struct it66121_priv priv={.client=&client,.adapter=&adapter,.aligned_i2c=true};
  u8 buffer[128];
  for (unsigned int block=0; block<6; block++) {
   assert(!it66121_get_edid_block(&priv,buffer,block,sizeof(buffer)));
@@ -142,7 +142,7 @@ parts = [
     *[function(source, name) for name in common_names],
     checks,
 ]
-with tempfile.TemporaryDirectory(prefix="fl2000-edid-") as temp:
+with tempfile.TemporaryDirectory(prefix="aligned_i2c-edid-") as temp:
     c = Path(temp) / "test.c"
     exe = Path(temp) / "test"
     c.write_text("\n\n".join(parts))
@@ -182,7 +182,7 @@ struct regmap { u8 values[256]; };
 struct i2c_adapter { int unused; };
 struct i2c_client { unsigned short addr; };
 struct i2c_msg { unsigned short addr,flags,len; u8 *buf; };
-struct it66121_priv { struct regmap *regmap; struct i2c_client *client; struct i2c_adapter *adapter; bool fl2000; };
+struct it66121_priv { struct regmap *regmap; struct i2c_client *client; struct i2c_adapter *adapter; bool aligned_i2c; };
 typedef long long ktime_t;
 #define dev_dbg(...) ((void)0)
 #define I2C_M_RD 1
@@ -192,7 +192,7 @@ typedef long long ktime_t;
 #define EDID_SLEEP 1000
 #define EDID_TIMEOUT 200000
 #define EDID_FIFO_SIZE 32
-#define FL2000_EDID_FIFO_SKIP 3
+#define IT66121_ALIGNED_FIFO_SKIP 3
 #define EDID_DDC_ADDR IT66121_DDC_HEADER_EDID
 #define IT66121_DDC_CONTROL IT66121_MASTER_SEL_REG
 #define IT66121_DDC_SEGMENT IT66121_DDC_SEGMENT_REG

@@ -45,9 +45,20 @@ No bridge-specific constants are embedded in the enumeration program.
 Candidate records describe how to identify and instantiate supported hardware;
 they do not adapt a bridge driver. A new provider must implement the component
 and IRQ integration described in [the architecture](ARCHITECTURE.md).
-The supplied bridge opts into FL2000 adaptations only when its adapter
-software node identifies `fresco,fl2000-i2c`. Native firmware-described
-IT6610/21/22 boards keep their ordinary probe and attachment paths.
+The FL2000 kernel driver publishes adapter software-node properties before
+registering the I2C bus. The supplied bridge reads explicit transport, wiring,
+reset, interrupt, and attachment settings; it does not identify the controller.
+See [adapter properties](ARCHITECTURE.md) for their meanings and defaults.
+These properties are a local module interface, not upstream firmware bindings.
+Native firmware-described IT6610/21/22 boards retain their ordinary graph,
+power/reset, and IRQ setup when adapter properties are absent.
+
+Enumerator records select bridge candidates and driver names. They do not set
+adapter properties, program pixel timing, or supply IRQ numbers. `new_device`
+creates an I2C client without a firmware graph; the bridge explicitly reads the
+adapter properties and obtains its IRQ from the adapter's domain at component
+bind time. Changing controller wiring or transport constraints requires changing
+the kernel-side device description, not adding fields to `enumerator.conf`.
 No candidate match reports an enumeration failure; it does not select native
 VGA or create a bridge-free DRM display.
 

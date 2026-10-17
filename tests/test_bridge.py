@@ -140,7 +140,7 @@ int main(void)
  struct regmap map={0};
  struct drm_encoder encoder={.crtc=&map};
  struct drm_connector connector={.dev=(void *)1,.display_info={.is_hdmi=true}};
- struct it66121_ctx ctx={.regmap=&map,.bridge={.encoder=&encoder},.connector=&connector,.bus_width=24,.id=ID_IT66121,.fl2000=true,.hpd_enabled=true};
+ struct it66121_ctx ctx={.regmap=&map,.bridge={.encoder=&encoder},.connector=&connector,.bus_width=24,.id=ID_IT66121,.aligned_i2c=true,.reset_by_controller=true,.component_binding=true,.retry_irq_ack=true,.input_clock_delay=IT66121_INPUT_MODE_PCLK_DELAY1,.hpd_enabled=true};
  struct drm_crtc_state crtc={.adjusted_mode={.clock=32000}};
  struct drm_atomic_state state={.connector=&connector,.crtc=&crtc};
  /* Simulate the encoder reset immediately before atomic bridge enable. */
@@ -213,7 +213,7 @@ int main(void)
  }
  fault_write_reg=-1;
  /* Generic boards retain their clock phase and existing IRQ configuration. */
- ctx.fl2000=false;map.values[IT66121_INT_REG]=0xc0;
+ ctx.input_clock_delay=0;ctx.reset_by_controller=false;map.values[IT66121_INT_REG]=0xc0;
  map.values[IT66121_INT_MASK1_REG]=0x5a;
  memset(register_writes,0,sizeof(register_writes));
  it66121_bridge_enable(&ctx.bridge,&state);
@@ -224,8 +224,21 @@ int main(void)
  it66121_bridge_disable(&ctx.bridge,&state);assert(!ctx.connector);
  ctx.bus_width=12;assert(!it66121_configure_input(&ctx));
  assert(map.values[IT66121_INPUT_MODE_REG]==IT66121_INPUT_MODE_DDR);ctx.bus_width=24;
+ /* Input timing, transport access, and reset ownership are independent. */
+ ctx.aligned_i2c=false;ctx.input_clock_delay=IT66121_INPUT_MODE_PCLK_DELAY1;
+ assert(!it66121_configure_input(&ctx));assert(map.values[IT66121_INPUT_MODE_REG]==1);
+ ctx.aligned_i2c=true;ctx.input_clock_delay=0;
+ assert(!it66121_configure_input(&ctx));assert(!map.values[IT66121_INPUT_MODE_REG]);
+ ctx.reset_by_controller=true;
+ ctx.irq_output_mode=IT66121_INT_ACTIVE_HIGH|IT66121_INT_OPEN_DRAIN;
+ assert(!it66121_restore_interrupts(&ctx));
+ assert((map.values[IT66121_INT_REG]&0xc0)==0xc0);
+ ctx.irq_output_mode=0;ctx.aligned_i2c=false;
+ assert(!it66121_restore_interrupts(&ctx));
+ assert(!(map.values[IT66121_INT_REG]&0xc0));
+ ctx.aligned_i2c=true;
  /* A transport reset must preserve an explicit framework HPD disable. */
- ctx.fl2000=true;ctx.bridge.dev=(void *)1;
+ ctx.input_clock_delay=IT66121_INPUT_MODE_PCLK_DELAY1;ctx.reset_by_controller=true;ctx.bridge.dev=(void *)1;
  it66121_bridge_hpd_disable(&ctx.bridge);assert(!ctx.hpd_enabled);
  it66121_bridge_enable(&ctx.bridge,&state);
  assert(map.values[IT66121_INT_MASK1_REG]==0xff);
@@ -313,7 +326,7 @@ int main(void)
  assert(requested_thread(37,&ctx)==IRQ_HANDLED);
  fault_reg=IT66121_SYS_STATUS_REG;
  assert(requested_thread(37,&ctx)==IRQ_NONE);
- ctx.fl2000=false;assert(requested_thread(37,&ctx)==IRQ_HANDLED);ctx.fl2000=true;
+ ctx.retry_irq_ack=false;assert(requested_thread(37,&ctx)==IRQ_HANDLED);ctx.retry_irq_ack=true;
  it66121_unbind(&component,NULL,&encoder);
  assert(!requested_irq && !ctx.connector && irq_frees==1);
  attach_error=-EIO;assert(it66121_bind(&component,NULL,&encoder)==-EIO && !requested_irq && !ctx.irq);
