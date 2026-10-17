@@ -202,22 +202,14 @@ static u64 fl2000_pll_ppm_err(u64 clock_mil, u32 vco_clk, u32 divisor)
 
 static inline u32 fl2000_pll_get_divisor(u64 clock_mil, u32 vco_clk, u64 *min_ppm_err)
 {
-	static const u32 divisor_arr[] = {
-		2,   4,	  6,   7,   8,	 9,   10,  11,	12,  13,  14,  15,  16,	 17,  18,  19,
-		20,  21,  22,  23,  24,	 25,  26,  27,	28,  29,  30,  31,  32,	 33,  34,  35,
-		36,  37,  38,  39,  40,	 41,  42,  43,	44,  45,  46,  47,  48,	 49,  50,  51,
-		52,  53,  54,  55,  56,	 57,  58,  59,	60,  61,  62,  63,  64,	 65,  66,  67,
-		68,  69,  70,  71,  72,	 73,  74,  75,	76,  77,  78,  79,  80,	 81,  82,  83,
-		84,  85,  86,  87,  88,	 89,  90,  91,	92,  93,  94,  95,  96,	 97,  98,  99,
-		100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
-		116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128
-	};
 	u32 best_divisor = 0;
 
-	/* Iterate over array */
-	for (unsigned int i = 0; i < ARRAY_SIZE(divisor_arr); i++) {
-		u32 divisor = divisor_arr[i];
-		u64 ppm_err = fl2000_pll_ppm_err(clock_mil, vco_clk, divisor);
+	for (u32 divisor = 2; divisor <= 128; divisor++) {
+		u64 ppm_err;
+
+		if (divisor == 3 || divisor == 5)
+			continue;
+		ppm_err = fl2000_pll_ppm_err(clock_mil, vco_clk, divisor);
 
 		if (ppm_err < *min_ppm_err) {
 			*min_ppm_err = ppm_err;
@@ -281,7 +273,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 			    struct drm_display_mode *adjusted_mode, struct fl2000_pll *pll)
 {
 	u64 ppm_err;
-	u32 clock_calculated;
+	u32 clock_calculated = 0;
 	u64 clock_mil_adjusted;
 	const u64 clock_mil = (u64)mode->clock * 1000 * FL2000_PLL_PRECISION;
 	const int max_h_adjustment = 10;
@@ -308,10 +300,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 
 		if (mode->htotal + d < mode->hsync_end || mode->htotal + d > 4095)
 			continue;
-		/* Maximum pixel clock 1GHz, or 10^9Hz. Multiply by 10^6 we get 10^15Hz. Assume
-		 * maximum htotal is 10000 pix (no way) we get 10^19 max value and using u64 which
-		 * is 1.8*10^19 no overflow can occur. Assume all this was checked before
-		 */
+		/* Validated clock and total bounds keep this product within u64. */
 		clock_mil_adjusted = clock_mil * (mode->htotal + d) / mode->htotal;
 
 		/* To keep precision use clock multiplied by 10^6 */
@@ -321,7 +310,6 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		    clock_calculated > FL2000_MAX_PIXCLOCK)
 			continue;
 
-		/* Stop searching as soon as the first valid option found */
 		if (ppm_err < FL2000_PPM_ERR_MAX) {
 			if (adjusted_mode) {
 				drm_mode_copy(adjusted_mode, mode);
