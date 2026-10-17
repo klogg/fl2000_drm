@@ -6,15 +6,33 @@ configuration and creates the I2C client through `new_device`; the core does
 not scan chip IDs, select a bridge driver, or require Device Tree. Components
 are matched by their owning I2C adapter.
 See [userspace enumeration](ENUMERATION.md) for configuration and activation.
+
 Each dongle owns its own adapter and DRM device. Component binding receives
 its DRM encoder; the bridge attaches itself using `drm_bridge_attach()`.
 The master uses the encoder bridge chain and pins the matched I2C driver's
 module until the final DRM device release. There is no shared private header
 or bridge payload between the drivers.
 
-The supplied `it66121.ko` is one optional bridge provider. Current providers
+The supplied `it66121.ko` is one optional bridge provider. Providers on FL2000
 need component binding and an IRQ request in addition to their normal I2C
 probe; instantiating an arbitrary upstream I2C bridge alone does not supply it.
+The adapter software node identifies its controller as `fresco,fl2000-i2c`
+before registration. This identity explicitly selects the transport-specific
+DDC access, reset, timing, and component adaptations; absence of Device Tree
+does not.
+The core publishes no IT66121-specific settings.
+
+The component framework remains responsible for readiness and bind/unbind
+ordering. Passing a `struct drm_encoder *` as component bind data is the
+agreement between the master and provider; DRM does not automatically impose
+that contract on other bridge drivers. The provider requests its IRQ and
+attaches its bridge during bind, then frees the IRQ during unbind. The master
+stops USB interrupt work and detaches the encoder before provider unbind.
+
+DRM registration currently waits for an external bridge component. Native
+VGA through the integrated FL2000 DAC would need a separate output path and
+explicit hardware selection; it is not implemented or inferred from failed
+bridge discovery.
 
 The bridge core is rebased on Linux v7.0's
 [IT66121 driver](https://github.com/torvalds/linux/blob/v7.0/drivers/gpu/drm/bridge/ite-it66121.c).
@@ -22,6 +40,21 @@ It uses upstream atomic bridge state, input-format negotiation, AFE programming,
 AVI infoframes, HPD detection, and interrupt acknowledgment. FL2000 adaptations
 retain USB component lifetime, the one-cycle parallel input delay, HDMI/DVI
 selection, aligned DWORD I2C/EDID reads, and restoration after encoder resets.
+The driver shares one regmap initializer, EDID callback and block transaction
+flow, modeset implementation, IRQ handler, and HPD reporting. Small DDC access
+helpers account for aligned transfers and destructive FIFO snapshots; there
+is no separate FL2000 EDID algorithm.
+Normal firmware-described boards retain OF matching and graph lookup,
+regulator/reset control, detected IT6610/21/22 identities, 12/24-bit input,
+`client->irq` or polling, ordinary I2C EDID reads, and HDMI audio. Component
+registration and transport IRQ lookup apply only to FL2000. Audio codec
+resources are released with the parent device.
+Bridge mode programming runs once in atomic enable, after the CRTC has reset
+and configured FL2000. The bridge restores its interrupt configuration before
+unmuting; it has no legacy `mode_set` callback. Generic boards retain the
+upstream input clock phase and interrupt configuration. FL2000 restores its
+active-low push-pull output and HPD mask according to the framework's last
+HPD enable/disable request. Disabling a bridge clears the active connector.
 Bridge registers are uncached because FL2000 controls their resets. Polling
 reads HPD without acknowledging interrupts; the bridge IRQ handler owns
 acknowledgment and calls `drm_bridge_hpd_notify()` for HPD events.
@@ -30,9 +63,9 @@ FL2000 creates a one-input IRQ domain keyed by its I2C adapter's software
 node, without Device Tree. The bridge finds that domain using the adapter's
 fwnode and looks up input zero through standard IRQ-domain APIs. The adapter
 owns the node; the FL2000 interrupt resources own the domain and mapping.
-Its USB worker
-calls `handle_nested_irq()` in sleepable context, so the bridge's normal
-threaded handler finishes before another interrupt URB is submitted. The bridge
+Its USB worker calls `handle_nested_irq()` in sleepable context, so the
+bridge's normal threaded handler finishes before another interrupt URB is
+submitted. The bridge
 requests the IRQ during component binding and frees it during unbinding;
 userspace I2C `new_device` needs no IRQ extension. IRQ unmask schedules a
 bridge rescan so an already-consumed FL2000 event cannot strand a pending IRQ.
@@ -54,8 +87,8 @@ The connector retains bridge references until the final DRM device release;
 a DRM-managed module reference keeps the bridge callbacks available until then.
 Detection and EDID callbacks check the requesting connector's unplug state,
 even after the bridge has been detached or attached to a replacement DRM device.
-The explicitly instantiated bridge needs no Device Tree graph, regulators, or separate
-reset GPIO; the FL2000 driver owns power/reset.
+The bridge instantiated on FL2000 needs no Device Tree graph, regulators, or
+separate reset GPIO; the FL2000 driver owns power/reset.
 
 Each adapter owns its lifecycle mutex and explicit streaming, interrupt, and
 I2C resource pointers. USB core parent-device locking serializes initial state
@@ -102,7 +135,8 @@ also work on controllers without it. Queue errors stop transmission; a later
 framebuffer update or modeset can drain the old queue and clear the endpoint
 halt before restarting it.
 
-Mode validation checks hardware timing field sizes, the 25–148.5 MHz input clock
+FL2000 mode validation checks hardware timing field sizes, the 25–148.5 MHz
+input clock
 range used by the upstream IT66121 driver and estimated USB payload capacity.
 The bandwidth estimate uses active pixels and refresh timing; sustained
 throughput still requires measurements. Interlaced, double-scan, stereoscopic

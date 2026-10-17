@@ -39,8 +39,9 @@ make KSRC=/usr/src/linux-headers-7.0.0-38-generic
 
 The resulting modules are `fl2000.ko` and `it66121.ko`. Use this repository's
 adapted bridge module; the stock upstream module is not interchangeable.
-The FL2000 core creates the I2C adapter; configure its bridge client explicitly
-as described below. There is no bridge-selection module parameter.
+The FL2000 core creates the I2C adapter; the userspace service identifies
+and instantiates its bridge as described below. There is no bridge-selection
+module parameter.
 
 `FL2000_FRAME_BACKEND=auto` selects SSSE3 for x86-64 target kernels and portable
 code elsewhere. Explicit choices are `ssse3`, `bmi2`, and `generic`. Optimized
@@ -105,6 +106,10 @@ the same enumerator and configuration in its minimal guest. Supply
 Tests load modules only inside a marked guest. Requirements are QEMU with KVM
 and USB-host support, access to `/dev/kvm` and the selected USB port, and the
 matching kernel image in `/boot`. Containers must expose those device nodes.
+The hardware and profiling launchers also need host `flock` and
+`i2ctransfer`, or an explicit `--i2ctransfer PATH`. They include these tools
+and their shared libraries in the guest overlay. The minimal guest needs
+POSIX shell, awk, base utilities, and built-in or preloaded `i2c-dev` support.
 The tested QEMU 11.1.2 needs the included
 [duplicate-endpoint workaround](docs/HARDWARE.md#qemu-1112-workaround).
 
@@ -148,8 +153,10 @@ Inside the guest:
 /fl2000-startup
 ```
 
-Startup loads IT66121 before FL2000 and is safe to repeat. No host USB
-controller is unbound. Logs default to `.qemu-build/fl2000-tests`. Use
+Startup preloads supplied bridge modules from the candidate configuration,
+skips registered or already loaded drivers, and loads FL2000 before
+enumeration. It is safe to repeat. No host USB controller is unbound. Logs
+default to `.qemu-build/fl2000-tests`. Use
 `KVER`, `MODULE_DIR`, or `QEMU_OUTPUT_DIR` to override the wrapper's defaults.
 
 The guest colour-bar exerciser needs libdrm development headers, pkg-config,
@@ -172,6 +179,14 @@ rmmod it66121
 
 ## Supported behavior and limits
 
+The FL2000 display path requires an external bridge component. The shipped
+enumeration data identifies IT66121. The bridge module also retains normal
+firmware-described IT6610/21/22 operation. Other bridges on FL2000 need
+compatible component attachment, IRQ handling, and hardware configuration;
+adding their identities to the config alone does not provide driver support.
+Native VGA through FL2000's integrated DAC is not implemented. A missing
+bridge is not treated as a VGA adapter.
+
 - Linear XRGB8888, RGB888, and RGB565 framebuffers, including pitch and crops.
 - Per-buffer damage tracking, persistent USB transport buffers, and standard
   DRM shmem GEM objects. There is no custom GEM buffer type.
@@ -192,7 +207,7 @@ recovery are not implemented. See the
 
 ## Performance
 
-The current codebase (`f9e99ef`) was measured on an i3-6100T under QEMU/KVM at
+Revision `f9e99ef` was measured on an i3-6100T under QEMU/KVM at
 800x480 and 60 updates/s. All backends ran in the same guest, with order reversed
 on the second pass. Values are median update-process CPU as a percentage of one
 core, from two 10-second trials per case.
@@ -227,6 +242,7 @@ Run hardware-free regressions with Python 3 and an ASan/UBSan-capable C compiler
 python3 tests/test_logic.py
 python3 tests/test_edid.py
 python3 tests/test_bridge.py
+python3 tests/test_bridge_probe.py
 python3 tests/test_driver.py
 python3 tests/test_interrupt.py
 python3 tests/test_tools.py

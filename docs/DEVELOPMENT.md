@@ -78,6 +78,11 @@ unresolved documentation conflicts. Unused definitions are retained.
 
 ## Remaining work
 
+Native VGA support is deferred. The current driver waits for an external
+bridge component. Supporting the integrated DAC would require output
+selection, VGA connector/EDID handling, native monitor interrupt reporting,
+and analog setup validated on VGA hardware.
+
 - Define and hardware-test recovery for FL2000 LBUF halt and VGA errors. Current
   status handling acknowledges overflow/underflow flags but does not implement
   these recovery sequences; do not infer reset ordering from the TODO alone.

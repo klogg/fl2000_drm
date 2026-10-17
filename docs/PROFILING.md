@@ -1,6 +1,6 @@
 # Profiling and measurement records
 
-## Current codebase: f9e99ef
+## Measured revision: f9e99ef
 
 ### Matched backend comparison
 
@@ -142,6 +142,12 @@ The workload selects 800x600 at 60 Hz when available, otherwise the first
 advertised mode; it does not explicitly search for a preferred-mode flag. The
 guest's `/proc/stat` totals were noisy in this VM; the saved process CPU and
 function profiles are the primary comparison metrics.
+
+The hardware profiling launcher uses the production bridge enumerator and
+candidate configuration. It needs host `flock` and `i2ctransfer`; supply
+`--i2ctransfer PATH` if the latter is not installed. The launcher appends the
+enumerator, configuration, tools, and their shared libraries to the base image.
+The minimal guest needs awk and built-in or preloaded `i2c-dev` support.
 
 `tests/profile_qemu.py` compares supplied modules in one guest, reverses their
 order on alternating trials, and records QEMU thread CPU alongside workload

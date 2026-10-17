@@ -42,6 +42,14 @@ value and the expected value, allowing revision bits to be ignored. Use only
 read-only identification registers whose reads have no destructive effects.
 The shipped [configuration](../userspace/enumerator.conf) supplies IT66121 data.
 No bridge-specific constants are embedded in the enumeration program.
+Candidate records describe how to identify and instantiate supported hardware;
+they do not adapt a bridge driver. A new provider must implement the component
+and IRQ integration described in [the architecture](ARCHITECTURE.md).
+The supplied bridge opts into FL2000 adaptations only when its adapter
+software node identifies `fresco,fl2000-i2c`. Native firmware-described
+IT6610/21/22 boards keep their ordinary probe and attachment paths.
+No candidate match reports an enumeration failure; it does not select native
+VGA or create a bridge-free DRM display.
 
 The program uses combined I2C transfers through `i2ctransfer`, rather than
 SMBus address scanning. It checks only configured addresses. Existing configured
