@@ -113,3 +113,7 @@ The module field names a loadable fallback. If the configured I2C driver is
 already registered, enumeration does not invoke `modprobe`; this includes
 built-in drivers with no `/sys/module` entry. Already loaded modules also
 skip loading. An existing bound client is accepted without another ID read.
+For an existing unbound client with a registered driver, each invocation
+requests one reprobe through the I2C bus `drivers_probe` attribute. This
+allows a service restart to retry an ordinary probe failure while preserving
+clients that are waiting for deferred probing.

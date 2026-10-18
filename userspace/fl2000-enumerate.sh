@@ -89,8 +89,15 @@ load_module()
 
 wait_for_binding()
 {
+    if [ ! -e "$client/driver" ] && [ -d "$sysfs/bus/i2c/drivers/$driver" ]; then
+        # Retry an ordinary probe failure once, without replacing the client.
+        if ! printf '%s\n' "${client##*/}" > "$sysfs/bus/i2c/drivers_probe"; then
+            printf 'fl2000-enumerate: reprobe failed for %s; waiting for binding\n' \
+                "$client" >&2
+        fi
+    fi
     remaining=$timeout
-    while [ "$remaining" -gt 0 ]; do
+    while :; do
         if [ ! -d "$adapter" ] || [ ! -d "$client" ]; then
             fail 'Adapter or client disappeared'
         fi
@@ -100,6 +107,7 @@ wait_for_binding()
             printf 'Bound %s at %s on i2c-%s\n' "$type" "$address" "$bus"
             exit 0
         fi
+        [ "$remaining" -gt 0 ] || break
         sleep 1
         remaining=$((remaining - 1))
     done

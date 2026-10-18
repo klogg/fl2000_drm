@@ -143,6 +143,38 @@ fi
         self.assertEqual(self.log.read_text(), "")
         self.assertFalse((self.sysfs / "module/example_module").exists())
 
+    def test_existing_unbound_client_is_reprobed_once(self):
+        self.client.mkdir()
+        (self.client / "name").write_text("example_bridge\n")
+        driver = self.sysfs / "bus/i2c/drivers/example_driver"
+        driver.mkdir(parents=True)
+        request = self.sysfs / "bus/i2c/drivers_probe"
+        request.write_text("")
+        self.tool(
+            "sleep",
+            '[ "$(cat "$SYSFS_ROOT/bus/i2c/drivers_probe")" = 7-0039 ]\n'
+            'ln -s "$SYSFS_ROOT/bus/i2c/drivers/example_driver" '
+            '"$SYSFS_ROOT/bus/i2c/devices/7-0039/driver"\n',
+        )
+        result = self.run_enumerator()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(request.read_text(), "7-0039\n")
+        self.assertEqual(self.log.read_text(), "")
+        self.assertEqual((self.adapter / "new_device").read_text(), "")
+
+    def test_failed_reprobe_preserves_existing_client(self):
+        self.client.mkdir()
+        (self.client / "name").write_text("example_bridge\n")
+        (self.sysfs / "bus/i2c/drivers/example_driver").mkdir(parents=True)
+        (self.sysfs / "bus/i2c/drivers_probe").mkdir()
+        result = self.run_enumerator()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reprobe failed", result.stderr)
+        self.assertIn("preserving it for deferred probing", result.stderr)
+        self.assertEqual((self.client / "name").read_text(), "example_bridge\n")
+        self.assertEqual(self.log.read_text(), "")
+        self.assertFalse((self.adapter / "delete_device").exists())
+
     def test_preloaded_module_needs_no_modprobe(self):
         self.client.mkdir()
         (self.client / "name").write_text("example_bridge\n")
