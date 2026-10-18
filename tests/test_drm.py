@@ -96,7 +96,7 @@ static int drm_dev_register(struct drm_device *d,int flags)
 static void drm_client_setup_with_fourcc(struct drm_device *d,int format) { assert(d->registered && format==1);stream_active=true; }
 static int fl2000_enable_interrupt(struct usb_device *u)
 { (void)u;int ret=operation();irq_active=!ret;return ret; }
-static void fl2000_disable_interrupt(struct usb_device *u)
+static void fl2000_disable_interrupt(const struct usb_device *u)
 { (void)u;irq_active=false;irq_stops++; }
 static void component_master_del(struct device *d,const void *ops)
 { assert(ops==&fl2000_master_ops);master_deletes++;if(bound)fl2000_drm_unbind(d); }
@@ -106,7 +106,7 @@ static void drm_dev_unplug(struct drm_device *d)
 { d->unplugged=true;unplugged++;drm_dev_unregister(d); }
 static void drm_atomic_helper_shutdown(struct drm_device *d)
 { assert(d->unplugged && !d->registered);assert(!irq_active);shutdowns++;if(!shutdown_failure)stream_active=false; }
-static void fl2000_streaming_disable(struct usb_device *u) { (void)u;stream_active=false;stops++; }
+static void fl2000_streaming_disable(const struct usb_device *u) { (void)u;stream_active=false;stops++; }
 static void drm_kms_helper_poll_fini(struct drm_device *d)
 { (void)d;assert(polling);polling=false;poll_fini++; }
 static void drm_encoder_cleanup(struct drm_encoder *e) { (void)e;assert(!irq_active && !stream_active);attached=false;encoder_cleanup++; }

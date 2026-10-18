@@ -625,7 +625,7 @@ static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_s
 static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
 				       struct drm_atomic_state *state __always_unused)
 {
-	struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
+	const struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
 
 	fl2000_streaming_disable(drm_if->usb_dev);
 }
@@ -861,7 +861,7 @@ put:
 
 static void fl2000_drm_unbind(struct device *master)
 {
-	struct usb_device *usb_dev = to_usb_device(master);
+	const struct usb_device *usb_dev = to_usb_device(master);
 	struct fl2000_device *device = dev_get_drvdata(master);
 	struct drm_device *drm = device->drm;
 	struct fl2000_drm_if *drm_if;
