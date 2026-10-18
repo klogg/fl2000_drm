@@ -42,7 +42,7 @@ struct drm_encoder { void *bridge; };
 enum drm_connector_status { connector_status_disconnected, connector_status_connected, connector_status_unknown };
 struct drm_connector { enum drm_connector_status status; int polled; };
 struct drm_mode_config { const void *funcs; int min_width,max_width,min_height,max_height; int mutex; bool poll_running; };
-struct drm_device { struct drm_mode_config mode_config; bool registered,unplugged; };
+struct drm_device { struct drm_mode_config mode_config; bool registered,unplugged; int refs; };
 struct fl2000_device { struct drm_device *drm; struct module *bridge_owner; };
 struct module { int refs; };
 
@@ -56,7 +56,10 @@ static bool bound,attached,polling;
 static bool irq_active,stream_active,shutdown_failure;
 static unsigned int irq_stops,master_deletes;
 static const int fl2000_master_ops;
+static int fl2000_drm_bind(struct device *master);
 static void fl2000_drm_unbind(struct device *master);
+static void unbind_master(struct device *master);
+static struct drm_device *managed_drm;
 static struct module provider;
 static bool reject_provider;
 static void (*release_owner)(struct drm_device *,void *);
@@ -79,8 +82,15 @@ static void drm_bridge_hpd_notify(void *b,enum drm_connector_status status)
 { assert(b && status==detected);hotplug_events++; }
 
 static int operation(void) { return ++step==failure?-EIO:0; }
-static void *__drm_dev_alloc(struct device *d,void *driver,size_t size,size_t offset)
-{ (void)d;(void)driver;assert(!offset);return operation()?ERR_PTR(-EIO):calloc(1,size); }
+static void *allocate_drm(struct device *d,void *driver,size_t size)
+{
+ (void)d;(void)driver;assert(!managed_drm);
+ if(operation())return ERR_PTR(-EIO);
+ managed_drm=calloc(1,size);assert(managed_drm);managed_drm->refs=1;
+ return managed_drm;
+}
+#define devm_drm_dev_alloc(d,driver,type,member) ((type *)allocate_drm(d,driver,sizeof(type)))
+
 static int drmm_mode_config_init(struct drm_device *d) { (void)d;return operation(); }
 static struct usb_interface *usb_ifnum_to_if(struct usb_device *u,int n) { (void)u;assert(!n);return NULL; }
 static struct device *usb_intf_get_dma_device(struct usb_interface *i) { (void)i;return NULL; }
@@ -108,7 +118,7 @@ static int fl2000_enable_interrupt(struct usb_device *u)
 static void fl2000_disable_interrupt(const struct usb_device *u)
 { (void)u;irq_active=false;irq_stops++; }
 static void component_master_del(struct device *d,const void *ops)
-{ assert(ops==&fl2000_master_ops);master_deletes++;if(bound)fl2000_drm_unbind(d); }
+{ assert(ops==&fl2000_master_ops);master_deletes++;if(bound)unbind_master(d); }
 static void drm_dev_unregister(struct drm_device *d)
 { assert(d->registered);d->registered=false;unregistered++; }
 static void drm_dev_unplug(struct drm_device *d)
@@ -123,6 +133,7 @@ static void component_unbind_all(struct device *d,struct drm_encoder *b)
 { (void)d;(void)b;assert(bound && !attached && !irq_active && !stream_active);bound=false;unbound++; }
 static void drm_dev_put(struct drm_device *d)
 {
+ if(--d->refs)return;
  struct fl2000_drm_if *output=(void *)d;
  assert(!d->registered && !bound && !attached && !polling);
  if(output->connector){assert(provider.refs);free(output->connector);}
@@ -130,6 +141,23 @@ static void drm_dev_put(struct drm_device *d)
  assert(!provider.refs);
  free(output);released++;
 }
+/* Component core releases the bind devres group after callback return. */
+static void release_group(void)
+{
+ if(managed_drm) { struct drm_device *d=managed_drm;managed_drm=NULL;drm_dev_put(d); }
+}
+static int bind_master(struct device *master)
+{
+ int ret=fl2000_drm_bind(master);
+ if(ret)release_group();
+ return ret;
+}
+static void unbind_master(struct device *master)
+{
+ fl2000_drm_unbind(master);
+ release_group();
+}
+
 """
 checks = r"""
 int main(void)
@@ -137,7 +165,7 @@ int main(void)
  for(failure=1;failure<=11;failure++) {
   struct fl2000_device device={.bridge_owner=&provider};struct usb_device usb={.dev={.data=&device}};
   step=unregistered=unplugged=shutdowns=stops=poll_fini=encoder_cleanup=unbound=released=0;
-  assert(fl2000_drm_bind(&usb.dev)==-EIO);
+  assert(bind_master(&usb.dev)==-EIO);
   assert(step==failure && !device.drm && !bound && !attached && !polling);
   assert(released==(failure>1));
   assert(unbound==(failure>6));
@@ -147,20 +175,30 @@ int main(void)
  }
  failure=0;step=0;reject_provider=true;
  struct fl2000_device failed_device={.bridge_owner=&provider};struct usb_device failed_usb={.dev={.data=&failed_device}};
- assert(fl2000_drm_bind(&failed_usb.dev)==-ENODEV && !provider.refs && !bound);
+ assert(bind_master(&failed_usb.dev)==-ENODEV && !provider.refs && !bound);
  reject_provider=false;
  /* Master removal and direct provider removal share one quiescence owner. */
  for(int direct=0;direct<2;direct++)for(int fail_shutdown=0;fail_shutdown<2;fail_shutdown++) {
   struct fl2000_device live_device={.bridge_owner=&provider};
   struct usb_device live_usb={.dev={.data=&live_device}};
-  step=0;assert(!fl2000_drm_bind(&live_usb.dev));
+  step=0;assert(!bind_master(&live_usb.dev));
   assert(bound && irq_active && stream_active && live_device.drm);
   shutdown_failure=fail_shutdown;irq_stops=0;stops=0;
-  if(direct)fl2000_drm_unbind(&live_usb.dev);
+  if(direct)unbind_master(&live_usb.dev);
   fl2000_drm_cleanup(&live_usb);
   assert(!bound && !irq_active && !stream_active && !live_device.drm);
   assert(irq_stops==1 && stops==1);
-  fl2000_drm_unbind(&live_usb.dev);assert(irq_stops==1 && stops==1);
+  unbind_master(&live_usb.dev);assert(irq_stops==1 && stops==1);
+ }
+ /* A DRM file retains the allocation and bridge module after group release. */
+ {
+  struct fl2000_device held_device={.bridge_owner=&provider};
+  struct usb_device held_usb={.dev={.data=&held_device}};
+  step=0;shutdown_failure=false;assert(!bind_master(&held_usb.dev));
+  struct drm_device *held=held_device.drm;held->refs++;
+  unbind_master(&held_usb.dev);
+  assert(!held_device.drm && !managed_drm && held->refs==1 && provider.refs==1);
+  drm_dev_put(held);assert(!provider.refs);
  }
  shutdown_failure=false;
  /* An unmatched master never started I/O; resource release owns its drain. */

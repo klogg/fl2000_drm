@@ -14,7 +14,10 @@ do not inherit framebuffer, GEM, atomic, or fbdev helper dependencies.
 
 Each dongle owns its own adapter and DRM device. Component binding receives
 its DRM encoder; the bridge attaches itself using `drm_bridge_attach()`.
-The master uses the encoder bridge chain and pins the matched I2C driver's
+The DRM allocation belongs to the component bind devres group, which releases
+its reference after unbind or a failed bind. Open DRM files retain their own
+references beyond that group. The master uses the encoder bridge chain and
+pins the matched I2C driver's
 module until the final DRM device release. There is no shared private header
 or bridge payload between the drivers.
 

@@ -782,15 +782,14 @@ static int fl2000_drm_bind(struct device *master)
 	struct drm_connector *connector;
 	int ret;
 
-	drm_if = __drm_dev_alloc(master, &fl2000_drm_driver, sizeof(*drm_if),
-				 offsetof(struct fl2000_drm_if, drm));
+	drm_if = devm_drm_dev_alloc(master, &fl2000_drm_driver, struct fl2000_drm_if, drm);
 	if (IS_ERR(drm_if))
 		return PTR_ERR_OR_ZERO(drm_if);
 	drm = &drm_if->drm;
 	drm_if->usb_dev = usb_dev;
 	ret = drmm_mode_config_init(drm);
 	if (ret)
-		goto put;
+		return ret;
 	drm->mode_config.funcs = &fl2000_mode_config_funcs;
 	drm->mode_config.min_width = 1;
 	drm->mode_config.max_width = FL20000_MAX_WIDTH;
@@ -804,21 +803,21 @@ static int fl2000_drm_bind(struct device *master)
 	}
 	ret = fl2000_pipeline_init(drm_if);
 	if (ret)
-		goto put;
+		return ret;
 	/* Component matching and binding run under the same framework lock.
 	 * Pin the selected provider before invoking its callbacks; the connector
 	 * retains those callbacks until the last DRM file is closed.
 	 */
 	if (!try_module_get(device->bridge_owner)) {
 		ret = -ENODEV;
-		goto put;
+		return ret;
 	}
 	ret = drmm_add_action_or_reset(drm, fl2000_bridge_module_put, device->bridge_owner);
 	if (ret)
-		goto put;
+		return ret;
 	ret = component_bind_all(master, &drm_if->encoder);
 	if (ret)
-		goto put;
+		return ret;
 	connector = drm_bridge_connector_init(drm, &drm_if->encoder);
 	if (IS_ERR(connector)) {
 		ret = PTR_ERR_OR_ZERO(connector);
@@ -854,8 +853,6 @@ detach:
 detach_encoder:
 	drm_encoder_cleanup(&drm_if->encoder);
 	component_unbind_all(master, &drm_if->encoder);
-put:
-	drm_dev_put(drm);
 	return ret;
 }
 
@@ -880,7 +877,6 @@ static void fl2000_drm_unbind(struct device *master)
 	drm_encoder_cleanup(&drm_if->encoder);
 	component_unbind_all(master, &drm_if->encoder);
 	WRITE_ONCE(device->drm, NULL);
-	drm_dev_put(drm);
 }
 
 static const struct component_master_ops fl2000_master_ops = {
