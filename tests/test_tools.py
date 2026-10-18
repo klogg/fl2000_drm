@@ -22,9 +22,28 @@ from qemu_utils import (
     qemu_command,
     write_initramfs,
 )
+from source_helpers import function, structure
 
 
 class ToolTests(unittest.TestCase):
+    def test_extract_documented_function_with_literal_braces(self):
+        definition = '''static int documented(void)
+{
+ return log("}"); /* Ignore { in comments, too. */
+}'''
+        source = '''/**
+ * documented() - Kernel-doc must not match a function definition
+ *
+ * Return: 0 on success.
+ */
+''' + definition
+        self.assertEqual(function(source, "documented"), definition)
+
+    def test_extract_structure_ignores_comment_lookalike(self):
+        definition = "struct sample {\n int member;\n};"
+        source = "/* struct sample {\n int ghost;\n}; */\n" + definition
+        self.assertEqual(structure(source, "sample"), definition)
+
     def test_dependency_overlay(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

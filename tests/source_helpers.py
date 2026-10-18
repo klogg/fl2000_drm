@@ -4,28 +4,46 @@
 import re
 
 
+def _code_mask(source):
+    """Hide comments and literals while preserving source offsets and lines."""
+    return re.sub(
+        r'/\*.*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
+        lambda match: re.sub(r"[^\n]", " ", match.group()),
+        source,
+        flags=re.DOTALL,
+    )
+
+
 def function(source, name):
+    code = _code_mask(source)
     match = re.search(
         r"^[ \t]*(?:static\s+)?(?:inline\s+)?[\w \t*]+(?:\n[ \t]*)?\b"
         + name
         + r"\([^;]*?\)\s*(?:/\*[^\n]*\*/\s*)?\{",
-        source,
+        code,
         re.MULTILINE,
     )
     if not match:
         raise AssertionError(f"Function not found: {name}")
     start = match.start()
-    pos = source.index("{", match.start())
+    pos = code.index("{", match.start())
     depth = 1
     end = pos + 1
     while depth:
-        depth += (source[end] == "{") - (source[end] == "}")
+        depth += (code[end] == "{") - (code[end] == "}")
         end += 1
     return source[start:end]
 
 
 def structure(source, name):
-    return re.search(r"struct " + name + r" \{.*?\n\};", source, re.DOTALL)[0]
+    match = re.search(
+        r"struct " + re.escape(name) + r" \{.*?\n\};",
+        _code_mask(source),
+        re.DOTALL,
+    )
+    if not match:
+        raise AssertionError(f"Structure not found: {name}")
+    return source[match.start() : match.end()]
 
 
 def register_header(source):
