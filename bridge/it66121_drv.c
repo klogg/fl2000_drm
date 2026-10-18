@@ -62,7 +62,6 @@ struct it66121_ctx {
 	bool aligned_i2c;
 	bool reset_by_controller;
 	bool component_binding;
-	bool retry_irq_ack;
 	u8 input_clock_delay;
 	u8 irq_output_mode;
 	bool hpd_enabled;
@@ -836,7 +835,7 @@ static irqreturn_t it66121_irq_thread(int irq __always_unused, void *data)
 
 	if (it66121_interrupt(ctx)) {
 		dev_err_ratelimited(ctx->dev, "Interrupt acknowledgment failed\n");
-		return ctx->retry_irq_ack ? IRQ_NONE : IRQ_HANDLED;
+		return IRQ_HANDLED;
 	}
 	return IRQ_HANDLED;
 }
@@ -1466,8 +1465,6 @@ static int it66121_probe_properties(struct it66121_ctx *ctx)
 	}
 	ctx->aligned_i2c = alignment == 4;
 	ctx->reset_by_controller = device_property_read_bool(adapter, "display-controller-reset");
-	ctx->component_binding = device_property_read_bool(adapter, "drm-component-attachment");
-	ctx->retry_irq_ack = device_property_read_bool(adapter, "interrupt-ack-retry");
 	if (device_property_read_bool(adapter, "interrupt-active-high"))
 		ctx->irq_output_mode |= IT66121_INT_ACTIVE_HIGH;
 	if (device_property_read_bool(adapter, "interrupt-open-drain"))
@@ -1480,13 +1477,17 @@ static int it66121_probe_properties(struct it66121_ctx *ctx)
 			return -EINVAL;
 	}
 	ctx->input_clock_delay = (u8)delay;
-	if (!ctx->component_binding)
+	/* Native boards retain their graph, power and IRQ configuration. */
+	if (ctx->dev->of_node)
 		return it66121_probe_firmware(ctx);
 	ret = device_property_read_u32(adapter, "display-input-bus-width", &ctx->bus_width);
 	if (ret)
 		return ret;
 	if (ctx->bus_width != 12 && ctx->bus_width != 24)
 		return -EINVAL;
+	if (!irq_find_matching_fwnode(dev_fwnode(&ctx->adapter->dev), DOMAIN_BUS_ANY))
+		return -EPROBE_DEFER;
+	ctx->component_binding = true;
 	return 0;
 }
 

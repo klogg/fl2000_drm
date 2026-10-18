@@ -152,7 +152,7 @@ int main(void)
  struct regmap map={0};
  struct drm_encoder encoder={.crtc=&map};
  struct drm_connector connector={.dev=(void *)1,.display_info={.is_hdmi=true}};
- struct it66121_ctx ctx={.regmap=&map,.bridge={.encoder=&encoder},.connector=&connector,.bus_width=24,.id=ID_IT66121,.aligned_i2c=true,.reset_by_controller=true,.component_binding=true,.retry_irq_ack=true,.input_clock_delay=IT66121_INPUT_MODE_PCLK_DELAY1,.hpd_enabled=true};
+ struct it66121_ctx ctx={.regmap=&map,.bridge={.encoder=&encoder},.connector=&connector,.bus_width=24,.id=ID_IT66121,.aligned_i2c=true,.reset_by_controller=true,.component_binding=true,.input_clock_delay=IT66121_INPUT_MODE_PCLK_DELAY1,.hpd_enabled=true};
  struct drm_crtc_state crtc={.adjusted_mode={.clock=32000}};
  struct drm_atomic_state state={.connector=&connector,.crtc=&crtc};
  /* Simulate the encoder reset immediately before atomic bridge enable. */
@@ -337,8 +337,8 @@ int main(void)
  map.values[IT66121_SYS_STATUS_REG]=0xc0;map.values[IT66121_INT_STATUS1_REG]=1;
  assert(requested_thread(37,&ctx)==IRQ_HANDLED);
  fault_reg=IT66121_SYS_STATUS_REG;
- assert(requested_thread(37,&ctx)==IRQ_NONE);
- ctx.retry_irq_ack=false;assert(requested_thread(37,&ctx)==IRQ_HANDLED);ctx.retry_irq_ack=true;
+ assert(requested_thread(37,&ctx)==IRQ_HANDLED);
+ assert(requested_thread(37,&ctx)==IRQ_HANDLED);
  it66121_unbind(&component,NULL,&encoder);
  assert(!requested_irq && !ctx.connector && irq_frees==1);
  attach_error=-EIO;assert(it66121_bind(&component,NULL,&encoder)==-EIO && !requested_irq && !ctx.irq);

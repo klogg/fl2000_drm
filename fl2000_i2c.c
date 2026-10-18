@@ -137,8 +137,6 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 static const struct property_entry fl2000_i2c_properties[] = {
 	PROPERTY_ENTRY_U32("i2c-register-access-alignment", 4),
 	PROPERTY_ENTRY_BOOL("display-controller-reset"),
-	PROPERTY_ENTRY_BOOL("drm-component-attachment"),
-	PROPERTY_ENTRY_BOOL("interrupt-ack-retry"),
 	PROPERTY_ENTRY_U32("display-input-clock-delay", 1),
 	PROPERTY_ENTRY_U32("display-input-bus-width", 24),
 	{}

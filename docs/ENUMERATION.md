@@ -47,7 +47,7 @@ they do not adapt a bridge driver. A new provider must implement the component
 and IRQ integration described in [the architecture](ARCHITECTURE.md).
 The FL2000 kernel driver publishes adapter software-node properties before
 registering the I2C bus. The supplied bridge reads explicit transport, wiring,
-reset, interrupt, and attachment settings; it does not identify the controller.
+reset and interrupt electrical settings; it does not identify the controller.
 See [adapter properties](ARCHITECTURE.md) for their meanings and defaults.
 These properties are a local module interface, not upstream firmware bindings.
 Native firmware-described IT6610/21/22 boards retain their ordinary graph,
@@ -55,9 +55,11 @@ power/reset, and IRQ setup when adapter properties are absent.
 
 Enumerator records select bridge candidates and driver names. They do not set
 adapter properties, program pixel timing, or supply IRQ numbers. `new_device`
-creates an I2C client without a firmware graph; the bridge explicitly reads the
-adapter properties and obtains its IRQ from the adapter's domain at component
-bind time. Changing controller wiring or transport constraints requires changing
+creates an I2C client without a firmware graph; the bridge reads hardware
+properties and waits for its adapter IRQ domain
+before registering a component. It obtains its IRQ from that domain at bind
+time. Native OF graphs retain their existing attachment path. Changing
+controller wiring or transport constraints requires changing
 the kernel-side device description, not adding fields to `enumerator.conf`.
 No candidate match reports an enumeration failure; it does not select native
 VGA or create a bridge-free DRM display.
@@ -82,7 +84,8 @@ operation. Removing the USB adapter removes its I2C clients in the kernel.
 
 ## Installation and diagnostics
 
-Install with `make install-enumerator`; use `DESTDIR` for a package staging root.
+Install with `make install-enumerator`; use `DESTDIR` for a package staging
+root.
 An existing `/etc/fl2000/enumerator.conf` is preserved. Reload udev rules after
 installation. Reconnecting the adapter then activates enumeration automatically.
 For an already-connected adapter, start its service explicitly:
@@ -94,13 +97,15 @@ sudo systemctl start "$unit"
 sudo journalctl -u "$unit"
 ```
 
-Use the actual FL2000 bus number in place of `i2c-0`. For a direct diagnostic run:
+Use the actual FL2000 bus number in place of `i2c-0`. For a direct diagnostic
+run:
 
 ```sh
 sudo /usr/libexec/fl2000-enumerate /sys/bus/i2c/devices/i2c-0
 ```
 
-The only additional I2C utility is `i2ctransfer` from i2c-tools. The other runtime
+The only additional I2C utility is `i2ctransfer` from i2c-tools. The other
+runtime
 requirements are POSIX shell, awk, base utilities, kmod, util-linux, udev, and
 systemd. Python is used by repository tests, not by the installed enumerator.
 

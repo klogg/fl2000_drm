@@ -23,7 +23,7 @@ need component binding and an IRQ request in addition to their normal I2C
 probe; instantiating an arbitrary upstream I2C bridge alone does not supply it.
 Before registration, the adapter receives a software node describing its
 register access constraints, parallel input wiring, reset ownership, and
-attachment and interrupt requirements. The bridge reads these properties
+interrupt electrical requirements. The bridge reads these properties
 without matching an adapter name, compatible string, or controller identity.
 Missing Device Tree data does not select transport quirks. The property
 interface and current FL2000 values are documented below.
@@ -35,8 +35,10 @@ that contract on other bridge drivers. The provider requests its IRQ and
 attaches its bridge during bind, then frees the IRQ during unbind. The master
 stops USB interrupt work and detaches the encoder before provider unbind.
 DRM unbind owns quiescence before bridge detachment: it drains interrupt work,
-stops connector polling, unplugs DRM, shuts down the display, and drains streaming
-before cleaning up the encoder and unbinding the provider. The explicit streaming
+stops connector polling, unplugs DRM, shuts down the display, and drains
+streaming
+before cleaning up the encoder and unbinding the provider. The explicit
+streaming
 stop also covers atomic shutdown failures. USB cleanup removes the component
 master and then releases interface resources without repeating those outer
 stops. Resource release callbacks still drain their own URBs and work so partial
@@ -48,7 +50,9 @@ explicit hardware selection; it is not implemented or inferred from failed
 bridge discovery.
 
 The bridge core is rebased on Linux v7.0's
-[IT66121 driver](https://github.com/torvalds/linux/blob/v7.0/drivers/gpu/drm/bridge/ite-it66121.c).
+[IT66121
+driver](https://github.com/torvalds/linux/blob/v7.0/drivers/gpu/drm/bridge/ite-
+it66121.c).
 It uses upstream atomic bridge state, input-format negotiation, AFE programming,
 AVI infoframes, HPD detection, and interrupt acknowledgment. FL2000 adaptations
 retain USB component lifetime, the one-cycle parallel input delay, HDMI/DVI
@@ -59,9 +63,11 @@ helpers account for aligned transfers and destructive FIFO snapshots; there
 is no separate FL2000 EDID algorithm.
 Normal firmware-described boards retain OF matching and graph lookup,
 regulator/reset control, detected IT6610/21/22 identities, 12/24-bit input,
-`client->irq` or polling, ordinary I2C EDID reads, and HDMI audio. Component
-registration and adapter IRQ lookup are selected by the explicit attachment
-property. Audio codec resources are released with the parent device.
+`client->irq` or polling, ordinary I2C EDID reads, and HDMI audio. Native OF
+graphs select the existing firmware path. Firmware-less clients
+with explicit parallel input wiring wait for their adapter IRQ domain before
+registering as components. Audio codec resources are released with the parent
+device.
 Bridge mode programming runs once in atomic enable, after the CRTC has reset
 and configured FL2000. The bridge restores its interrupt configuration before
 unmuting; it has no legacy `mode_set` callback. Generic boards retain the
@@ -69,9 +75,10 @@ upstream input clock phase and interrupt configuration. FL2000 restores its
 active-low push-pull output and HPD mask according to the framework's last
 HPD enable/disable request. Disabling a bridge clears the active connector.
 The bridge never identifies its I2C adapter. Adapter software-node properties
-provide independent settings for aligned I2C access, pixel-clock delay, controller
-reset ownership, interrupt output mode, acknowledgment retry, and component
-attachment. Parallel input width is independent of I2C transfer width. Standard
+provide independent settings for aligned I2C access, pixel-clock delay,
+controller
+reset ownership and interrupt output mode. Parallel input width is independent
+of I2C transfer width. Standard
 I2C adapter quirks describe transfer lengths but do not describe destructive
 aligned register reads, so that requirement remains an explicit transport quirk.
 The following adapter software-node properties form a local module interface;
@@ -84,8 +91,6 @@ not inherited automatically from it by the I2C client.
 | --- | --- |
 | `i2c-register-access-alignment` | Access granularity: 1 or 4 bytes. |
 | `display-controller-reset` | Restore settings after controller reset. |
-| `drm-component-attachment` | Use component binding and adapter IRQ domain. |
-| `interrupt-ack-retry` | Report acknowledgment failure to the parent. |
 | `interrupt-active-high` | Restore an active-high IRQ output. |
 | `interrupt-open-drain` | Restore an open-drain IRQ output. |
 | `display-input-clock-delay` | Clock delay selector, 0–3; default 0. |
@@ -94,14 +99,20 @@ not inherited automatically from it by the I2C client.
 Alignment defaults to 1; a value of 4 selects aligned group access and FIFO
 handling. Input bus width is required for component attachment. IRQ output
 properties apply when restoring configuration after a controller-owned reset.
-Acknowledgment retry returns an unhandled IRQ so the parent can retry.
+IRQ handlers acknowledge serviced interrupts. The transport detects I2C
+failures independently and owns acknowledgment retries.
 
 The FL2000 adapter supplies alignment 4, clock delay selector 1, and input
-bus width 24. It sets controller reset, component attachment, and acknowledgment
-retry to true. Both electrical IRQ properties are absent, selecting active-low,
+bus width 24. It sets controller reset to true. Both electrical IRQ properties
+are absent, selecting active-low,
 push-pull output when configuration is restored. Absent boolean properties
 are false; their presence means true. Clock delay is a hardware selector,
 not a duration in nanoseconds.
+
+A native OF graph always retains firmware attachment. Without that graph,
+explicit input wiring and an adapter IRQ domain select component attachment.
+A missing domain defers probe until its provider is ready. There are no
+software-policy properties for attachment or interrupt retry.
 
 Unsupported alignment, clock delay, or component input width fails probe;
 malformed numeric properties also fail probe. Without component attachment,
@@ -150,7 +161,8 @@ publication. Independent adapters do not share a lifecycle lock.
 
 ## Atomic display pipeline
 
-The display pipeline uses an explicit primary plane, CRTC, and parallel RGB encoder.
+The display pipeline uses an explicit primary plane, CRTC, and parallel RGB
+encoder.
 CRTC-only atomic commits include the primary plane in validation and updates.
 Plane checks enforce fullscreen output without scaling or positioning, and
 GEM shadow-plane state retains framebuffer mappings from preparation through
