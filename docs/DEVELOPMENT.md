@@ -38,8 +38,13 @@ formatting. `scripts/checkpatch.sh` remains strict, with two narrow exceptions:
 
 The exceptions do not apply to other files or disable other checks.
 Kernel callback parameter types must match their framework declarations.
-Narrow `NOSONAR` annotations identify callback parameters that cannot accept
-pointer-to-const suggestions without breaking that ABI.
+Sonar rule exceptions belong in `.github/workflows/sonarcloud.yaml`, keeping
+source free of analyzer suppression tags. The pointer-to-const rule (`c:S995`)
+is excluded for `fl2000_drm.c`, `fl2000_i2c.c` and `bridge/it66121_drv.c`, which
+contain callbacks whose pointer types are fixed by the kernel ABI. Sonar
+file/rule exclusions also cover ordinary functions in those files; review
+their const correctness manually. Other rules still apply to these files,
+and S995 remains enabled elsewhere.
 
 CI sets `UBSAN_OPTIONS=halt_on_error=1` for sanitizer regressions so undefined
 behavior fails the job rather than producing diagnostics followed by success.

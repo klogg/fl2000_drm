@@ -670,9 +670,7 @@ static int it66121_configure_hdmi(struct it66121_ctx *ctx, const struct drm_disp
 	return regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, IT66121_HDMI_MODE_HDMI);
 }
 
-static void
-it66121_bridge_enable(struct drm_bridge *bridge,
-		      struct drm_atomic_state *state) /* NOSONAR: Kernel callback ABI. */
+static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_state *state)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	const struct drm_crtc_state *crtc_state;
@@ -844,8 +842,7 @@ static irqreturn_t it66121_irq_thread(int irq __always_unused, void *data)
 }
 
 /* Firmware-less adapters publish the bridge IRQ through their IRQ domain. */
-static int it66121_bind(struct device *comp, /* NOSONAR: Kernel callback ABI. */
-			struct device *master __always_unused, void *data)
+static int it66121_bind(struct device *comp, struct device *master __always_unused, void *data)
 {
 	struct drm_encoder *encoder = data;
 	struct irq_domain *domain;
@@ -872,8 +869,8 @@ static int it66121_bind(struct device *comp, /* NOSONAR: Kernel callback ABI. */
 	return ret;
 }
 
-static void it66121_unbind(struct device *comp, /* NOSONAR: Kernel callback ABI. */
-			   struct device *master __always_unused, void *data __always_unused)
+static void it66121_unbind(struct device *comp, struct device *master __always_unused,
+			   void *data __always_unused)
 {
 	struct it66121_ctx *ctx = dev_get_drvdata(comp);
 
@@ -1141,11 +1138,9 @@ static int it661221_audio_ch_enable(struct it66121_ctx *ctx, bool enable)
 	return ret;
 }
 
-static int
-it66121_audio_hw_params(struct device *dev, /* NOSONAR: Kernel callback ABI. */
-			void *data __always_unused,
-			struct hdmi_codec_daifmt *daifmt, /* NOSONAR: Kernel callback ABI. */
-			struct hdmi_codec_params *params) /* NOSONAR: Kernel callback ABI. */
+static int it66121_audio_hw_params(struct device *dev, void *data __always_unused,
+				   struct hdmi_codec_daifmt *daifmt,
+				   struct hdmi_codec_params *params)
 {
 	u8 fs;
 	u8 swl;
@@ -1293,8 +1288,7 @@ out:
 	return ret;
 }
 
-static int it66121_audio_startup(struct device *dev, /* NOSONAR: Kernel callback ABI. */
-				 void *data __always_unused)
+static int it66121_audio_startup(struct device *dev, void *data __always_unused)
 {
 	int ret;
 	struct it66121_ctx *ctx = dev_get_drvdata(dev);
@@ -1309,8 +1303,7 @@ static int it66121_audio_startup(struct device *dev, /* NOSONAR: Kernel callback
 	return ret;
 }
 
-static void it66121_audio_shutdown(struct device *dev, /* NOSONAR: Kernel callback ABI. */
-				   void *data __always_unused)
+static void it66121_audio_shutdown(struct device *dev, void *data __always_unused)
 {
 	int ret;
 	struct it66121_ctx *ctx = dev_get_drvdata(dev);
@@ -1323,8 +1316,8 @@ static void it66121_audio_shutdown(struct device *dev, /* NOSONAR: Kernel callba
 	mutex_unlock(&ctx->lock);
 }
 
-static int it66121_audio_mute(struct device *dev, /* NOSONAR: Kernel callback ABI. */
-			      void *data __always_unused, bool enable, int direction)
+static int it66121_audio_mute(struct device *dev, void *data __always_unused, bool enable,
+			      int direction)
 {
 	int ret;
 	struct it66121_ctx *ctx = dev_get_drvdata(dev);
@@ -1352,8 +1345,8 @@ static int it66121_audio_mute(struct device *dev, /* NOSONAR: Kernel callback AB
 	return ret;
 }
 
-static int it66121_audio_get_eld(struct device *dev, /* NOSONAR: Kernel callback ABI. */
-				 void *data __always_unused, u8 *buf, size_t len)
+static int it66121_audio_get_eld(struct device *dev, void *data __always_unused, u8 *buf,
+				 size_t len)
 {
 	struct it66121_ctx *ctx = dev_get_drvdata(dev);
 

@@ -144,8 +144,7 @@ static const struct property_entry fl2000_i2c_properties[] = {
 	{}
 };
 
-static void fl2000_i2c_adapter_release(struct device *dev, /* NOSONAR: devres callback ABI. */
-				       void *res)
+static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 {
 	struct i2c_adapter *adapter = res;
 	struct fwnode_handle *fwnode = dev_fwnode(&adapter->dev);
