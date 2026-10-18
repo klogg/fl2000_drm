@@ -1015,7 +1015,7 @@ static void fl2000_recover_stream(struct work_struct *work)
  * Context: Process context. Takes the stream mutex and may drain old URBs.
  * Return: 0 on success or a negative error code.
  */
-int fl2000_streaming_enable(struct usb_device *usb_dev)
+int fl2000_streaming_enable(const struct usb_device *usb_dev)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
 	unsigned long flags;
