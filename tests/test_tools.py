@@ -7,6 +7,7 @@ import gzip
 import json
 import lzma
 import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -22,10 +23,54 @@ from qemu_utils import (
     qemu_command,
     write_initramfs,
 )
-from source_helpers import function, structure
+from source_helpers import _code_mask, function, structure
 
 
 class ToolTests(unittest.TestCase):
+    def test_production_kernel_doc_coverage(self):
+        paths = [
+            path
+            for directory in (ROOT, ROOT / "bridge", ROOT / "frame", ROOT / "compat")
+            for suffix in ("*.c", "*.h")
+            for path in directory.glob(suffix)
+            if not path.name.endswith(".mod.c")
+        ]
+        sources = {path: path.read_text() for path in paths}
+        comments = "\n".join(
+            comment
+            for source in sources.values()
+            for comment in re.findall(r"/\*\*.*?\*/", source, re.DOTALL)
+        )
+        functions = set(re.findall(r"^ \* (\w+)\(\) -", comments, re.MULTILINE))
+        types = set(
+            re.findall(r"^ \* (?:struct|enum|union) (\w+) -", comments, re.MULTILINE)
+        )
+        variables = set(re.findall(r"^ \* var (\w+) -", comments, re.MULTILINE))
+        definition = re.compile(
+            r"^[A-Za-z_][\w \t*]*?(?:\n[ \t]*)?\b(\w+)\([^;]*?\)\s*\{",
+            re.MULTILINE,
+        )
+        for path, source in sources.items():
+            with self.subTest(path=path.relative_to(ROOT)):
+                code = _code_mask(source)
+                self.assertFalse(set(definition.findall(code)) - functions)
+                declarations = re.findall(
+                    r"^(?:struct|enum|union) (\w+) \{", code, re.MULTILINE
+                )
+                self.assertFalse(set(declarations) - types)
+                tables = re.findall(
+                    r"^static (?:const )?struct \w+ (\w+)(?:\[\])?\s*=\s*\{",
+                    code,
+                    re.MULTILINE,
+                )
+                self.assertFalse(set(tables) - variables)
+                aliases = re.findall(
+                    r"^typedef[^\n;]*?\b(\w+)\s+__attribute__", code, re.MULTILINE
+                )
+                for alias in aliases:
+                    self.assertRegex(comments, r"\b" + re.escape(alias) + r"\b")
+                self.assertNotRegex(source, r"\b\S+\.md\b")
+
     def test_extract_documented_function_with_literal_braces(self):
         definition = '''static int documented(void)
 {
