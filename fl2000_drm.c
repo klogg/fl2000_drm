@@ -762,7 +762,7 @@ void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
 						      DRM_CONNECTOR_POLL_HPD;
 		mutex_unlock(&drm->mode_config.mutex);
 		if (polling)
-			drm_kms_helper_poll_enable(drm);
+			drm_kms_helper_poll_reschedule(drm);
 		drm_dev_exit(idx);
 	}
 }

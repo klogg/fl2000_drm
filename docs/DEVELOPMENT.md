@@ -133,6 +133,11 @@ or a genuinely stalled endpoint. The injector reported zero missed probes.
 An initial I2C experiment also affected non-IRQ traffic; only the revised
 IRQ-scoped experiment counts as bridge acknowledgment coverage.
 
+These injection results recorded polling flag transitions, not execution of
+the DRM poll worker. A later review found that fallback needed
+`drm_kms_helper_poll_reschedule()` when HPD polling was already initialized.
+The DRM regression now checks that transition queues work.
+
 The PM freezer-only control test passed. The device-suspend test also hung
 after both production modules were unloaded (`PM_CONTROL_NO_DRIVERS=0`),
 with xHCI reporting an error on resume and lost root-hub power. This reproduces

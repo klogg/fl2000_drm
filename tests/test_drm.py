@@ -24,6 +24,9 @@ prelude = r"""
 #define FL2000_USBIF_AVCONTROL 0
 #define DRM_BRIDGE_ATTACH_NO_CONNECTOR 1
 #define DRM_FORMAT_XRGB8888 1
+#define DRM_CONNECTOR_POLL_CONNECT 1
+#define DRM_CONNECTOR_POLL_DISCONNECT 2
+#define DRM_CONNECTOR_POLL_HPD 4
 #define WRITE_ONCE(p,v) ((p)=(v))
 #define READ_ONCE(p) (p)
 #define container_of(p,t,m) ((t *)((char *)(p)-offsetof(t,m)))
@@ -37,8 +40,8 @@ struct drm_plane { int unused; };
 struct drm_crtc { int unused; };
 struct drm_encoder { void *bridge; };
 enum drm_connector_status { connector_status_disconnected, connector_status_connected, connector_status_unknown };
-struct drm_connector { enum drm_connector_status status; };
-struct drm_mode_config { const void *funcs; int min_width,max_width,min_height,max_height; };
+struct drm_connector { enum drm_connector_status status; int polled; };
+struct drm_mode_config { const void *funcs; int min_width,max_width,min_height,max_height; int mutex; bool poll_running; };
 struct drm_device { struct drm_mode_config mode_config; bool registered,unplugged; };
 struct fl2000_device { struct drm_device *drm; struct module *bridge_owner; };
 struct module { int refs; };
@@ -60,7 +63,13 @@ static void (*release_owner)(struct drm_device *,void *);
 static void *owner_data;
 static bool try_module_get(struct module *m) { if(reject_provider)return false;m->refs++;return true; }
 static void module_put(struct module *m) { assert(m->refs);m->refs--; }
-static int hpd_calls,hotplug_events;
+static int hpd_calls,hotplug_events,poll_schedules;
+static void mutex_lock(int *m) { (void)m; }
+static void mutex_unlock(int *m) { (void)m; }
+static inline void drm_kms_helper_poll_enable(struct drm_device *d)
+{ if(d->mode_config.poll_running)return;d->mode_config.poll_running=true; }
+static void drm_kms_helper_poll_reschedule(struct drm_device *d)
+{ if(d->mode_config.poll_running)poll_schedules++; }
 static enum drm_connector_status detected=connector_status_connected;
 static bool drm_dev_enter(struct drm_device *d,int *idx) { *idx=0;return !d->unplugged; }
 static void drm_dev_exit(int idx) { assert(!idx); }
@@ -172,7 +181,17 @@ int main(void)
  assert(fl2000_drm_hotplug(&usb)==-EIO && hotplug_events==1);
  output.drm.unplugged=true;
  assert(fl2000_drm_hotplug(&usb)==-ENODEV && hpd_calls==3);
- puts("PASS: standard encoder attachment, all DRM bind failure stages, single unregister on interrupt-start failure, preserved errno, quiescence before bridge detach, shutdown failure fallback, unmatched master, balanced teardown");
+ /* HPD-only initialization marks polling running without queuing a poll. */
+ output.drm.unplugged=false;output.drm.mode_config.poll_running=true;
+ connector.polled=DRM_CONNECTOR_POLL_HPD;poll_schedules=0;
+ fl2000_drm_set_polling(&usb,true);
+ assert(connector.polled==(DRM_CONNECTOR_POLL_CONNECT|DRM_CONNECTOR_POLL_DISCONNECT));
+ assert(poll_schedules==1);
+ fl2000_drm_set_polling(&usb,false);
+ assert(connector.polled==DRM_CONNECTOR_POLL_HPD && poll_schedules==1);
+ output.drm.unplugged=true;fl2000_drm_set_polling(&usb,true);
+ assert(connector.polled==DRM_CONNECTOR_POLL_HPD && poll_schedules==1);
+ puts("PASS: polling fallback schedules work after HPD initialization; standard encoder attachment, all DRM bind failure stages, single unregister on interrupt-start failure, preserved errno, quiescence before bridge detach, shutdown failure fallback, unmatched master, balanced teardown");
  return 0;
 }
 """
@@ -188,6 +207,7 @@ with tempfile.TemporaryDirectory(prefix="fl2000-drm-") as temp:
                 function(source, "fl2000_bridge_module_put"),
                 function(source, "fl2000_drm_bind"),
                 function(source, "fl2000_drm_hotplug"),
+                function(source, "fl2000_drm_set_polling"),
                 function(source, "fl2000_drm_unbind"),
                 function(source, "fl2000_drm_cleanup"),
                 checks,
