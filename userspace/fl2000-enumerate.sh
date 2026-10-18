@@ -89,12 +89,11 @@ load_module()
 
 wait_for_binding()
 {
-    if [ ! -e "$client/driver" ] && [ -d "$sysfs/bus/i2c/drivers/$driver" ]; then
-        # Retry an ordinary probe failure once, without replacing the client.
-        if ! printf '%s\n' "${client##*/}" > "$sysfs/bus/i2c/drivers_probe"; then
-            printf 'fl2000-enumerate: reprobe failed for %s; waiting for binding\n' \
-                "$client" >&2
-        fi
+    # Retry an ordinary probe failure once, without replacing the client.
+    if [ ! -e "$client/driver" ] && [ -d "$sysfs/bus/i2c/drivers/$driver" ] &&
+        ! printf '%s\n' "${client##*/}" > "$sysfs/bus/i2c/drivers_probe"; then
+        printf 'fl2000-enumerate: reprobe failed for %s; waiting for binding\n' \
+            "$client" >&2
     fi
     remaining=$timeout
     while :; do
