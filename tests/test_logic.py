@@ -83,6 +83,8 @@ static bool cancel_delayed_work(struct delayed_work *w)
 static void cancel_delayed_work_sync(struct delayed_work *w) { w->work.pending=false; }
 
 #define dev_err_ratelimited(...) (++log_count)
+#define DRM_MODE_FLAG_PHSYNC BIT(4)
+#define DRM_MODE_FLAG_PVSYNC BIT(5)
 #define DRM_MODE_FLAG_INTERLACE BIT(0)
 #define DRM_MODE_FLAG_DBLSCAN BIT(1)
 #define DRM_MODE_FLAG_3D_MASK (BIT(2) | BIT(3))
@@ -134,17 +136,25 @@ static struct fl2000_device i2c_device;
 static void *dev_get_drvdata(const struct device *dev) { (void)dev;return &i2c_device; }
 struct regmap { u32 aclk, ctrl2, pll, regs[0x10000/4]; };
 static struct regmap test_regmap;
-static int regmap_error, regmap_calls, detection_writes, detection_delay;
+static int regmap_error, regmap_calls, regmap_fail_at, detection_writes, detection_delay;
 static struct regmap *dev_get_regmap(struct device *dev, const char *name)
 { (void)dev; (void)name; return &test_regmap; }
 static int regmap_write(struct regmap *map, unsigned int reg, u32 val)
-{ assert(reg==0x802c); if(regmap_error)return regmap_error;map->pll=val;return 0; }
+{
+ regmap_calls++;
+ if(regmap_error)return regmap_error;
+ if(regmap_fail_at==regmap_calls)return -EIO;
+ assert(reg<0x10000 && !(reg&3));
+ if(reg==0x802c)map->pll=val;else map->regs[reg/4]=val;
+ return 0;
+}
 static void msleep(unsigned int ms)
 { assert(ms==750 && detection_writes==2);detection_delay=ms; }
 static int regmap_write_bits(struct regmap *map, unsigned int reg, u32 mask, u32 val)
 {
  regmap_calls++;
  if(regmap_error)return regmap_error;
+ if(regmap_fail_at==regmap_calls)return -EIO;
  assert(reg<0x10000 && !(reg&3));
  if(reg==0x8020) {
   const u32 expected[]={0,BIT(30),BIT(30)|BIT(28)};
@@ -668,6 +678,39 @@ static void test_modes(void)
 }
 
 
+static void test_modeset_preserves_i2c(void)
+{
+ struct usb_device usb={.speed=USB_SPEED_SUPER};
+ struct fl2000_drm_if output={.usb_dev=&usb};
+ struct drm_display_mode mode={.clock=32000,.hdisplay=800,.hsync_start=840,
+  .hsync_end=888,.htotal=960,.vdisplay=480,.vsync_start=493,.vsync_end=496,
+  .vtotal=500,.flags=DRM_MODE_FLAG_PHSYNC|DRM_MODE_FLAG_PVSYNC};
+ const u32 formats[]={DRM_FORMAT_XRGB8888,DRM_FORMAT_RGB888,DRM_FORMAT_RGB565};
+ /* Model a bridge sequence paused between transfers: preserve engine state. */
+ for(unsigned int i=0;i<ARRAY_SIZE(formats);i++) {
+  test_regmap=(struct regmap){0};regmap_calls=0;
+  test_regmap.regs[FL2000_VGA_I2C_SC_REG/4]=0xa5a55a5a;
+  test_regmap.regs[FL2000_RST_CTRL_REG/4]=0x12345678;
+  detection_writes=detection_delay=0;
+  assert(!fl2000_configure_mode(&output,&mode,formats[i]));
+  assert(test_regmap.pll && test_regmap.regs[FL2000_VGA_HSYNC_REG1/4]);
+  assert(!!(test_regmap.regs[FL2000_VGA_CTRL_REG_PXCLK/4] &
+   FL2000_VGA_CTRL_PXCLK_VGA565_MODE)==(formats[i]==DRM_FORMAT_RGB565));
+  assert(test_regmap.regs[FL2000_VGA_I2C_SC_REG/4]==0xa5a55a5a);
+  assert(test_regmap.regs[FL2000_RST_CTRL_REG/4]==0x12345678);
+  assert(!detection_writes && !detection_delay);
+ }
+ int writes=regmap_calls;
+ for(int fail=1;fail<=writes;fail++) {
+  regmap_calls=0;regmap_fail_at=fail;
+  assert(fl2000_configure_mode(&output,&mode,DRM_FORMAT_XRGB8888)==-EIO);
+  assert(regmap_calls==fail);
+ }
+ regmap_fail_at=regmap_calls=0;
+ assert(fl2000_configure_mode(&output,&mode,0)==-EINVAL);
+ assert(!regmap_calls);
+}
+
 static void test_i2c(void)
 {
  struct usb_device usb={0}; struct device client_dev={.unused=1};
@@ -1120,7 +1163,7 @@ static void test_queue(void)
 }
 int main(void)
 {
- test_damage_simd_boundaries(); test_partial_damage(); test_conversion(); test_native_reordering(); test_native_formats(); test_native_crop(); test_modes(); test_i2c(); test_register_io(); test_queue(); test_atomic_state(); test_frame_allocation(); test_stream_preparation(); test_stream_release();
+ test_damage_simd_boundaries(); test_partial_damage(); test_conversion(); test_native_reordering(); test_native_formats(); test_native_crop(); test_modes(); test_modeset_preserves_i2c(); test_i2c(); test_register_io(); test_queue(); test_atomic_state(); test_frame_allocation(); test_stream_preparation(); test_stream_release();
 #ifdef TEST_SIMD
  assert(!fpu_depth);
  simd_cpu_available=false;
@@ -1128,7 +1171,7 @@ int main(void)
  simd_cpu_available=true; simd_context_available=false;
  test_damage_simd_boundaries(); test_conversion(); test_native_reordering();
 #endif
- puts("PASS: conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, persistent DMA, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers, atomic buffer preparation/failure/unwind, active and partial stream release");
+ puts("PASS: modesets preserve I2C state and propagate every write failure, conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, persistent DMA, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers, atomic buffer preparation/failure/unwind, active and partial stream release");
  return 0;
 }
 """
@@ -1138,6 +1181,7 @@ parts = [
     '#include "tests/register_helpers.h"',
     register_header((ROOT / "fl2000_registers.h").read_text()),
     structure(header, "fl2000_pll"),
+    structure(header, "fl2000_timings"),
 ]
 parts += [
     function(drm, name)
@@ -1229,9 +1273,18 @@ parts += [
 parts += [function(registers, name) for name in ("fl2000_reg_read", "fl2000_reg_write")]
 parts += [
     function(registers, name)
-    for name in ("fl2000_enable_interrupts", "fl2000_set_pll", "fl2000_usb_magic")
+    for name in (
+        "fl2000_enable_interrupts",
+        "fl2000_set_pll",
+        "fl2000_usb_magic",
+        "fl2000_set_timings",
+        "fl2000_set_pixfmt",
+        "fl2000_set_transfers",
+        "fl2000_afe_magic",
+    )
 ]
 parts.append(function(drm, "fl2000_init_clock"))
+parts.append(function(drm, "fl2000_configure_mode"))
 parts.append(checks)
 with tempfile.TemporaryDirectory(prefix="fl2000-tests-") as temp:
     source = Path(temp) / "test.c"

@@ -967,7 +967,7 @@ static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_s
 
 	mutex_lock(&ctx->lock);
 	ctx->connector = connector;
-	/* Atomic enable follows display-controller configuration and reset. */
+	/* Atomic enable follows display-controller configuration. */
 	ret = it66121_configure_hdmi(ctx, &crtc_state->adjusted_mode);
 	if (ret)
 		goto unlock;

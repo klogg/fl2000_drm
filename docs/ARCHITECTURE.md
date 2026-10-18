@@ -87,11 +87,13 @@ retain the allocation and provider module after unbind. See
 `fl2000_drm_bind()` and `fl2000_drm_cleanup()` in [fl2000_drm.c](../fl2000_drm.c)
 for the lifetime and teardown contracts.
 
-Reset and detection setup take the adapter bus lock before the controller
-regmap lock. This excludes whole I2C transfers, including byte-write
-read-modify-write pairs; it does not exclude an entire multi-transfer bridge
-DDC sequence. Bridge register sequences use a separate bridge mutex. Whole
-sequence serialization against controller reset remains a review item.
+Application reset and detection restart run only during initial probe, before
+I2C adapter registration, and system resume, while display, polling and IRQ
+work are quiescent and child devices and userspace have not resumed. Ordinary
+modesets drain streaming and reprogram display registers without restarting
+the shared I2C transaction engine. The adapter bus lock excludes individual
+transfers during lifecycle setup; it cannot protect a complete bridge DDC
+sequence across several transfers.
 
 ## Atomic pipeline and frame preparation
 

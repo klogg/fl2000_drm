@@ -241,8 +241,10 @@ int fl2000_set_transfers(struct usb_device *usb_dev)
  *
  * Takes the adapter bus lock when registered, then accesses the controller
  * regmap. This excludes complete I2C transfers, not multi-transfer bridge DDC
- * sequences. Callers must coordinate those sequences separately. Do not call
- * bridge I2C operations or wait for IRQ work while holding the bus lock.
+ * sequences. Call only before adapter registration or during system resume,
+ * after display, polling and IRQ work have been quiesced by suspend and before
+ * child devices and userspace resume. Do not call from runtime modesets or
+ * bridge I2C operations, or wait for IRQ work while holding the bus lock.
  *
  * Context: Process context. Caller must not already hold the adapter bus
  *          lock.
@@ -294,7 +296,8 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
  *
  * Enables EDID detection, waits 750 ms, then enables external-monitor
  * detection and applies USB power-management setup. Serializes changes to
- * the shared transaction-engine register with the adapter bus lock.
+ * the shared transaction-engine register with the adapter bus lock. As with
+ * fl2000_reset(), callers must ensure complete bridge sequences are quiescent.
  *
  * Context: Process context. PLL must run; caller must not hold the adapter
  *          bus lock.

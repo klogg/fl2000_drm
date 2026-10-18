@@ -223,12 +223,10 @@ Published CPU measurements remain in the tracked JSON files linked from
 
 ## Remaining implementation work
 
-Controller reset excludes individual I2C transfers but not complete bridge
-register sequences. Resolve serialization with DDC/HPD sequences before claiming
-reset concurrency safety. Upstream submission also needs patches against the
-existing `ite-it66121.c` and its Kconfig, rather than a second implementation
-with the same module name. Review the local adapter-property and component-bind
-contracts as part of that integration.
+Upstream submission needs patches against the existing `ite-it66121.c` and
+its Kconfig, rather than a second implementation with the same module name.
+Review the local adapter-property and component-bind contracts as part of that
+integration.
 
 Native VGA requires output selection, VGA connector/EDID handling, monitor
 interrupts and analog validation. LBUF halt and VGA error recovery are not

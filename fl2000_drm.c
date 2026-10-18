@@ -722,10 +722,14 @@ exit:
 }
 
 /**
- * fl2000_configure_mode() - Reset and program the display controller
+ * fl2000_configure_mode() - Program the display controller without restarting I2C
  * @drm_if: FL2000 DRM pipeline.
  * @mode: Display timing to inspect.
  * @format: Source DRM fourcc.
+ *
+ * The stream has been drained. Keep application reset and detection restart
+ * in probe and system resume: either would interrupt concurrent bridge DDC
+ * sequences between their individually locked I2C transfers.
  *
  * Context: Process context under DRM atomic/modeset serialization.
  * Return: 0 on success or a negative error code.
@@ -746,10 +750,6 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_
 	bytes_pix = fl2000_frame_bytes_pix(usb_dev->speed, mode, format);
 	if (!bytes_pix)
 		return -EINVAL;
-	/* Reset before programming: the cache must describe the current hardware. */
-	ret = fl2000_reset(usb_dev);
-	if (ret)
-		return ret;
 	ret = fl2000_set_pll(usb_dev, &pll);
 	if (ret)
 		return ret;
@@ -765,9 +765,7 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_
 		.hsync_positive = !!(mode->flags & DRM_MODE_FLAG_PHSYNC),
 		.vsync_positive = !!(mode->flags & DRM_MODE_FLAG_PVSYNC),
 	};
-	ret = fl2000_usb_magic(usb_dev);
-	if (!ret)
-		ret = fl2000_set_timings(usb_dev, &timings);
+	ret = fl2000_set_timings(usb_dev, &timings);
 	if (!ret)
 		ret = fl2000_set_pixfmt(usb_dev, bytes_pix);
 	if (!ret)
@@ -827,8 +825,8 @@ static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_
  * @crtc: Display CRTC.
  * @state: Atomic transaction state.
  *
- * Performs controller reset/programming before bridge atomic enable. Failure
- * drains scanout and is reported through the device log.
+ * Programs the controller before bridge atomic enable. Failure drains scanout
+ * and is reported through the device log.
  *
  * Context: Process context under DRM atomic/modeset serialization.
  */
@@ -1153,7 +1151,6 @@ static int fl2000_drm_bind(struct device *master)
 	ret = drm_dev_register(drm, 0);
 	if (ret)
 		goto detach;
-	/* Initial fbdev setup resets the device while configuring its mode. */
 	drm_client_setup_with_fourcc(drm, DRM_FORMAT_XRGB8888);
 	ret = fl2000_enable_interrupt(usb_dev);
 	if (ret) {
