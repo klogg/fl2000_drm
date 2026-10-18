@@ -154,10 +154,26 @@ static void atomic_checks(int fd, uint32_t crtc, uint32_t fb, unsigned int width
 int main(int argc, char **argv)
 {
 	setbuf(stdout, NULL);
+	int mode_index = -1;
+	bool list_modes = argc == 2 && !strcmp(argv[1], "--list-modes");
+	bool hold = argc == 2 && !strcmp(argv[1], "--hold");
+
+	if (argc == 3 && !strcmp(argv[1], "--mode")) {
+		char *end;
+
+		errno = 0;
+		unsigned long index = strtoul(argv[2], &end, 10);
+		if (errno || end == argv[2] || *end || argv[2][0] == '-' || index >= 128)
+			return 2;
+		mode_index = (int)index;
+	} else if (argc != 1 && !list_modes && !hold) {
+		fprintf(stderr, "Usage: %s [--hold | --list-modes | --mode INDEX]\n", argv[0]);
+		return 2;
+	}
 	const char *device = getenv("DRM_DEVICE");
 	int fd = open(device ? device : "/dev/dri/card0", O_RDWR | O_CLOEXEC);
 	check(fd, "open DRM");
-	if (argc == 2 && !strcmp(argv[1], "--hold")) {
+	if (hold) {
 		puts("DRM_HANDLE_OPEN");
 		while (access("/tmp/release-hold", F_OK))
 			usleep(100000);
@@ -189,6 +205,15 @@ int main(int argc, char **argv)
 	connector.modes_ptr = (uintptr_t)modes;
 	connector.count_props = connector.count_encoders = 0;
 	check(ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &connector), "connector modes");
+	if (list_modes) {
+		for (unsigned int i = 0; i < connector.count_modes; i++)
+			printf("KMS_MODE %u %ux%u %uHz clock=%u\n", i, modes[i].hdisplay,
+			       modes[i].vdisplay, modes[i].vrefresh, modes[i].clock);
+		close(fd);
+		return 0;
+	}
+	if (mode_index >= (int)connector.count_modes)
+		return 2;
 	struct drm_mode_modeinfo *mode = NULL;
 	for (unsigned int i = 0; i < connector.count_modes; i++)
 		if (modes[i].hdisplay == 800 && modes[i].vdisplay == 600 &&
@@ -196,7 +221,9 @@ int main(int argc, char **argv)
 			mode = &modes[i];
 			break;
 		}
-	if (!mode)
+	if (mode_index >= 0)
+		mode = &modes[mode_index];
+	else if (!mode)
 		mode = &modes[0];
 	struct drm_mode_crtc saved = { .crtc_id = crtcs[0] };
 	check(ioctl(fd, DRM_IOCTL_MODE_GETCRTC, &saved), "save CRTC");

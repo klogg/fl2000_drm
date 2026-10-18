@@ -28,6 +28,13 @@ parser.add_argument(
 )
 parser.add_argument("--output", type=Path, default=OUTPUT)
 parser.add_argument(
+    "--guest-file",
+    type=Path,
+    action="append",
+    default=[],
+    help="Additional file copied to the guest root under its basename",
+)
+parser.add_argument(
     "--no-device",
     action="store_true",
     help="Attach the USB port later from the QEMU monitor",
@@ -46,6 +53,8 @@ entries += [
     ("fl2000-test-guest", b"FL2000 QEMU test guest\n", 0o100644),
     ("fl2000-startup", (ROOT / "scripts/startup.sh").read_bytes(), 0o100755),
 ]
+for source in args.guest_file:
+    entries.append((source.name, source.read_bytes(), source.stat().st_mode))
 entries += enumeration_overlay(args.i2ctransfer)
 check_modules(
     [args.modules / name for name in ("fl2000.ko", "it66121.ko")], args.kernel
@@ -66,7 +75,7 @@ command = qemu_command(args) + [
     "-initrd",
     str(run / "boot.cpio"),
     "-append",
-    "console=ttyS0 quiet panic=1 oops=panic",
+    "console=ttyS0 quiet no_console_suspend panic=1 oops=panic",
     "-device",
     "qemu-xhci,id=xhci",
     "-qmp",
