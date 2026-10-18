@@ -19,17 +19,43 @@
 /* Vendor detection restart sequence waits for EDID detection to settle. */
 #define FL2000_MONITOR_DETECT_MDELAY 750
 
+/**
+ * fl2000_reg_precious() - Exclude destructive status from incidental regmap reads
+ * @dev: Regmap device argument; unused.
+ * @reg: Register offset.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: True for the controller status register.
+ */
 static bool fl2000_reg_precious(struct device *dev __always_unused, unsigned int reg)
 {
 	return FL2000_REG_PRECIOUS(reg);
 }
 
+/**
+ * fl2000_reg_volatile() - Select registers that must bypass the cache
+ * @dev: Regmap device argument; unused.
+ * @reg: Register offset.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: True for volatile registers, false for cacheable controls.
+ */
 static bool fl2000_reg_volatile(struct device *dev __always_unused, unsigned int reg)
 {
 	return FL2000_REG_VOLATILE(reg);
 }
 
-/* Protected by internal regmap mutex */
+/**
+ * fl2000_reg_read() - Read an exact little-endian USB register word
+ * @context: USB parent used for the vendor request.
+ * @reg: Register offset.
+ * @val: CPU-endian output; unchanged on failure.
+ *
+ * USB helpers own DMA-safe staging buffers, so the local word may be on stack.
+ *
+ * Context: Process context. Regmap holds its mutex.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 {
 	struct usb_device *usb_dev = context;
@@ -43,7 +69,15 @@ static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 	return ret;
 }
 
-/* Protected by internal regmap mutex */
+/**
+ * fl2000_reg_write() - Write a little-endian USB register word
+ * @context: USB parent used for the vendor request.
+ * @reg: Register offset.
+ * @val: CPU-endian register value.
+ *
+ * Context: Process context. Regmap holds its mutex.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 {
 	struct usb_device *usb_dev = context;
@@ -54,9 +88,11 @@ static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 				    GFP_KERNEL);
 }
 
-/* We do not use default values as per documentation because:
- *  a) somehow they differ from real HW
- *  b) on SW reset not all of them are cleared
+/**
+ * var fl2000_regmap_config - Controller caching and vendor USB register access
+ *
+ * Observed values differ from the manual, and soft reset preserves registers.
+ * Do not seed the cache with documented reset defaults.
  */
 static const struct regmap_config fl2000_regmap_config = {
 	.val_bits = 32,
@@ -79,6 +115,14 @@ static const struct regmap_config fl2000_regmap_config = {
 	.use_single_write = true,
 };
 
+/**
+ * fl2000_set_pll() - Program the PLL and clear forced connection
+ * @usb_dev: USB parent whose interface resources remain alive.
+ * @pll: Validated register field encodings from the PLL search.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_set_pll(struct usb_device *usb_dev, const struct fl2000_pll *pll)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -100,6 +144,14 @@ int fl2000_set_pll(struct usb_device *usb_dev, const struct fl2000_pll *pll)
 				 FL2000_VGA_CTRL_ACLK_FORCE_PLL_UP);
 }
 
+/**
+ * fl2000_set_timings() - Program adjusted display timing fields
+ * @usb_dev: USB parent whose interface resources remain alive.
+ * @timings: Validated controller encodings and sync polarities.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_set_timings(struct usb_device *usb_dev, const struct fl2000_timings *timings)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -138,6 +190,14 @@ int fl2000_set_timings(struct usb_device *usb_dev, const struct fl2000_timings *
 	return regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, value);
 }
 
+/**
+ * fl2000_set_pixfmt() - Select the wire pixel representation
+ * @usb_dev: USB parent whose interface resources remain alive.
+ * @bytes_pix: Validated wire pixel size: 2 for RGB565 or 3 for RGB888.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -152,6 +212,13 @@ int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix)
 	return regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, value);
 }
 
+/**
+ * fl2000_set_transfers() - Configure bulk frame-boundary signaling
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_set_transfers(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -168,17 +235,26 @@ int fl2000_set_transfers(struct usb_device *usb_dev)
 	return regmap_write_bits(regmap, FL2000_VGA_ISOCH_REG, FL2000_VGA_ISOCH_MFRAME_CNT, 0);
 }
 
+/**
+ * fl2000_reset() - Reset the controller and invalidate cached registers
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Takes the adapter bus lock when registered, then accesses the controller
+ * regmap. This excludes complete I2C transfers, not multi-transfer bridge DDC
+ * sequences. Callers must coordinate those sequences separately. Do not call
+ * bridge I2C operations or wait for IRQ work while holding the bus lock.
+ *
+ * Context: Process context. Caller must not already hold the adapter bus
+ *          lock.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_reset(struct usb_device *usb_dev)
 {
 	struct i2c_adapter *adapter = fl2000_i2c_adapter(usb_dev);
 	int ret;
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
 
-	/* Bus lock covers whole I2C transfers, including byte-write RMW pairs.
-	 * Lock order is adapter bus before FL2000 regmap.
-	 * Never call bridge I2C or wait for interrupt work while holding it.
-	 * Initial probe has no adapter or concurrent bridge traffic yet.
-	 */
+	/* Initial probe has no adapter or concurrent bridge traffic. */
 	if (adapter)
 		i2c_lock_bus(adapter, I2C_LOCK_ROOT_ADAPTER);
 
@@ -197,6 +273,13 @@ unlock:
 	return ret;
 }
 
+/**
+ * fl2000_afe_magic() - Apply the vendor analog-front-end quirk
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_afe_magic(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -205,6 +288,18 @@ int fl2000_afe_magic(struct usb_device *usb_dev)
 				 FL2000_USB_LPM_VENDOR_QUIRK);
 }
 
+/**
+ * fl2000_usb_magic() - Restart detection after enabling the PLL
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Enables EDID detection, waits 750 ms, then enables external-monitor
+ * detection and applies USB power-management setup. Serializes changes to
+ * the shared transaction-engine register with the adapter bus lock.
+ *
+ * Context: Process context. PLL must run; caller must not hold the adapter
+ *          bus lock.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_usb_magic(struct usb_device *usb_dev)
 {
 	struct i2c_adapter *adapter = fl2000_i2c_adapter(usb_dev);
@@ -251,6 +346,13 @@ unlock:
 	return ret;
 }
 
+/**
+ * fl2000_enable_interrupts() - Program controller event enables and polarity
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_enable_interrupts(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -274,9 +376,17 @@ int fl2000_enable_interrupts(struct usb_device *usb_dev)
 				 FL2000_VGA_CTRL2_ACLK_HDMI_INT_EN);
 }
 
-/*
- * Check for sink events and recoverable errors
- * Return: 1 if sink event detected, 0 otherwise, negative on error
+/**
+ * fl2000_check_interrupt() - Consume controller status and acknowledge LBUF flags
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * The status read clears event bits on the tested configuration. A retry
+ * may therefore need to dispatch the bridge without another event bit. This
+ * does not implement recovery from LBUF halt or VGA errors.
+ *
+ * Context: Process context. May sleep.
+ * Return: 1 for a sink event, 0 otherwise, or a negative register-access
+ *         error.
  */
 int fl2000_check_interrupt(struct usb_device *usb_dev)
 {
@@ -301,10 +411,26 @@ int fl2000_check_interrupt(struct usb_device *usb_dev)
 			return ret;
 	}
 
-	/* LBUF halt and VGA error recovery remain unsupported; see docs/DEVELOPMENT.md. */
+	/* LBUF halt and VGA error recovery are not implemented. */
 	return sink_event ? 1 : 0;
 }
 
+/**
+ * fl2000_i2c_dword() - Execute one aligned controller I2C command
+ * @usb_dev: USB parent whose interface resources remain alive.
+ * @read: True to read, false to write.
+ * @addr: Seven-bit I2C slave address.
+ * @offset: Four-byte-aligned register offset.
+ * @data: CPU-endian word to write or destination for a successful read.
+ *
+ * The controller transfers four bytes, including adjacent registers with
+ * read side effects. This function does not acquire the adapter bus lock;
+ * normal calls come from the serialized I2C adapter transfer callback.
+ *
+ * Context: Process context. Caller serializes the complete controller
+ *          command.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
@@ -346,6 +472,13 @@ int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset,
 	return 0;
 }
 
+/**
+ * fl2000_regmap_init() - Create the USB-backed controller regmap
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_regmap_init(struct usb_device *usb_dev)
 {
 	const struct regmap *regmap;
@@ -357,6 +490,15 @@ int fl2000_regmap_init(struct usb_device *usb_dev)
 	return 0;
 }
 
+/**
+ * fl2000_regmap_cleanup() - Release the controller regmap
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * All I2C clients, IRQ work and streaming/display register users must be
+ * quiesced first. Does nothing if the regmap is absent.
+ *
+ * Context: Process context. Caller serializes adapter teardown.
+ */
 void fl2000_regmap_cleanup(struct usb_device *usb_dev)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);

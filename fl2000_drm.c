@@ -33,6 +33,22 @@
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_probe_helper.h>
 
+/**
+ * DOC: Atomic display and event semantics
+ *
+ * Use explicit plane, CRTC and parallel encoder objects. CRTC-only commits
+ * also validate the primary plane. Plane checks reject scaling, positioning
+ * and fractional source rectangles. Mode fixup resolves the PLL and bounded
+ * horizontal-total adjustment before plane bandwidth checking, retaining
+ * bridge timing adjustments. Prepared wire allocations and framebuffer
+ * mappings belong to a single atomic commit; no modeset allocation is delayed
+ * until after state swap.
+ *
+ * Changing an active framebuffer format can change wire depth, so it requires
+ * a full modeset to drain the previous stream before hardware reprogramming.
+ * The controller exposes no physical scanout IRQ. Software flip events report
+ * commit completion, not physical vblank or confirmed presentation.
+ */
 #define DRM_DRIVER_NAME "fl2000_drm"
 #define DRM_DRIVER_DESC "USB display"
 
@@ -44,7 +60,9 @@
 #define FL20000_MAX_WIDTH  4000
 #define FL20000_MAX_HEIGHT 4000
 
-/* Native packed formats avoid colour conversion; XRGB8888 remains a fallback. */
+/**
+ * var fl2000_pixel_formats - Supported linear framebuffer formats for primary-plane negotiation
+ */
 static const u32 fl2000_pixel_formats[] = {
 	DRM_FORMAT_XRGB8888,
 	DRM_FORMAT_RGB888,
@@ -55,17 +73,17 @@ static const u32 fl2000_pixel_formats[] = {
 #define FL2000_MIN_PIXCLOCK 25000000
 #define FL2000_MAX_PIXCLOCK 148500000
 
-/* PLL computing precision is 6 digits after comma */
+/* Fixed-point PLL scale: six decimal places. */
 #define FL2000_PLL_PRECISION 1000000
 
-/* Input xtal clock, Hz */
+/* Crystal frequency in Hz. */
 #define FL2000_XTAL 10000000 /* 10 MHz */
 
-/* Internal vco clock min/max, Hz */
+/* Internal VCO range in Hz. */
 #define FL2000_VCOCLOCK_MIN 62500000 /* 62.5 MHz */
-#define FL2000_VCOCLOCK_MAX 1000000000 /* 1GHz */
+#define FL2000_VCOCLOCK_MAX 1000000000 /* 1 GHz */
 
-/* Maximum acceptable ppm error */
+/* Maximum PLL error in parts per million. */
 #define FL2000_PPM_ERR_MAX 500
 
 /* Assume bulk transfers can use only 80% of USB bandwidth */
@@ -75,12 +93,19 @@ static const u32 fl2000_pixel_formats[] = {
 #define FL2000_BULK_BW_SUPER_SPEED	(5000000000ull * FL2000_BULK_BW_PERCENT / 100 / 8)
 #define FL2000_BULK_BW_SUPER_SPEED_PLUS (10000000000ull * FL2000_BULK_BW_PERCENT / 100 / 8)
 
+/**
+ * fl2000_get_bytes_pix() - Estimate usable wire pixel depth for a USB link
+ * @speed: Negotiated USB link speed.
+ * @pixclock: Active pixel rate per second; must be nonzero.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: 2 or 3 bytes per pixel, or 0 when the link cannot carry either.
+ */
 static unsigned int fl2000_get_bytes_pix(enum usb_device_speed speed, unsigned int pixclock)
 {
 	unsigned int bytes_pix;
 	u64 max_bw;
 
-	/* Calculate maximum bandwidth, bytes per second */
 	switch (speed) {
 	case USB_SPEED_HIGH:
 		max_bw = FL2000_BULK_BW_HIGH_SPEED;
@@ -95,17 +120,16 @@ static unsigned int fl2000_get_bytes_pix(enum usb_device_speed speed, unsigned i
 		return 0;
 	}
 
-	/* Maximum bytes per pixel with maximum bandwidth */
 	if (!pixclock)
 		return 0;
 	/* USB bandwidth is bounded by 1.25 GB/s, even at a one-Hz clock. */
 	bytes_pix = (unsigned int)div_u64(max_bw, pixclock);
 	switch (bytes_pix) {
-	case 0: /* Not enough */
-	case 1: /* RGB 332 not supported*/
+	case 0:
+	case 1: /* RGB332 is unsupported. */
 		return 0;
-	case 2: /* RGB 565 */
-	case 3: /* RGB 888 */
+	case 2: /* RGB565 */
+	case 3: /* RGB888 */
 		break;
 	default:
 		bytes_pix = 3;
@@ -115,7 +139,13 @@ static unsigned int fl2000_get_bytes_pix(enum usb_device_speed speed, unsigned i
 	return bytes_pix;
 }
 
-/* USB carries active pixels only; blanking affects refresh, not frame size. */
+/**
+ * fl2000_active_pixel_rate() - Exclude blanking from the transmitted pixel rate
+ * @mode: Display timing to inspect.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: Active pixels per second, rounded up; 0 for zero totals.
+ */
 static unsigned int fl2000_active_pixel_rate(const struct drm_display_mode *mode)
 {
 	u64 total = (u64)mode->htotal * mode->vtotal;
@@ -125,6 +155,15 @@ static unsigned int fl2000_active_pixel_rate(const struct drm_display_mode *mode
 	return total ? (unsigned int)div64_u64(pixels + total - 1, total) : 0;
 }
 
+/**
+ * fl2000_frame_bytes_pix() - Select wire depth for the framebuffer format
+ * @speed: Negotiated USB link speed.
+ * @mode: Display timing to inspect.
+ * @format: Source DRM fourcc.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: 2 or 3 bytes per pixel, or 0 when unsupported or over bandwidth.
+ */
 static unsigned int fl2000_frame_bytes_pix(enum usb_device_speed speed,
 					   const struct drm_display_mode *mode, u32 format)
 {
@@ -144,6 +183,18 @@ static unsigned int fl2000_frame_bytes_pix(enum usb_device_speed speed,
 	}
 }
 
+/**
+ * struct fl2000_drm_if - DRM-managed display pipeline
+ * @drm: DRM device whose references own this enclosing allocation.
+ * @plane: Fullscreen primary plane backed by shadow GEM mappings.
+ * @crtc: Software-completion CRTC; no physical vblank reporting.
+ * @encoder: Parallel RGB encoder carrying the bridge chain.
+ * @connector: Bridge connector retained until DRM final release.
+ * @usb_dev: USB parent used for transport operations while bound.
+ *
+ * The component bind devres group owns the initial DRM reference. Open DRM
+ * files may retain this allocation and the provider module after unbind.
+ */
 struct fl2000_drm_if {
 	struct drm_device drm;
 	struct drm_plane plane;
@@ -155,6 +206,9 @@ struct fl2000_drm_if {
 
 DEFINE_DRM_GEM_FOPS(fl2000_drm_driver_fops);
 
+/**
+ * var fl2000_drm_driver - Atomic shmem GEM driver and framebuffer-console operations
+ */
 static struct drm_driver fl2000_drm_driver = {
 	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_ATOMIC,
 	.ioctls = NULL,
@@ -170,6 +224,14 @@ static struct drm_driver fl2000_drm_driver = {
 	.patchlevel = DRM_DRIVER_PATCHLEVEL,
 };
 
+/**
+ * fl2000_atomic_check() - Require modesets for active pixel-format changes
+ * @drm: DRM device.
+ * @state: Atomic transaction state.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_state *state)
 {
 	const struct drm_plane *plane;
@@ -195,13 +257,24 @@ static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_state *
 	return drm_atomic_helper_check(drm, state);
 }
 
+/**
+ * var fl2000_mode_config_funcs - Framebuffer creation and atomic commit entry points
+ */
 static const struct drm_mode_config_funcs fl2000_mode_config_funcs = {
 	.fb_create = drm_gem_fb_create_with_dirty,
 	.atomic_check = fl2000_atomic_check,
 	.atomic_commit = drm_atomic_helper_commit,
 };
 
-/* Integer division compute of ppm error */
+/**
+ * fl2000_pll_ppm_err() - Compute unsigned PLL frequency error
+ * @clock_mil: Target Hz multiplied by FL2000_PLL_PRECISION; at least one Hz.
+ * @vco_clk: VCO frequency in Hz.
+ * @divisor: Nonzero output divider.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: Absolute frequency error in parts per million.
+ */
 static u64 fl2000_pll_ppm_err(u64 clock_mil, u32 vco_clk, u32 divisor)
 {
 	u64 pll_clk_mil = (u64)vco_clk * FL2000_PLL_PRECISION / divisor;
@@ -216,6 +289,15 @@ static u64 fl2000_pll_ppm_err(u64 clock_mil, u32 vco_clk, u32 divisor)
 	return pll_clk_err / (clock_mil / FL2000_PLL_PRECISION);
 }
 
+/**
+ * fl2000_pll_get_divisor() - Find a divider improving the current best error
+ * @clock_mil: Target Hz multiplied by FL2000_PLL_PRECISION.
+ * @vco_clk: VCO frequency in Hz.
+ * @min_ppm_err: Best error bound; updated on improvement.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: Improving divider, or 0 when no candidate improves the bound.
+ */
 static inline u32 fl2000_pll_get_divisor(u64 clock_mil, u32 vco_clk, u64 *min_ppm_err)
 {
 	u32 best_divisor = 0;
@@ -236,7 +318,16 @@ static inline u32 fl2000_pll_get_divisor(u64 clock_mil, u32 vco_clk, u64 *min_pp
 	return best_divisor;
 }
 
-/* Try to match pixel clock - find parameters with minimal PLL error */
+/**
+ * fl2000_pll_calc() - Search prescaler, multiplier and divider combinations
+ * @clock_mil: Target Hz multiplied by FL2000_PLL_PRECISION.
+ * @pll: Best hardware PLL field values.
+ * @clock_calculated: Selected output frequency in Hz.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: Minimum error in ppm; outputs are valid when an improving candidate
+ *         exists.
+ */
 static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_calculated)
 {
 	static const u32 prescaler_max = 2;
@@ -245,7 +336,6 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_cal
 
 	for (u32 prescaler = 1; prescaler <= prescaler_max; prescaler++)
 		for (u32 multiplier = 1; multiplier <= multiplier_max; multiplier++) {
-			/* Do not need precision here yet, no 10^6 multiply */
 			u32 vco_clk = FL2000_XTAL / prescaler * multiplier;
 			u32 divisor;
 
@@ -273,7 +363,16 @@ static u64 fl2000_pll_calc(u64 clock_mil, struct fl2000_pll *pll, u32 *clock_cal
 	return min_ppm_err;
 }
 
-/* Detection needs a clock before EDID has supplied a display mode. */
+/**
+ * fl2000_init_clock() - Establish the detection clock before EDID
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Programs a nominal 25 MHz clock through the PLL search, without requiring
+ * a display mode. Needed before detection and I2C bridge discovery.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_init_clock(struct usb_device *usb_dev)
 {
 	struct fl2000_pll pll;
@@ -285,6 +384,18 @@ int fl2000_init_clock(struct usb_device *usb_dev)
 	return fl2000_set_pll(usb_dev, &pll);
 }
 
+/**
+ * fl2000_mode_calc() - Validate timings and quantize the pixel clock
+ * @mode: Display timing to inspect.
+ * @adjusted_mode: Optional destination mode; written on success.
+ * @pll: Selected PLL parameters.
+ *
+ * Try the original horizontal total, then alternating adjustments up to ten
+ * pixel clocks. Refresh derived CRTC timing fields only for a valid result.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_mode_calc(const struct drm_display_mode *mode,
 			    struct drm_display_mode *adjusted_mode, struct fl2000_pll *pll)
 {
@@ -319,7 +430,7 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		/* Validated clock and total bounds keep this product within u64. */
 		clock_mil_adjusted = clock_mil * (mode->htotal + d) / mode->htotal;
 
-		/* To keep precision use clock multiplied by 10^6 */
+		/* Keep the fixed-point scale while adjusting horizontal blanking. */
 		ppm_err = fl2000_pll_calc(clock_mil_adjusted, pll, &clock_calculated);
 		/* The quantized clock must still satisfy the bridge input limits. */
 		if (clock_calculated < FL2000_MIN_PIXCLOCK ||
@@ -338,10 +449,17 @@ static int fl2000_mode_calc(const struct drm_display_mode *mode,
 		}
 	}
 
-	/* Cannot find PLL configuration that satisfies requirements. */
 	return -EINVAL;
 }
 
+/**
+ * fl2000_crtc_mode_valid() - Reject unrepresentable timing or bandwidth
+ * @crtc: Display CRTC.
+ * @mode: Display timing to inspect.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: MODE_OK, MODE_BAD for timing/PLL failure, or MODE_CLOCK_HIGH.
+ */
 static enum drm_mode_status fl2000_crtc_mode_valid(struct drm_crtc *crtc,
 						   const struct drm_display_mode *mode)
 {
@@ -356,7 +474,15 @@ static enum drm_mode_status fl2000_crtc_mode_valid(struct drm_crtc *crtc,
 		       MODE_CLOCK_HIGH;
 }
 
-/* Resolve PLL constraints during modeset checking, before plane validation. */
+/**
+ * fl2000_crtc_mode_fixup() - Apply PLL quantization after bridge timing changes
+ * @crtc: CRTC callback argument; unused.
+ * @mode: Original mode callback argument; unused.
+ * @adjusted_mode: Bridge-adjusted timing, replaced on success.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: True on success; false if no valid PLL/timing combination exists.
+ */
 static bool fl2000_crtc_mode_fixup(struct drm_crtc *crtc __always_unused,
 				   const struct drm_display_mode *mode __always_unused,
 				   struct drm_display_mode *adjusted_mode)
@@ -371,6 +497,15 @@ static bool fl2000_crtc_mode_fixup(struct drm_crtc *crtc __always_unused,
 	return true;
 }
 
+/**
+ * fl2000_display_check() - Validate integral crop geometry and wire bandwidth
+ * @drm_if: FL2000 DRM pipeline.
+ * @plane: Candidate primary-plane state.
+ * @crtc: Candidate CRTC state.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_display_check(const struct fl2000_drm_if *drm_if,
 				const struct drm_plane_state *plane,
 				const struct drm_crtc_state *crtc)
@@ -386,16 +521,39 @@ static int fl2000_display_check(const struct fl2000_drm_if *drm_if,
 	return 0;
 }
 
+/**
+ * struct fl2000_plane_state - Commit-owned mappings and transport preparation
+ * @shadow: DRM shadow-plane state owning this commit's framebuffer mappings.
+ * @prepared: Uninstalled wire allocations; consumed on modeset or freed at
+ *            cleanup.
+ *
+ * Duplicating atomic state does not share either mappings or prepared wire
+ * allocations. Preparation must finish before atomic state swap.
+ */
 struct fl2000_plane_state {
 	struct drm_shadow_plane_state shadow;
 	struct fl2000_stream_buffers *prepared;
 };
 
+/**
+ * fl2000_plane_state() - Recover the driver shadow-plane extension
+ * @state: Embedded DRM plane state.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: Borrowed driver state containing the supplied base state.
+ */
 static struct fl2000_plane_state *fl2000_plane_state(struct drm_plane_state *state)
 {
 	return container_of(to_drm_shadow_plane_state(state), struct fl2000_plane_state, shadow);
 }
 
+/**
+ * fl2000_plane_destroy_state() - Free pending wire allocations and shadow state
+ * @plane: Primary plane.
+ * @state: Plane state being destroyed.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_plane_destroy_state(struct drm_plane *plane, struct drm_plane_state *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
@@ -406,6 +564,12 @@ static void fl2000_plane_destroy_state(struct drm_plane *plane, struct drm_plane
 	kfree(fl_state);
 }
 
+/**
+ * fl2000_plane_reset() - Replace primary-plane state with an empty shadow state
+ * @plane: Primary plane.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ */
 static void fl2000_plane_reset(struct drm_plane *plane)
 {
 	struct fl2000_plane_state *state;
@@ -418,6 +582,13 @@ static void fl2000_plane_reset(struct drm_plane *plane)
 		__drm_gem_reset_shadow_plane(plane, &state->shadow);
 }
 
+/**
+ * fl2000_plane_duplicate_state() - Duplicate state without sharing commit-owned resources
+ * @plane: Primary plane.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ * Return: New base plane state, or NULL on allocation failure.
+ */
 static struct drm_plane_state *fl2000_plane_duplicate_state(struct drm_plane *plane)
 {
 	struct fl2000_plane_state *state;
@@ -430,6 +601,17 @@ static struct drm_plane_state *fl2000_plane_duplicate_state(struct drm_plane *pl
 	return &state->shadow.base;
 }
 
+/**
+ * fl2000_prepare_fb() - Map a framebuffer and preallocate modeset wire buffers
+ * @plane: Primary plane.
+ * @state: Pending plane state receiving mappings and prepared buffers.
+ *
+ * Runs before atomic state swap. Mapping and allocation errors leave scanout
+ * unchanged. I/O-memory mappings are unsupported.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_prepare_fb(struct drm_plane *plane, struct drm_plane_state *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
@@ -473,6 +655,13 @@ unmap:
 	return ret;
 }
 
+/**
+ * fl2000_cleanup_fb() - Unmap one commit and free unconsumed prepared buffers
+ * @plane: Primary plane.
+ * @state: Plane state whose preparation lifetime is ending.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_cleanup_fb(struct drm_plane *plane, struct drm_plane_state *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
@@ -485,6 +674,18 @@ static void fl2000_cleanup_fb(struct drm_plane *plane, struct drm_plane_state *s
 		drm_gem_fb_vunmap(state->fb, shadow->map);
 }
 
+/**
+ * fl2000_copy_frame() - Prepare crop-relative damage from a mapped framebuffer
+ * @drm_if: FL2000 DRM pipeline.
+ * @state: Prepared plane state with a live CPU mapping.
+ * @damage: Framebuffer-coordinate rectangle, or NULL for a full rebuild.
+ *
+ * Brackets the copy with GEM CPU-access synchronization. The mapping is owned
+ * by shadow-plane preparation, not this function.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_copy_frame(struct fl2000_drm_if *drm_if, struct drm_plane_state *state,
 			     const struct drm_rect *damage)
 {
@@ -520,6 +721,15 @@ exit:
 	return ret;
 }
 
+/**
+ * fl2000_configure_mode() - Reset and program the display controller
+ * @drm_if: FL2000 DRM pipeline.
+ * @mode: Display timing to inspect.
+ * @format: Source DRM fourcc.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_display_mode *mode,
 				 u32 format)
 {
@@ -569,6 +779,14 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_
 	return ret;
 }
 
+/**
+ * fl2000_crtc_atomic_check() - Include the primary plane in CRTC-only transactions
+ * @crtc: Display CRTC.
+ * @state: Atomic transaction state.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_state *state)
 {
 	int ret;
@@ -582,6 +800,14 @@ static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_sta
 	return drm_atomic_add_affected_planes(state, crtc);
 }
 
+/**
+ * fl2000_plane_atomic_check() - Validate fullscreen primary-plane state
+ * @plane: Primary plane.
+ * @state: Atomic transaction state.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_state *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
@@ -596,6 +822,16 @@ static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_
 	return fl2000_display_check(drm_if, new_plane, crtc);
 }
 
+/**
+ * fl2000_crtc_atomic_enable() - Install prepared buffers and start the initial frame
+ * @crtc: Display CRTC.
+ * @state: Atomic transaction state.
+ *
+ * Performs controller reset/programming before bridge atomic enable. Failure
+ * drains scanout and is reported through the device log.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ */
 static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_state *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
@@ -622,6 +858,13 @@ static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_s
 	drm_dev_exit(idx);
 }
 
+/**
+ * fl2000_crtc_atomic_disable() - Stop scanout before disabling the bridge chain
+ * @crtc: Display CRTC.
+ * @state: Atomic transaction; unused.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ */
 static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
 				       struct drm_atomic_state *state __always_unused)
 {
@@ -630,6 +873,16 @@ static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
 	fl2000_streaming_disable(drm_if->usb_dev);
 }
 
+/**
+ * fl2000_plane_atomic_update() - Prepare damage for an unchanged active mode
+ * @plane: Primary plane.
+ * @state: Atomic transaction state.
+ *
+ * Modeset frames are handled by CRTC enable. A changed framebuffer forces a
+ * full rebuild; successful preparation can restart a stopped bulk queue.
+ *
+ * Context: Process context under DRM atomic/modeset serialization.
+ */
 static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomic_state *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
@@ -658,6 +911,9 @@ static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomi
 	drm_dev_exit(idx);
 }
 
+/**
+ * var fl2000_crtc_funcs - Standard CRTC state and modeset operations
+ */
 static const struct drm_crtc_funcs fl2000_crtc_funcs = {
 	.reset = drm_atomic_helper_crtc_reset,
 	.destroy = drm_crtc_cleanup,
@@ -667,6 +923,9 @@ static const struct drm_crtc_funcs fl2000_crtc_funcs = {
 	.atomic_destroy_state = drm_atomic_helper_crtc_destroy_state,
 };
 
+/**
+ * var fl2000_crtc_helper_funcs - Timing validation and scanout transition callbacks
+ */
 static const struct drm_crtc_helper_funcs fl2000_crtc_helper_funcs = {
 	.mode_valid = fl2000_crtc_mode_valid,
 	.mode_fixup = fl2000_crtc_mode_fixup,
@@ -675,6 +934,9 @@ static const struct drm_crtc_helper_funcs fl2000_crtc_helper_funcs = {
 	.atomic_disable = fl2000_crtc_atomic_disable,
 };
 
+/**
+ * var fl2000_plane_funcs - Primary-plane state ownership operations
+ */
 static const struct drm_plane_funcs fl2000_plane_funcs = {
 	.update_plane = drm_atomic_helper_update_plane,
 	.disable_plane = drm_atomic_helper_disable_plane,
@@ -684,6 +946,9 @@ static const struct drm_plane_funcs fl2000_plane_funcs = {
 	.atomic_destroy_state = fl2000_plane_destroy_state,
 };
 
+/**
+ * var fl2000_plane_helper_funcs - Mapping, damage and update callbacks for the primary plane
+ */
 static const struct drm_plane_helper_funcs fl2000_plane_helper_funcs = {
 	.prepare_fb = fl2000_prepare_fb,
 	.cleanup_fb = fl2000_cleanup_fb,
@@ -691,10 +956,20 @@ static const struct drm_plane_helper_funcs fl2000_plane_helper_funcs = {
 	.atomic_update = fl2000_plane_atomic_update,
 };
 
+/**
+ * var fl2000_encoder_funcs - Encoder cleanup owns bridge-chain detachment
+ */
 static const struct drm_encoder_funcs fl2000_encoder_funcs = {
 	.destroy = drm_encoder_cleanup,
 };
 
+/**
+ * fl2000_pipeline_init() - Create a primary plane, CRTC and parallel RGB encoder
+ * @drm_if: FL2000 DRM pipeline.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_pipeline_init(struct fl2000_drm_if *drm_if)
 {
 	static const u64 modifiers[] = { DRM_FORMAT_MOD_LINEAR, DRM_FORMAT_MOD_INVALID };
@@ -721,6 +996,18 @@ static int fl2000_pipeline_init(struct fl2000_drm_if *drm_if)
 	return 0;
 }
 
+/**
+ * fl2000_drm_hotplug() - Detect a sink after nested IRQ acknowledgment
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Checks status even if an earlier acknowledgment consumed the HPD event.
+ * Only a changed known status triggers notification. IRQ work must be drained
+ * before component teardown can free the published DRM device.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 for known status, -EIO for unknown status, or -ENODEV if
+ *         unavailable.
+ */
 int fl2000_drm_hotplug(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
@@ -744,6 +1031,17 @@ int fl2000_drm_hotplug(const struct usb_device *usb_dev)
 	return ret;
 }
 
+/**
+ * fl2000_drm_set_polling() - Select fallback polling or HPD-only detection
+ * @usb_dev: USB parent whose interface resources remain alive.
+ * @polling: True to poll connect/disconnect; false for HPD-only flags.
+ *
+ * Reschedules the DRM poll worker when entering fallback, including after
+ * HPD-only initialization. An absent or unplugged DRM device is ignored.
+ * Restoring HPD-only flags does not synchronously cancel a queued poll worker.
+ *
+ * Context: Process context. Takes the DRM mode-config mutex.
+ */
 void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
@@ -767,11 +1065,30 @@ void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
 	}
 }
 
+/**
+ * fl2000_bridge_module_put() - Drop the final DRM-managed provider reference
+ * @drm: Releasing DRM device; unused.
+ * @owner: Bridge provider module reference.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_bridge_module_put(struct drm_device *drm __always_unused, void *owner)
 {
 	module_put(owner);
 }
 
+/**
+ * fl2000_drm_bind() - Bind a bridge and publish a DRM display
+ * @master: USB parent registered as the component master.
+ *
+ * The component bind devres group owns the initial DRM reference. Pin the
+ * selected provider before calling its callbacks, and retain that module
+ * reference until final DRM release, including after open-file unbind. The
+ * bridge connector holds callbacks beyond component attachment.
+ *
+ * Context: Process context under component framework serialization.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_drm_bind(struct device *master)
 {
 	struct usb_device *usb_dev = to_usb_device(master);
@@ -856,6 +1173,15 @@ detach_encoder:
 	return ret;
 }
 
+/**
+ * fl2000_drm_unbind() - Quiesce display callbacks before provider unbind
+ * @master: USB component master device.
+ *
+ * Component core releases the bind devres group after this callback. Open
+ * files may retain the unplugged DRM allocation and provider module.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_drm_unbind(struct device *master)
 {
 	const struct usb_device *usb_dev = to_usb_device(master);
@@ -879,11 +1205,22 @@ static void fl2000_drm_unbind(struct device *master)
 	WRITE_ONCE(device->drm, NULL);
 }
 
+/**
+ * var fl2000_master_ops - Component aggregate binding and quiescent unbinding
+ */
 static const struct component_master_ops fl2000_master_ops = {
 	.bind = fl2000_drm_bind,
 	.unbind = fl2000_drm_unbind,
 };
 
+/**
+ * fl2000_component_compare() - Match an I2C component and remember its provider
+ * @client_dev: Candidate component device.
+ * @data: USB parent whose I2C adapter must own the candidate.
+ *
+ * Context: Process context. May sleep.
+ * Return: 1 for a client on this adapter, 0 otherwise.
+ */
 static int fl2000_component_compare(struct device *client_dev, void *data)
 {
 	const struct usb_device *usb_dev = data;
@@ -895,6 +1232,17 @@ static int fl2000_component_compare(struct device *client_dev, void *data)
 	return 1;
 }
 
+/**
+ * fl2000_drm_init() - Register a component master for this adapter
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Matches a component by its owning I2C adapter. Registration can succeed
+ * without a bridge; DRM registration waits for component binding. The provider
+ * receives the encoder and must attach its bridge without creating a connector.
+ *
+ * Context: Process context. Caller serializes adapter lifecycle.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_drm_init(struct usb_device *usb_dev)
 {
 	struct component_match *match = NULL;
@@ -905,11 +1253,31 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 	return component_master_add_with_match(&usb_dev->dev, &fl2000_master_ops, match);
 }
 
+/**
+ * fl2000_drm_cleanup() - Remove the component master and bound display
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Unbind drains IRQ work and polling, unplugs DRM, shuts down scanout and
+ * detaches the encoder before provider unbind. Open DRM files can retain the
+ * old DRM allocation and its bridge-module reference after this returns.
+ *
+ * Context: Process context. Caller serializes adapter lifecycle.
+ */
 void fl2000_drm_cleanup(struct usb_device *usb_dev)
 {
 	component_master_del(&usb_dev->dev, &fl2000_master_ops);
 }
 
+/**
+ * fl2000_drm_suspend() - Quiesce IRQs and suspend the display
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Stops streaming on success. If DRM suspend fails, attempts to restore IRQ
+ * reception so the adapter remains usable.
+ *
+ * Context: Process context. Caller holds the adapter lifecycle mutex.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_drm_suspend(struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
@@ -924,6 +1292,16 @@ int fl2000_drm_suspend(struct usb_device *usb_dev)
 	return ret;
 }
 
+/**
+ * fl2000_drm_resume() - Restore controller state and the suspended display
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Restores the initial clock and detection before resuming DRM. Disables IRQ
+ * reception on failure.
+ *
+ * Context: Process context. Caller holds the adapter lifecycle mutex.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_drm_resume(struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);

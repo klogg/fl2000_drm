@@ -30,8 +30,32 @@
 #define FL2000_USB_CTRL_WAKE_NRDY BIT_U32(17)
 
 /* VGA control registers, manual sections 40.1.1.1-40.1.1.32. */
-/* Coverage and documented ambiguities: docs/REGISTERS.md. */
 
+/**
+ * DOC: FL2000 register semantics and reference conflicts
+ *
+ * The FL200DX register manual sections 40.1.1.1 through 40.1.1.32 describe
+ * the VGA bank. The USB controls at 0x0070/0x0078 are vendor-derived and are
+ * outside those tables. Do not invent meanings for reserved or test-only bits.
+ *
+ * Status at 0x8000 consumes events on read. LBUF overflow is bit 9 and
+ * underflow bit 8. The manual says to clear them by writing bit 31, which is
+ * also an EDID event; the driver instead writes observed bits 8/9 back. That
+ * acknowledgment discrepancy still needs hardware confirmation. LBUF halt and
+ * VGA error recovery are not implemented.
+ *
+ * On tested hardware, VGA_CTRL_REG_ACLK bit 4 inhibits read-to-clear when set,
+ * contrary to its documented enable meaning. Keep it clear. Bit 25 forces VGA
+ * connection and must remain clear for physical disconnect detection. HDMI
+ * interrupt enable is VGA_CTRL2_REG_ACLK bit 19 and active-high selection is
+ * bit 20. Status bit 27 is an HDMI-enable pin, not raw INT# level.
+ *
+ * The PLL pre-divider byte is documented as one field but the vendor model
+ * splits it into prescaler and function; programming uses that split. The BIAC
+ * 0x8054 table assigns status and current to the same low half; retain the
+ * upper-half current definition pending clarification. The printed 0x8078
+ * address range overlaps its successor; the register offset remains 0x8078.
+ */
 #define FL2000_VGA_CONTROL_OFFSET 0x8000
 
 #define FL2000_VGA_STATUS_REG		 (FL2000_VGA_CONTROL_OFFSET + 0x00)
@@ -213,8 +237,6 @@
 #define FL2000_BIAC_STATUS_CURRENT_STATUS GENMASK_U32(15, 0)
 #define FL2000_BIAC_STATUS_CURRENT_VALUE  GENMASK_U32(31, 16)
 
-/* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x58) */
-
 #define FL2000_VGA_PLT_REG_PXCLK		 (FL2000_VGA_CONTROL_OFFSET + 0x5C)
 #define FL2000_VGA_PLT_PXCLK_PALETTE_RAM_WR_DATA GENMASK_U32(23, 0)
 
@@ -232,9 +254,6 @@
 #define FL2000_VGA_CTRL2_ACLK_HDMI_INT_ACTIVE_HIGH    BIT_U32(20)
 #define FL2000_VGA_CTRL2_ACLK_SPI_EN		      BIT_U32(21)
 #define FL2000_VGA_CTRL2_ACLK_SW_PROD_REV	      GENMASK_U32(31, 24)
-
-/* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x68) */
-/* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x6C) */
 
 #define FL2000_TEST_CNTL_REG1 (FL2000_VGA_CONTROL_OFFSET + 0x70)
 #define FL2000_TEST_CNTL_REG2 (FL2000_VGA_CONTROL_OFFSET + 0x74)
@@ -255,15 +274,25 @@
 #define FL2000_VGA_CTRL3_SPI_INIT_EN	 BIT_U32(3)
 #define FL2000_VGA_CTRL3_TEST_BUS_SELECT GENMASK_U32(2, 0)
 
-/* undefined				(FL2000_VGA_CONTROL_OFFSET + 0x8C) */
-
-/* Reading status acknowledges events; exclude it from incidental regmap reads. */
+/**
+ * FL2000_REG_PRECIOUS() - Identify status whose reads consume events
+ * @reg: Register offset.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: True for the destructive status register.
+ */
 static inline bool FL2000_REG_PRECIOUS(u32 reg)
 {
 	return reg == FL2000_VGA_STATUS_REG;
 }
 
-/* List of volatile registers that shall not be cached */
+/**
+ * FL2000_REG_VOLATILE() - Identify live status and transaction-engine registers
+ * @reg: Register offset.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: True if reads must bypass regmap cache.
+ */
 static inline bool FL2000_REG_VOLATILE(u32 reg)
 {
 	switch (reg) {

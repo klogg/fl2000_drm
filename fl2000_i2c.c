@@ -17,16 +17,44 @@
 #define I2C_REG_ADDR_SIZE  (sizeof(u8))
 #define I2C_XFER_ADDR_MASK (~0x3ul)
 
+/**
+ * fl2000_i2c_read_dword() - Read one aligned group through the transaction engine
+ * @usb_dev: USB parent with live adapter resources.
+ * @addr: Seven-bit I2C slave address.
+ * @offset: Register offset.
+ * @data: Destination CPU-endian word.
+ *
+ * Context: Process context. Caller holds the adapter bus lock.
+ * Return: 0 on success or a negative error code.
+ */
 static inline int fl2000_i2c_read_dword(struct usb_device *usb_dev, u16 addr, u8 offset, u32 *data)
 {
 	return fl2000_i2c_dword(usb_dev, true, addr, offset, data);
 }
 
+/**
+ * fl2000_i2c_write_dword() - Write one aligned group through the transaction engine
+ * @usb_dev: USB parent with live adapter resources.
+ * @addr: Seven-bit I2C slave address.
+ * @offset: Register offset.
+ * @data: Source CPU-endian word.
+ *
+ * Context: Process context. Caller holds the adapter bus lock.
+ * Return: 0 on success or a negative error code.
+ */
 static inline int fl2000_i2c_write_dword(struct usb_device *usb_dev, u16 addr, u8 offset, u32 *data)
 {
 	return fl2000_i2c_dword(usb_dev, false, addr, offset, data);
 }
 
+/**
+ * fl2000_i2c_xfer_valid() - Check the supported message shapes and flags
+ * @msgs: I2C transfer messages.
+ * @num: Number of messages.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: True for a supported byte/word read or write, false otherwise.
+ */
 static bool fl2000_i2c_xfer_valid(const struct i2c_msg *msgs, int num)
 {
 	bool read;
@@ -46,6 +74,18 @@ static bool fl2000_i2c_xfer_valid(const struct i2c_msg *msgs, int num)
 	return true;
 }
 
+/**
+ * fl2000_i2c_write_value() - Build a full word or merge a byte write
+ * @adapter: Owning I2C adapter.
+ * @msg: Validated write message.
+ * @addr: Seven-bit I2C slave address.
+ * @offset: Register offset.
+ * @idx: Byte position within the aligned group.
+ * @data: Destination full word, read first for a byte update.
+ *
+ * Context: Process context. Caller holds the adapter bus lock.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_i2c_write_value(const struct i2c_adapter *adapter, const struct i2c_msg *msg,
 				  u16 addr, u8 offset, u8 idx, u32 *data)
 {
@@ -64,6 +104,19 @@ static int fl2000_i2c_write_value(const struct i2c_adapter *adapter, const struc
 	return 0;
 }
 
+/**
+ * fl2000_i2c_xfer() - Execute byte or aligned-word messages
+ * @adapter: Owning I2C adapter.
+ * @msgs: I2C transfer messages.
+ * @num: Number of messages.
+ *
+ * Reads consume a whole aligned word. Byte writes use a read-modify-write
+ * pair under the same bus lock. Failed transfers increment the adapter error
+ * counter used by interrupt acknowledgment recovery.
+ *
+ * Context: Process context. I2C core holds the adapter bus lock.
+ * Return: Message count on success, or a negative error code.
+ */
 static int fl2000_i2c_xfer(struct i2c_adapter *adapter, struct i2c_msg *msgs, int num)
 {
 	const struct usb_device *usb_dev = adapter->algo_data;
@@ -113,20 +166,31 @@ error:
 	return ret;
 }
 
+/**
+ * fl2000_i2c_func() - Advertise raw I2C transactions
+ * @adap: I2C adapter callback argument; unused.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: I2C_FUNC_I2C.
+ */
 static u32 fl2000_i2c_func(struct i2c_adapter *adap __always_unused)
 {
 	return I2C_FUNC_I2C;
 }
 
+/**
+ * var fl2000_i2c_algorithm - Raw byte/word I2C transfer callbacks
+ */
 static const struct i2c_algorithm fl2000_i2c_algorithm = {
 	.master_xfer = fl2000_i2c_xfer,
 	.functionality = fl2000_i2c_func,
 };
 
+/**
+ * var fl2000_i2c_quirks - Transfer shapes allowed by the controller command engine
+ */
 static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
-	.flags = I2C_AQ_COMB | /* enforce "combined" mode */
-		 I2C_AQ_COMB_WRITE_FIRST | /* address write goes first */
-		 I2C_AQ_COMB_SAME_ADDR, /* both are on the same address */
+	.flags = I2C_AQ_COMB | I2C_AQ_COMB_WRITE_FIRST | I2C_AQ_COMB_SAME_ADDR,
 	.max_num_msgs = I2C_CMESSAGES_NUM,
 	.max_write_len = 5,
 	.max_read_len = 4,
@@ -134,6 +198,29 @@ static const struct i2c_adapter_quirks fl2000_i2c_quirks = {
 	.max_comb_2nd_msg_len = 4,
 };
 
+/**
+ * DOC: FL2000 adapter hardware description
+ *
+ * The adapter receives a software node before I2C registration. These properties
+ * are a local interface, not upstream firmware bindings; consumers read the
+ * adapter directly rather than inheriting properties on the I2C client.
+ *
+ * ``i2c-register-access-alignment`` is 4 bytes; aligned reads can consume
+ * neighboring side-effect registers. Standard I2C quirks describe transfer
+ * lengths but not that behavior. ``display-input-bus-width`` is independently
+ * 24 bits. ``display-input-clock-delay`` is selector 1, not nanoseconds.
+ * ``display-controller-reset`` is present because controller reset also resets
+ * the bridge. Neither ``interrupt-active-high`` nor ``interrupt-open-drain`` is
+ * present, selecting active-low push-pull output during restoration.
+ *
+ * Bridge identity and address come from userspace enumeration, not this node.
+ * The interrupt subsystem keys its domain by this node; component consumers
+ * map input zero. Remove the component master and IRQ domain before the I2C
+ * adapter and its node.
+ */
+/**
+ * var fl2000_i2c_properties - Adapter transport and wiring settings
+ */
 static const struct property_entry fl2000_i2c_properties[] = {
 	PROPERTY_ENTRY_U32("i2c-register-access-alignment", 4),
 	PROPERTY_ENTRY_BOOL("display-controller-reset"),
@@ -142,6 +229,13 @@ static const struct property_entry fl2000_i2c_properties[] = {
 	{}
 };
 
+/**
+ * fl2000_i2c_adapter_release() - Unregister clients and remove the software node
+ * @dev: USB parent owning the resource.
+ * @res: Registered I2C adapter.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 {
 	struct i2c_adapter *adapter = res;
@@ -152,7 +246,17 @@ static void fl2000_i2c_adapter_release(struct device *dev, void *res)
 	fwnode_remove_software_node(fwnode);
 }
 
-/* Callers must keep control-interface resources alive while using the adapter. */
+/**
+ * fl2000_i2c_adapter() - Get the control interface I2C adapter
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * The result is borrowed. Callers must keep control-interface resources alive
+ * and serialize against adapter teardown; this does not acquire a reference.
+ *
+ * Context: Any context with control-interface lifetime guaranteed.
+ * Return: The registered adapter, or NULL before initialization/after
+ *         cleanup.
+ */
 struct i2c_adapter *fl2000_i2c_adapter(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
@@ -160,6 +264,14 @@ struct i2c_adapter *fl2000_i2c_adapter(const struct usb_device *usb_dev)
 	return device->i2c;
 }
 
+/**
+ * fl2000_i2c_verify_client() - Check component ownership by I2C adapter
+ * @usb_dev: USB parent whose interface resources remain alive.
+ * @client_dev: Candidate component device.
+ *
+ * Context: Component matching context with the adapter alive.
+ * Return: True for an I2C client belonging to this adapter, false otherwise.
+ */
 bool fl2000_i2c_verify_client(const struct usb_device *usb_dev, struct device *client_dev)
 {
 	const struct i2c_client *client = i2c_verify_client(client_dev);
@@ -167,6 +279,17 @@ bool fl2000_i2c_verify_client(const struct usb_device *usb_dev, struct device *c
 	return client && client->adapter == fl2000_i2c_adapter(usb_dev);
 }
 
+/**
+ * fl2000_i2c_init() - Register the I2C adapter and its software node
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Requires controller registers and the detection clock to be initialized.
+ * Publishes adapter hardware properties before registration can probe clients.
+ *
+ * Context: Process context. Caller serializes control-interface
+ *          initialization.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_i2c_init(struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
@@ -206,6 +329,14 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	return 0;
 }
 
+/**
+ * fl2000_i2c_cleanup() - Remove I2C clients, adapter and software node
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * The component master and IRQ domain must already be removed.
+ *
+ * Context: Process context. Caller serializes control-interface teardown.
+ */
 void fl2000_i2c_cleanup(struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);

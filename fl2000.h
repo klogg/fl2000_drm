@@ -19,13 +19,35 @@ struct module;
 struct usb_device;
 struct usb_interface;
 
-/* Known USB interfaces of FL2000 */
+/**
+ * enum fl2000_interface - USB interfaces claimed as one adapter
+ * @FL2000_USBIF_AVCONTROL: Register access and bulk endpoint configuration.
+ * @FL2000_USBIF_STREAMING: Interface holding the bulk-stream resource
+ *                          lifetime.
+ * @FL2000_USBIF_INTERRUPT: USB interrupt endpoint resource lifetime.
+ */
 enum fl2000_interface {
 	FL2000_USBIF_AVCONTROL = 0,
 	FL2000_USBIF_STREAMING = 1,
 	FL2000_USBIF_INTERRUPT = 2,
 };
 
+/**
+ * struct fl2000_timings - Controller timing values, excluding PLL encoding
+ * @hactive: Active pixels per line.
+ * @htotal: Total pixel clocks per line.
+ * @hsync_width: Horizontal sync width in pixel clocks.
+ * @hstart: Controller active-start encoding: htotal - hsync_start + 1.
+ * @vactive: Active lines per frame.
+ * @vtotal: Total lines per frame.
+ * @vsync_width: Vertical sync width in lines.
+ * @vstart: Controller active-start encoding: vtotal - vsync_start + 1.
+ * @hsync_positive: True for positive horizontal sync polarity.
+ * @vsync_positive: True for positive vertical sync polarity.
+ *
+ * Values are derived from a validated DRM adjusted mode. Start values are
+ * controller encodings, not DRM sync-start coordinates.
+ */
 struct fl2000_timings {
 	u32 hactive;
 	u32 htotal;
@@ -39,6 +61,13 @@ struct fl2000_timings {
 	bool vsync_positive;
 };
 
+/**
+ * struct fl2000_pll - Validated PLL register field encodings
+ * @prescaler: Prescaler field encoding, selected by the PLL search.
+ * @multiplier: Multiplier field encoding.
+ * @divisor: Output divider field encoding.
+ * @function: Function field sharing the pre-divider byte.
+ */
 struct fl2000_pll {
 	u32 prescaler;
 	u32 multiplier;
@@ -46,15 +75,15 @@ struct fl2000_pll {
 	u32 function;
 };
 
-/* Timeout in us for I2C read/write operations */
+/* Controller I2C poll interval and timeout, in microseconds. */
 #define I2C_RDWR_INTERVAL 200
 #define I2C_RDWR_TIMEOUT  (256 * 1000)
 
-/* Endpoints we want to use for Bulk streaming and Interrupt transfers */
+/* Endpoint numbers; direction is selected by the USB pipe. */
 #define STREAMING_EP 1
 #define INTERRUPT_EP 3
 
-/* Streaming transfer task creation */
+/* Bulk streaming. */
 int fl2000_streaming_create(struct usb_interface *interface);
 void fl2000_streaming_destroy(struct usb_interface *interface);
 struct fl2000_stream_buffers;
@@ -69,19 +98,19 @@ int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigne
 int fl2000_streaming_enable(struct usb_device *usb_dev);
 void fl2000_streaming_disable(const struct usb_device *usb_dev);
 
-/* Interrupt polling task creation */
+/* USB interrupt reception and status recovery. */
 int fl2000_interrupt_create(struct usb_interface *interface);
 void fl2000_interrupt_destroy(struct usb_interface *interface);
 int fl2000_enable_interrupt(struct usb_device *usb_dev);
 void fl2000_disable_interrupt(const struct usb_device *usb_dev);
 
-/* I2C adapter interface creation */
+/* I2C adapter. */
 struct i2c_adapter *fl2000_i2c_adapter(const struct usb_device *usb_dev);
 int fl2000_i2c_init(struct usb_device *usb_dev);
 void fl2000_i2c_cleanup(struct usb_device *usb_dev);
 bool fl2000_i2c_verify_client(const struct usb_device *usb_dev, struct device *client_dev);
 
-/* Register map creation */
+/* Controller registers. */
 int fl2000_regmap_init(struct usb_device *usb_dev);
 void fl2000_regmap_cleanup(struct usb_device *usb_dev);
 int fl2000_reset(struct usb_device *usb_dev);
@@ -96,7 +125,7 @@ int fl2000_enable_interrupts(struct usb_device *usb_dev);
 int fl2000_check_interrupt(struct usb_device *usb_dev);
 int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data);
 
-/* DRM device creation */
+/* Component master and DRM lifecycle. */
 int fl2000_drm_init(struct usb_device *usb_dev);
 void fl2000_drm_cleanup(struct usb_device *usb_dev);
 int fl2000_drm_hotplug(const struct usb_device *usb_dev);
@@ -107,13 +136,33 @@ int fl2000_drm_resume(struct usb_device *usb_dev);
 struct fl2000_stream;
 struct fl2000_interrupt;
 
+/**
+ * struct fl2000_device - State shared by the claimed USB interfaces
+ * @stream: Bulk resources, owned by the streaming interface.
+ * @interrupt: Interrupt URB, work and IRQ domain resources.
+ * @i2c: Adapter owned by the control interface; NULL before registration.
+ * @bridge_owner: Provider module selected under the component framework lock.
+ * @i2c_errors: Failed adapter transfers, including IRQ acknowledgment errors.
+ * @interfaces: Claimed interfaces, cleared before sibling disconnect
+ *              callbacks.
+ * @active_interfaces: Interfaces whose subsystem initialization completed.
+ * @master_registered: Component master registration succeeded.
+ * @suspended: Adapter PM transition completed under @lock.
+ * @drm: Bound DRM device, or NULL; IRQ work reads it with READ_ONCE().
+ *
+ * Allocated on the USB parent device. USB core parent locking serializes its
+ * initial publication. Independent adapters do not share lifecycle locks.
+ * Component removal drains IRQ work before the DRM reference and interface
+ * resources can disappear; reading @drm alone does not acquire a reference.
+ */
 struct fl2000_device {
-	struct mutex lock; /* Serializes lifecycle and PM for this adapter. */
+	/** @lock: Serializes USB lifecycle and PM for this adapter. */
+	struct mutex lock;
 	struct fl2000_stream *stream;
 	struct fl2000_interrupt *interrupt;
 	struct i2c_adapter *i2c;
-	struct module *bridge_owner; /* Selected under the component framework lock. */
-	atomic_t i2c_errors; /* Failed bridge transactions, including IRQ acknowledgment. */
+	struct module *bridge_owner;
+	atomic_t i2c_errors;
 	struct usb_interface *interfaces[FL2000_USBIF_INTERRUPT + 1];
 	unsigned long active_interfaces;
 	bool master_registered;

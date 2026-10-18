@@ -17,6 +17,29 @@
 #define FL2000_INTR_STALL_RETRIES   3
 #define FL2000_INTR_STATUS_RETRY_MS 1000
 
+/**
+ * struct fl2000_interrupt - USB event reception and nested IRQ lifetime
+ * @usb_dev: Owning USB parent.
+ * @domain: One-input domain keyed by the I2C adapter software node.
+ * @irq: Linux IRQ mapped from domain input zero.
+ * @urb: Single reusable interrupt-IN URB.
+ * @buf: One-byte interrupt packet buffer.
+ * @work: Status acknowledgment, halt clearing and rearm worker.
+ * @stalls: Consecutive endpoint stalls; successful packets clear the count.
+ * @stalled: Worker must clear the endpoint halt before resubmission.
+ * @rearm: Completion awaits acknowledgment before resubmission.
+ * @fallback: Worker must enable polling after reception has stopped.
+ * @irq_rescan: IRQ unmask requested a bridge rescan; consumed with xchg().
+ * @status_polling: Status retry mode; worker-owned, reset after cancellation.
+ * @enabled: Submission allowed; stop clears it before draining URB and work.
+ *
+ * The USB worker dispatches the nested IRQ synchronously, so bridge I2C
+ * acknowledgment completes before USB rearm. Status or acknowledgment errors
+ * retry once per second while enabled. A fourth consecutive endpoint stall
+ * stops reception; bulk-stream recovery has its own independent retry budget.
+ * Stop must not hold a bridge/DRM lock needed by @work. Domain and mapping
+ * outlive provider unbind and are freed before the adapter software node.
+ */
 struct fl2000_interrupt {
 	struct usb_device *usb_dev;
 	struct irq_domain *domain;
@@ -24,22 +47,36 @@ struct fl2000_interrupt {
 	struct urb *urb;
 	u8 *buf;
 	struct delayed_work work;
-	struct mutex mutex; /* Serializes enable, disable and resource release. */
-	spinlock_t lock; /* Serializes submission against stop. */
+	/** @mutex: Serializes enable, disable and resource release. */
+	struct mutex mutex;
+	/** @lock: Serializes submission and completion queue state against stop. */
+	spinlock_t lock;
 	unsigned int stalls;
 	bool stalled;
 	bool rearm;
 	bool fallback;
-	bool irq_rescan; /* Recheck bridge status after IRQ unmask. */
-	bool status_polling; /* Owned by the worker; reset after cancellation. */
+	bool irq_rescan;
+	bool status_polling;
 	bool enabled;
 };
 
+/**
+ * fl2000_irq_mask() - Leave nested dispatch masking to IRQ core
+ * @data: IRQ descriptor argument; unused.
+ *
+ * Context: Any context. Does not sleep.
+ */
 static void fl2000_irq_mask(struct irq_data *data __always_unused)
 {
 	/* IRQ core masks nested dispatch; the USB worker owns packet submission. */
 }
 
+/**
+ * fl2000_irq_unmask() - Request a rescan of pending bridge status
+ * @data: Mapped IRQ descriptor.
+ *
+ * Context: Any context. Does not sleep.
+ */
 static void fl2000_irq_unmask(struct irq_data *data)
 {
 	struct fl2000_interrupt *intr = irq_data_get_irq_chip_data(data);
@@ -52,11 +89,22 @@ static void fl2000_irq_unmask(struct irq_data *data)
 	spin_unlock_irqrestore(&intr->lock, flags);
 }
 
+/**
+ * fl2000_irq_set_type() - Accept only unspecified or level-low trigger type
+ * @data: IRQ descriptor argument; unused.
+ * @type: Requested IRQ_TYPE_* trigger encoding.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: 0 for a supported type or -EINVAL.
+ */
 static int fl2000_irq_set_type(struct irq_data *data __always_unused, unsigned int type)
 {
 	return type == IRQ_TYPE_NONE || type == IRQ_TYPE_LEVEL_LOW ? 0 : -EINVAL;
 }
 
+/**
+ * var fl2000_irq_chip - Nested level-low IRQ operations without hardware mask writes
+ */
 static const struct irq_chip fl2000_irq_chip = {
 	.name = "fl2000",
 	.irq_mask = fl2000_irq_mask,
@@ -64,6 +112,15 @@ static const struct irq_chip fl2000_irq_chip = {
 	.irq_set_type = fl2000_irq_set_type,
 };
 
+/**
+ * fl2000_irq_map() - Install the nested chip and handler for domain input zero
+ * @domain: Adapter IRQ domain.
+ * @irq: Linux IRQ number.
+ * @hwirq: Domain input, always zero; unused.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_irq_map(struct irq_domain *domain, unsigned int irq,
 			  irq_hw_number_t hwirq __always_unused)
 {
@@ -74,10 +131,20 @@ static int fl2000_irq_map(struct irq_domain *domain, unsigned int irq,
 	return 0;
 }
 
+/**
+ * var fl2000_irq_domain_ops - Map the adapter domain to a nested Linux IRQ
+ */
 static const struct irq_domain_ops fl2000_irq_domain_ops = {
 	.map = fl2000_irq_map,
 };
 
+/**
+ * fl2000_intr_irq_init() - Create the adapter domain and map its one input
+ * @intr: Interrupt resource with a registered I2C adapter.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_intr_irq_init(struct fl2000_interrupt *intr)
 {
 	struct i2c_adapter *adapter = fl2000_i2c_adapter(intr->usb_dev);
@@ -90,6 +157,15 @@ static int fl2000_intr_irq_init(struct fl2000_interrupt *intr)
 	return intr->irq ? 0 : -ENOMEM;
 }
 
+/**
+ * fl2000_intr_recover_stall() - Clear a halt outside URB completion context
+ * @intr: Interrupt state with a stalled endpoint.
+ *
+ * After the settle delay, recheck enabled state before submission. Failed halt
+ * clear or resubmission stops reception and enables connector polling.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_intr_recover_stall(struct fl2000_interrupt *intr)
 {
 	unsigned long flags;
@@ -123,6 +199,17 @@ unlock:
 	}
 }
 
+/**
+ * fl2000_intr_process_status() - Acknowledge controller and nested bridge events
+ * @intr: Enabled interrupt resource.
+ *
+ * Compare I2C error counts around synchronous nested dispatch and detection.
+ * Failures enable fallback polling and status retries without depending on an
+ * IRQ handler return value.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_intr_process_status(struct fl2000_interrupt *intr)
 {
 	const struct fl2000_device *device = dev_get_drvdata(&intr->usb_dev->dev);
@@ -156,6 +243,12 @@ static int fl2000_intr_process_status(struct fl2000_interrupt *intr)
 	return ret;
 }
 
+/**
+ * fl2000_intr_work() - Process status before rearming the interrupt URB
+ * @work: Scheduled subsystem work item.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_intr_work(struct work_struct *work)
 {
 	struct fl2000_interrupt *intr =
@@ -196,6 +289,12 @@ static void fl2000_intr_work(struct work_struct *work)
 	}
 }
 
+/**
+ * fl2000_intr_completion() - Record endpoint status and defer all I2C work
+ * @urb: Completed USB request.
+ *
+ * Context: USB completion context. Takes the interrupt spinlock.
+ */
 static void fl2000_intr_completion(struct urb *urb)
 {
 	struct fl2000_interrupt *intr = urb->context;
@@ -235,6 +334,12 @@ unlock:
 		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt transfer failed: %d\n", status);
 }
 
+/**
+ * fl2000_intr_stop() - Drain the interrupt URB and synchronize its worker
+ * @intr: Interrupt resource to stop.
+ *
+ * Context: Process context. Caller holds the interrupt mutex.
+ */
 static void fl2000_intr_stop(struct fl2000_interrupt *intr)
 {
 	unsigned long flags;
@@ -251,6 +356,13 @@ static void fl2000_intr_stop(struct fl2000_interrupt *intr)
 	intr->status_polling = false;
 }
 
+/**
+ * fl2000_intr_release() - Stop delivery and free IRQ-domain and USB resources
+ * @dev: Resource owner; unused.
+ * @res: Interrupt resource whose bridge component is already unbound.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_intr_release(struct device *dev __always_unused, void *res)
 {
 	struct fl2000_interrupt *intr = res;
@@ -266,6 +378,18 @@ static void fl2000_intr_release(struct device *dev __always_unused, void *res)
 	mutex_unlock(&intr->mutex);
 }
 
+/**
+ * fl2000_enable_interrupt() - Start interrupt reception and request a status rescan
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Idempotent while enabled. A fresh start clears stale halt state, restores
+ * HPD-only connector detection and schedules status processing immediately.
+ * Call after bridge IRQ binding and initial display setup.
+ *
+ * Context: Process context. Takes the interrupt mutex; must not run from its
+ *          worker.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_enable_interrupt(struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
@@ -309,6 +433,16 @@ out:
 	return ret;
 }
 
+/**
+ * fl2000_disable_interrupt() - Quiesce USB and nested IRQ delivery
+ * @usb_dev: USB parent whose interface resources remain alive.
+ *
+ * Kills the interrupt URB and synchronizes status/recovery work. Call before
+ * detaching the bridge or freeing its requested IRQ.
+ *
+ * Context: Process context. Must not hold locks needed by bridge/DRM
+ *          callbacks.
+ */
 void fl2000_disable_interrupt(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
@@ -322,6 +456,16 @@ void fl2000_disable_interrupt(const struct usb_device *usb_dev)
 	mutex_unlock(&intr->mutex);
 }
 
+/**
+ * fl2000_interrupt_create() - Create USB interrupt resources and a nested IRQ
+ * @interface: Claimed interrupt interface; the I2C adapter is registered.
+ *
+ * Creates a one-input IRQ domain keyed by the adapter software node and
+ * maps input zero. Does not start the interrupt URB.
+ *
+ * Context: Process context. Caller serializes interface initialization.
+ * Return: 0 on success or a negative error code.
+ */
 int fl2000_interrupt_create(struct usb_interface *interface)
 {
 	struct fl2000_device *device = dev_get_drvdata(&interface_to_usbdev(interface)->dev);
@@ -360,6 +504,15 @@ release:
 	return ret;
 }
 
+/**
+ * fl2000_interrupt_destroy() - Release interrupt resources and IRQ mapping
+ * @interface: Interrupt interface; the component master is removed.
+ *
+ * Drains work before removing the IRQ mapping and domain. The adapter and
+ * its software node must remain alive through this call.
+ *
+ * Context: Process context. Caller excludes interface reinitialization.
+ */
 void fl2000_interrupt_destroy(struct usb_interface *interface)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);

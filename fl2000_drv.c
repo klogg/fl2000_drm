@@ -10,12 +10,21 @@
 
 static struct usb_driver fl2000_driver;
 
+/**
+ * var fl2000_id_table - Match the FL2000 control interface only
+ */
 static const struct usb_device_id fl2000_id_table[] = {
 	{ USB_DEVICE_INTERFACE_NUMBER(0x1d5c, 0x2000, FL2000_USBIF_AVCONTROL) },
 	{}
 };
 MODULE_DEVICE_TABLE(usb, fl2000_id_table);
 
+/**
+ * fl2000_destroy_interface() - Release resources belonging to one interface
+ * @interface: Claimed USB interface.
+ *
+ * Context: Process context. Caller holds the adapter lifecycle mutex.
+ */
 static void fl2000_destroy_interface(struct usb_interface *interface)
 {
 	struct usb_device *usb_dev = interface_to_usbdev(interface);
@@ -36,7 +45,13 @@ static void fl2000_destroy_interface(struct usb_interface *interface)
 	}
 }
 
-/* The caller serializes control-interface setup with the device mutex. */
+/**
+ * fl2000_control_init() - Initialize registers, detection clock and I2C
+ * @usb_dev: USB parent with live adapter resources.
+ *
+ * Context: Process context. Caller holds the adapter lifecycle mutex.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_control_init(struct usb_device *usb_dev)
 {
 	int ret;
@@ -56,7 +71,13 @@ static int fl2000_control_init(struct usb_device *usb_dev)
 	return ret;
 }
 
-/* Clear every callback's data before synchronous sibling disconnects. */
+/**
+ * fl2000_release_interfaces() - Clear callback data before releasing sibling interfaces
+ * @device: Per-adapter state.
+ * @origin: Interface whose disconnect callback is already executing.
+ *
+ * Context: Process context. Caller holds the adapter lifecycle mutex.
+ */
 static void fl2000_release_interfaces(struct fl2000_device *device,
 				      const struct usb_interface *origin)
 {
@@ -74,6 +95,13 @@ static void fl2000_release_interfaces(struct fl2000_device *device,
 			usb_driver_release_interface(&fl2000_driver, interfaces[i]);
 }
 
+/**
+ * fl2000_cleanup() - Remove the component master before interface resources
+ * @usb_dev: USB parent with live adapter resources.
+ * @device: Per-adapter state.
+ *
+ * Context: Process context. Caller holds the adapter lifecycle mutex.
+ */
 static void fl2000_cleanup(struct usb_device *usb_dev, struct fl2000_device *device)
 {
 	if (device->master_registered) {
@@ -87,6 +115,17 @@ static void fl2000_cleanup(struct usb_device *usb_dev, struct fl2000_device *dev
 	device->suspended = false;
 }
 
+/**
+ * fl2000_probe() - Claim all interfaces and publish one adapter instance
+ * @interface: Claimed USB interface.
+ * @id: USB match entry; unused.
+ *
+ * USB parent locking serializes initial state publication. Claim siblings before
+ * changing endpoint configuration; unwind in reverse subsystem order.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_probe(struct usb_interface *interface,
 			const struct usb_device_id *id __always_unused)
 {
@@ -151,6 +190,12 @@ out:
 	return ret;
 }
 
+/**
+ * fl2000_disconnect() - Tear down all claimed interfaces from one disconnect
+ * @interface: Claimed USB interface.
+ *
+ * Context: Process context. May sleep.
+ */
 static void fl2000_disconnect(struct usb_interface *interface)
 {
 	struct fl2000_device *device = usb_get_intfdata(interface);
@@ -164,6 +209,14 @@ static void fl2000_disconnect(struct usb_interface *interface)
 	mutex_unlock(&device->lock);
 }
 
+/**
+ * fl2000_suspend() - Run one suspend transition for the complete adapter
+ * @interface: Claimed USB interface.
+ * @message: USB PM request; unused.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_suspend(struct usb_interface *interface, pm_message_t message __always_unused)
 {
 	struct fl2000_device *device = usb_get_intfdata(interface);
@@ -181,6 +234,13 @@ static int fl2000_suspend(struct usb_interface *interface, pm_message_t message 
 	return ret;
 }
 
+/**
+ * fl2000_resume() - Restore the adapter from the control-interface callback
+ * @interface: Claimed USB interface.
+ *
+ * Context: Process context. May sleep.
+ * Return: 0 on success or a negative error code.
+ */
 static int fl2000_resume(struct usb_interface *interface)
 {
 	struct fl2000_device *device = usb_get_intfdata(interface);
@@ -203,6 +263,9 @@ static int fl2000_resume(struct usb_interface *interface)
 	return ret;
 }
 
+/**
+ * var fl2000_driver - USB ownership and shared-interface lifecycle callbacks
+ */
 static struct usb_driver fl2000_driver = {
 	.name = "fl2000_usb",
 	.probe = fl2000_probe,

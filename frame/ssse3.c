@@ -4,11 +4,27 @@
 
 #include "ssse3.h"
 
+/**
+ * DOC: SSSE3 vector lane aliases
+ *
+ * GCC shuffle and packing builtins require primitive 128-bit vector aliases.
+ * ``v16qi`` has sixteen byte lanes, ``v4si`` four signed integer lanes,
+ * ``v4su`` four unsigned integer lanes for pixel masks, and ``v8hu`` eight
+ * unsigned short lanes for RGB565 sign-bit correction. These are internal
+ * computation types, used only inside the caller's kernel FPU section.
+ */
 typedef char v16qi __attribute__((vector_size(16)));
 typedef int v4si __attribute__((vector_size(16)));
 typedef unsigned int v4su __attribute__((vector_size(16)));
 typedef unsigned short v8hu __attribute__((vector_size(16)));
 
+/**
+ * load() - Load an unaligned 16-byte vector
+ * @src: Readable source mapping.
+ *
+ * Context: Caller holds kernel FPU protection.
+ * Return: Loaded vector.
+ */
 static v16qi load(const u8 *src)
 {
 	v16qi value;
@@ -17,6 +33,13 @@ static v16qi load(const u8 *src)
 	return value;
 }
 
+/**
+ * store() - Store an unaligned 16-byte vector
+ * @dst: Writable destination wire buffer.
+ * @value: Vector to store.
+ *
+ * Context: Caller holds kernel FPU protection.
+ */
 static void store(u8 *dst, v16qi value)
 {
 	__builtin_memcpy(dst, &value, 16);

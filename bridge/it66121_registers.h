@@ -1,8 +1,30 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
-/* Linux v7.0 definitions with vendor register-list additions; see docs/REGISTERS.md. */
+/* Linux v7.0 definitions with IT66121/IT66120 Register Definitions v1.0 additions. */
 #ifndef __IT66121_REGISTERS_H__
 #define __IT66121_REGISTERS_H__
 
+/**
+ * DOC: IT6610/21/22 register coverage and unresolved layouts
+ *
+ * Shared definitions retain Linux v7.0 values. The IT66121/IT66120 HDMI Tx
+ * Register Definitions v1.0 (2011-11-29) supplies additional bank, input, FIFO,
+ * CSC, AFE and interrupt fields. It does not establish identical layouts on
+ * every silicon variant. These definitions are not a complete chip catalogue:
+ * HDCP, CSC matrices, pattern/sync generation, packet payloads and interrupt
+ * banks are only partly represented. CEC belongs to a separate I2C slave.
+ *
+ * The older reference places an audio CTS counter at 0x135-0x137, whereas the
+ * shared driver uses 0x1a0-0x1a2. It also leaves some upstream CSC filter bits
+ * unnamed. Require variant-specific evidence before changing shared values.
+ *
+ * AVI payload layout is unresolved. The definitions place DB1-DB5 at
+ * 0x158-0x15c, checksum at 0x15d, and DB6-DB13 at 0x15e-0x165. The shared
+ * programming sequence writes 13 contiguous payload bytes starting at 0x158,
+ * then checksum at 0x15d. Under the documented layout that overwrites byte 6
+ * and omits byte 13's register. Preserve the existing sequence until a
+ * revision-specific reference and independent packet-layout test establish a
+ * safe correction for existing native-board users.
+ */
 #define IT66121_VENDOR_ID0_REG 0x00
 #define IT66121_VENDOR_ID1_REG 0x01
 #define IT66121_DEVICE_ID0_REG 0x02
@@ -42,7 +64,7 @@
 #define IT66121_INPUT_MODE_SYNCEMB	   BIT(3)
 #define IT66121_INPUT_MODE_DDR		   BIT(2)
 #define IT66121_INPUT_MODE_PCLK_DELAY_MASK GENMASK(1, 0)
-/* FL2000 uses one input-clock delay step. */
+/* Input-clock delay selector values. */
 #define IT66121_INPUT_MODE_PCLK_DELAY1 BIT(0)
 #define IT66121_INPUT_MODE_PCLK_DELAY2 BIT(1)
 #define IT66121_INPUT_MODE_PCLK_DELAY3 GENMASK(1, 0)
@@ -294,6 +316,6 @@
 #define IT66121_AUD_SWL_16BIT	      0x2
 #define IT66121_AUD_SWL_NOT_INDICATED 0x0
 
-#define IT66121_AFE_CLK_HIGH 80000 /* Khz */
+#define IT66121_AFE_CLK_HIGH 80000 /* kHz */
 
 #endif
