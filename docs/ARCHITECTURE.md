@@ -1,257 +1,131 @@
 # Driver architecture
 
-The FL2000 core registers an I2C adapter and waits for a bridge component on
-that adapter. A udev-activated service identifies bridges from external
-configuration and creates the I2C client through `new_device`; the core does
-not scan chip IDs, select a bridge driver, or require Device Tree. Components
-are matched by their owning I2C adapter.
-See [userspace enumeration](ENUMERATION.md) for configuration and activation.
+## Discovery and attachment
 
-`fl2000.h` contains shared state and subsystem declarations, with forward
-declarations for pointer-only types. DRM helpers and other implementation
-headers are included by the source files that use them; transport subsystems
-do not inherit framebuffer, GEM, atomic, or fbdev helper dependencies.
+FL2000 owns a USB transport, an I2C adapter and a DRM display pipeline. It
+waits for a bridge component on its own I2C adapter before registering the DRM
+device. A udev-activated service identifies configured bridges and creates an
+I2C client through `new_device`; see [enumeration](ENUMERATION.md). Native VGA
+through the integrated DAC is not implemented, including when bridge discovery
+fails.
 
-Each dongle owns its own adapter and DRM device. Component binding receives
-its DRM encoder; the bridge attaches itself using `drm_bridge_attach()`.
-The DRM allocation belongs to the component bind devres group, which releases
-its reference after unbind or a failed bind. Open DRM files retain their own
-references beyond that group. The master uses the encoder bridge chain and
-pins the matched I2C driver's
-module until the final DRM device release. There is no shared private header
-or bridge payload between the drivers.
+The supplied IT6610/21/22 driver derives from the [Linux v7.0 bridge
+driver][upstream-bridge]. It supports two attachment contexts:
 
-The supplied `it66121.ko` is one optional bridge provider. Providers on FL2000
-need component binding and an IRQ request in addition to their normal I2C
-probe; instantiating an arbitrary upstream I2C bridge alone does not supply it.
-Before registration, the adapter receives a software node describing its
-register access constraints, parallel input wiring, reset ownership, and
-interrupt electrical requirements. The bridge reads these properties
-without matching an adapter name, compatible string, or controller identity.
-Missing Device Tree data does not select transport quirks. The property
-interface and current FL2000 values are documented below.
+| Context | Configuration | Attachment | IRQ |
+| --- | --- | --- | --- |
+| OF board | Graph, supplies, reset GPIO | DRM graph | `client->irq` |
+| No OF node | Adapter software node | Component bind | Adapter input 0 |
 
-The component framework remains responsible for readiness and bind/unbind
-ordering. Passing a `struct drm_encoder *` as component bind data is the
-agreement between the master and provider; DRM does not automatically impose
-that contract on other bridge drivers. The provider requests its IRQ and
-attaches its bridge during bind, then frees the IRQ during unbind. The master
-stops USB interrupt work and detaches the encoder before provider unbind.
-DRM unbind owns quiescence before bridge detachment: it drains interrupt work,
-stops connector polling, unplugs DRM, shuts down the display, and drains
-streaming
-before cleaning up the encoder and unbinding the provider. The explicit
-streaming
-stop also covers atomic shutdown failures. USB cleanup removes the component
-master and then releases interface resources without repeating those outer
-stops. Resource release callbacks still drain their own URBs and work so partial
-probe failures and an unmatched component master remain safe.
+OF means Device Tree. FL2000 on x86 uses the second context and needs no OF
+node or Device Tree support. The core creates a software node on its I2C
+adapter, then registers an IRQ domain keyed by that node. The bridge reads the
+adapter properties and waits for the domain before registering its component.
+A missing domain returns `-EPROBE_DEFER`; polling-only firmware-less
+attachment is not supported. An OF node selects the native graph path instead.
 
-DRM registration currently waits for an external bridge component. Native
-VGA through the integrated FL2000 DAC would need a separate output path and
-explicit hardware selection; it is not implemented or inferred from failed
-bridge discovery.
+Component matching checks the client's owning I2C adapter. During binding,
+FL2000 passes a `struct drm_encoder *`; the provider requests its mapped IRQ
+and calls `drm_bridge_attach()` with `DRM_BRIDGE_ATTACH_NO_CONNECTOR`. This
+bind contract is local to these drivers. Using the component and IRQ
+frameworks does not make an arbitrary upstream bridge compatible: other
+providers must implement that contract and support the controller's wiring and
+transfer constraints.
 
-The bridge core is rebased on Linux v7.0's
-[IT66121
-driver](https://github.com/torvalds/linux/blob/v7.0/drivers/gpu/drm/bridge/ite-
-it66121.c).
-It uses upstream atomic bridge state, input-format negotiation, AFE programming,
-AVI infoframes, HPD detection, and interrupt acknowledgment. FL2000 adaptations
-retain USB component lifetime, the one-cycle parallel input delay, HDMI/DVI
-selection, aligned DWORD I2C/EDID reads, and restoration after encoder resets.
-The driver shares one regmap initializer, EDID callback and block transaction
-flow, modeset implementation, IRQ handler, and HPD reporting. Small DDC access
-helpers account for aligned transfers and destructive FIFO snapshots; there
-is no separate FL2000 EDID algorithm.
-Normal firmware-described boards retain OF matching and graph lookup,
-regulator/reset control, detected IT6610/21/22 identities, 12/24-bit input,
-`client->irq` or polling, ordinary I2C EDID reads, and HDMI audio. Native OF
-graphs select the existing firmware path. Firmware-less clients
-with explicit parallel input wiring wait for their adapter IRQ domain before
-registering as components. Audio codec resources are released with the parent
-device.
-Bridge mode programming runs once in atomic enable, after the CRTC has reset
-and configured FL2000. The bridge restores its interrupt configuration before
-unmuting; it has no legacy `mode_set` callback. Generic boards retain the
-upstream input clock phase and interrupt configuration. FL2000 restores its
-active-low push-pull output and HPD mask according to the framework's last
-HPD enable/disable request. Disabling a bridge clears the active connector.
-The bridge never identifies its I2C adapter. Adapter software-node properties
-provide independent settings for aligned I2C access, pixel-clock delay,
-controller
-reset ownership and interrupt output mode. Parallel input width is independent
-of I2C transfer width. Standard
-I2C adapter quirks describe transfer lengths but do not describe destructive
-aligned register reads, so that requirement remains an explicit transport quirk.
-The following adapter software-node properties form a local module interface;
-they are not existing upstream firmware bindings. With no adapter properties,
-the bridge retains the normal firmware graph,
-power/reset, and IRQ configuration. These values are read from the adapter,
-not inherited automatically from it by the I2C client.
+`drm_bridge_connector_init()` supplies detection, EDID and HPD integration.
+In-tree Kconfig selects its dependencies. External builds can compile missing
+helpers from checksum-pinned, unmodified kernel sources.
 
-| Property | Meaning |
-| --- | --- |
-| `i2c-register-access-alignment` | Access granularity: 1 or 4 bytes. |
-| `display-controller-reset` | Restore settings after controller reset. |
-| `interrupt-active-high` | Restore an active-high IRQ output. |
-| `interrupt-open-drain` | Restore an open-drain IRQ output. |
-| `display-input-clock-delay` | Clock delay selector, 0–3; default 0. |
-| `display-input-bus-width` | Parallel pixel bus width: 12 or 24. |
+[upstream-bridge]: https://github.com/torvalds/linux/blob/v7.0/drivers/gpu/drm/bridge/ite-it66121.c
 
-Alignment defaults to 1; a value of 4 selects aligned group access and FIFO
-handling. Input bus width is required for component attachment. IRQ output
-properties apply when restoring configuration after a controller-owned reset.
-IRQ handlers acknowledge serviced interrupts. The transport detects I2C
-failures independently and owns acknowledgment retries.
+## Adapter hardware description
 
-The FL2000 adapter supplies alignment 4, clock delay selector 1, and input
-bus width 24. It sets controller reset to true. Both electrical IRQ properties
-are absent, selecting active-low,
-push-pull output when configuration is restored. Absent boolean properties
-are false; their presence means true. Clock delay is a hardware selector,
-not a duration in nanoseconds.
+FL2000 supplies transport granularity, pixel input wiring and reset ownership
+through its I2C adapter software node. The property names and FL2000 values
+are documented in the `FL2000 adapter hardware description` kernel-doc section
+in [fl2000_i2c.c](../fl2000_i2c.c). Defaults, validation and OF/component selection
+are documented at `it66121_probe_properties()` in
+[the bridge](../bridge/it66121_drv.c).
 
-A native OF graph always retains firmware attachment. Without that graph,
-explicit input wiring and an adapter IRQ domain select component attachment.
-A missing domain defers probe until its provider is ready. There are no
-software-policy properties for attachment or interrupt retry.
+These are local module interfaces, not upstream firmware bindings. Consumers
+read the adapter directly; I2C clients do not inherit them automatically.
+The userspace candidate configuration does not set them. Standard I2C quirks
+separately describe transfer lengths; destructive aligned reads remain an
+explicit constraint. See the
+[hardware observations](HARDWARE.md#observed-device-behavior).
 
-Unsupported alignment, clock delay, or component input width fails probe;
-malformed numeric properties also fail probe. Without component attachment,
-input width and downstream attachment still come from the existing OF graph.
-The adapter's standard I2C quirks separately enforce message counts and lengths;
-they cannot establish whether aligned reads consume adjacent FIFO registers.
+## Bridge programming and interrupts
 
-Bridge registers are uncached because FL2000 controls their resets. Polling
-reads HPD without acknowledging interrupts; the bridge IRQ handler owns
-acknowledgment and calls `drm_bridge_hpd_notify()` for HPD events.
+The bridge shares its register map, EDID transaction flow, modeset
+programming, IRQ handler and HPD reporting across attachment contexts.
+Registers are uncached because the display controller can reset the bridge.
+Native OF boards retain regulator/reset handling, IT6610/21/22 identification,
+12/24-bit input, ordinary I2C access and HDMI audio support. Native-board
+validation remains required; FL2000 passthrough does not test those
+configurations.
 
-FL2000 creates a one-input IRQ domain keyed by its I2C adapter's software
-node, without Device Tree. The bridge finds that domain using the adapter's
-fwnode and looks up input zero through standard IRQ-domain APIs. The adapter
-owns the node; the FL2000 interrupt resources own the domain and mapping.
-Its USB worker calls `handle_nested_irq()` in sleepable context, so the
-bridge's normal threaded handler finishes before another interrupt URB is
-submitted. The bridge
-requests the IRQ during component binding and frees it during unbinding;
-userspace I2C `new_device` needs no IRQ extension. IRQ unmask schedules a
-bridge rescan so an already-consumed FL2000 event cannot strand a pending IRQ.
-Connector selection comes from atomic state when the bridge is enabled.
+Mode programming runs once in atomic enable, after the CRTC has configured the
+display controller. The bridge selects HDMI or DVI from the connector state
+and programs input format, AFE and infoframes. If `display-controller-reset`
+is set, it restores the configured IRQ output and the framework's HPD mask
+before unmuting. For FL2000 this selects active-low push-pull output. Polling
+reads HPD without acknowledging it; the IRQ handler owns acknowledgment and
+calls `drm_bridge_hpd_notify()` on an HPD event.
 
-A per-adapter I2C error counter preserves acknowledgment retry without a
-private bridge return value: a failed transfer during dispatch or detection
-holds USB rearming, enables connector polling, and schedules a delayed retry.
-An unrelated concurrent I2C failure can conservatively cause the same retry.
-Retries dispatch the IRQ even if the earlier status read cleared the event.
-Endpoint errors also enable polling; successful recovery restores HPD-only
-detection. Unbinding stops the USB worker before freeing the bridge IRQ, and
-the IRQ mapping and domain are released after component teardown.
+USB notifications reach the bridge through a nested Linux IRQ, with I2C work
+in sleepable context. Connector polling provides a fallback when the interrupt
+path fails. The domain, worker and provider lifetimes are coupled; their
+synchronization and retry rules are documented at `struct fl2000_interrupt`
+and the interrupt entry points in [fl2000_interrupt.c](../fl2000_interrupt.c).
 
-`drm_bridge_connector_init()` supplies connector detection, EDID handling,
-and HPD delivery. In-tree Kconfig selects its helpers. External builds can
-compile missing helpers from checksum-pinned, unmodified kernel sources.
-The connector retains bridge references until the final DRM device release;
-a DRM-managed module reference keeps the bridge callbacks available until then.
-Detection and EDID callbacks check the requesting connector's unplug state,
-even after the bridge has been detached or attached to a replacement DRM device.
-The bridge instantiated on FL2000 needs no Device Tree graph, regulators, or
-separate reset GPIO; the FL2000 driver owns power/reset.
+## Ownership and teardown
 
-Each adapter owns its lifecycle mutex and explicit streaming, interrupt, and
-I2C resource pointers. USB core parent-device locking serializes initial state
-publication. Independent adapters do not share a lifecycle lock.
+Each adapter owns its lifecycle lock and transport resources. The
+`struct fl2000_device` documentation in [fl2000.h](../fl2000.h) describes state
+ownership. Component binding owns the initial DRM reference; open files can
+retain the allocation and provider module after unbind. See
+`fl2000_drm_bind()` and `fl2000_drm_cleanup()` in [fl2000_drm.c](../fl2000_drm.c)
+for the lifetime and teardown contracts.
 
-## Atomic display pipeline
+Reset and detection setup take the adapter bus lock before the controller
+regmap lock. This excludes whole I2C transfers, including byte-write
+read-modify-write pairs; it does not exclude an entire multi-transfer bridge
+DDC sequence. Bridge register sequences use a separate bridge mutex. Whole
+sequence serialization against controller reset remains a review item.
 
-The display pipeline uses an explicit primary plane, CRTC, and parallel RGB
-encoder.
-CRTC-only atomic commits include the primary plane in validation and updates.
-Plane checks enforce fullscreen output without scaling or positioning, and
-GEM shadow-plane state retains framebuffer mappings from preparation through
-cleanup. Update and enable callbacks read the state belonging to their commit.
-PLL clock quantization and horizontal-total adjustment run in the CRTC
-`mode_fixup` callback during modeset checking. They preserve bridge timing
-adjustments and refresh derived CRTC timings. Plane validation only reads the
-resulting mode when checking geometry and USB bandwidth. The encoder attaches
-a bridge through the component framework.
+## Atomic pipeline and frame preparation
 
-## Frames and transport
+The atomic pipeline separates validation and preparation from hardware commit.
+That permits allocation failures to leave the current display running. Standard
+DRM shmem GEM objects own framebuffer storage; transport buffers belong to the
+USB stream. The source-level atomic contract is documented in
+[fl2000_drm.c](../fl2000_drm.c), and wire representation, ownership and damage
+tracking in [fl2000_streaming.c](../fl2000_streaming.c).
 
-The driver accepts linear XRGB8888, RGB888 and RGB565 framebuffers. XRGB8888 is
-converted into RGB888 or RGB565 according to estimated USB bandwidth. Native
-RGB888 and RGB565 retain their colour representation and only undergo wire-word
-reordering. RGB888 uses B, G, R bytes in memory; RGB565 uses little-endian
-words. Native RGB888 modes are rejected if the estimated bandwidth only supports
-RGB565. Active framebuffer format changes require an atomic commit with
-ALLOW_MODESET, so old transfers are drained before the device's pixel format is
-changed. Both paths preserve framebuffer offsets and pitch and swap dwords in
-each eight-byte wire word across the full frame. The FL2000 compression protocol
-is not used. Compression is deferred because host-side encoding adds CPU work.
-Future support will be optional, with the current uncompressed path remaining
-the default. Its purpose would be to reduce USB bandwidth when that trade-off is
-useful.
-
-Three reusable bulk URBs transmit immutable frames. USB noncoherent allocations
-retain their DMA mappings across submissions; USB core handles cache
-synchronization. If that allocation fails, the driver falls back to page-based
-scatter-gather, with separate mapping metadata for each URB. Repeated frames
-avoid rebuilding unchanged scatter-gather entries. Both paths reuse unchanged
-pixels without a copy. Five buffers allow three distinct in-flight frames, the
-newest frame and a free conversion destination. Controller scatter-gather
-support is required only for the page-based fallback; contiguous DMA allocations
-also work on controllers without it. Recoverable queue errors schedule up to
-three delayed restart attempts using
-the latest immutable frame, without requiring new damage. Successful frame
-completion resets that budget. Short transfers are diagnosed. Explicit stop
-and terminal removal/cancellation errors suppress recovery; resource release
-waits for the worker before freeing buffers. After retry exhaustion, a later
-framebuffer update or modeset can explicitly start a new attempt.
-
-FL2000 mode validation checks hardware timing field sizes, the 25–148.5 MHz
-input clock
-range used by the upstream IT66121 driver and estimated USB payload capacity.
-The bandwidth estimate uses active pixels and refresh timing; sustained
-throughput still requires measurements. Interlaced, double-scan, stereoscopic
-and fractional source rectangles are rejected.
-
-The device does not expose a physical scanout interrupt. DRM flip events
-therefore report software commit completion, not physical vblank or confirmed
-presentation. Damage clips update only the regions each reusable wire buffer has
-missed. A buffer accumulates damage while it is in flight and is repaired only
-after it is free; no submitted buffer is modified and no full-frame copy is
-needed. Initial buffers, new framebuffers, mapping/layout changes and modesets
-use a full rebuild. Crop-relative damage preserves global eight-byte wire-word
-ordering, including odd widths and padding. Full and partial updates share
-packed conversion and 64-bit reordering routines.
+Damage handling reduces host preparation work while the transport continues
+sending complete frames. Native framebuffer formats avoid color conversion,
+which makes userspace format choice relevant to CPU cost. Flip completion
+provides software synchronization; it is not evidence of physical presentation.
+See [profiling](PROFILING.md) for measurement scope and results.
 
 ## CPU backends
 
-In-tree builds select the frame backend through Kconfig. External builds select
-it at build time with `FL2000_FRAME_BACKEND=auto` (default), `ssse3`, `bmi2`,
-or `generic`. Auto
-builds the SSSE3 backend for x86-64 target kernels and the portable backend
-elsewhere; selection uses the target kernel configuration, so cross builds do
-not inspect the build host CPU. For example, `make FL2000_FRAME_BACKEND=generic`
-forces the portable implementation. The x86 backend checks CPU SSSE3 support and
-FPU context availability before each bounded SIMD section, falling back to
-scalar processing on unsupported CPUs, small spans, and row/damage edges. Only
-its computation object is compiled with SIMD enabled. FPU protection ends before
-rescheduling.
+Kconfig selects the in-tree frame backend. External builds accept
+`FL2000_FRAME_BACKEND=auto`, `ssse3`, `bmi2` or `generic`. Auto selects SSSE3
+for x86-64 target kernels and portable code elsewhere, using the target kernel
+configuration rather than the build host CPU.
 
-The SSSE3 routines combine XRGB8888 conversion with FL2000 wire reordering;
-native RGB888/RGB565 retain portable reordering because vector reordering did
-not provide a repeatable improvement in the complete USB workload. The optional
-BMI2 backend uses PEXT on general-purpose registers and requires no FPU
-protection; it checks CPU BMI2 support and falls back to portable code when
-unavailable. Contiguous XRGB8888 rows are grouped into bounded spans of up to
-4096 pixels, reducing per-row dispatch and FPU transitions while preserving
-padding and crops. New backends implement the conversion prefix function in
-`fl2000_frame.h`, add their objects to Kbuild and their architecture selection
-to Kconfig, and
-define `FL2000_FRAME_ACCELERATED`. Returning zero uses the existing portable
-code. Backend implementations must preserve complete wire words, arbitrary
-source alignment, and bounded protected sections. `tests/test_logic.py` runs
-portable, SSSE3 and BMI2 routines against independent byte references, including
-damage edges, chunk boundaries and runtime fallback. QEMU hardware tests default
-to `-cpu host`; `--cpu` can override the guest model.
+SSSE3 combines XRGB8888 conversion with wire reordering. It checks CPU
+features and FPU context availability and protects bounded SIMD sections with
+`kernel_fpu_begin/end()`. Only its computation object enables SIMD
+compilation. BMI2 uses PEXT in general-purpose registers and needs no FPU
+protection. Both fall back to portable code when features are unavailable or
+spans are too small. Native RGB888/RGB565 reordering is portable in every
+backend.
+
+New backends implement the kernel-doc contract in
+[fl2000_frame.h](../fl2000_frame.h), add Kbuild objects and Kconfig architecture
+constraints, and define `FL2000_FRAME_ACCELERATED`. The raw SSSE3/BMI2 routines
+have stricter span and CPU/FPU preconditions documented in their headers.
+`tests/test_logic.py` checks byte ordering, edges, chunk boundaries and runtime
+fallback against independent references.

@@ -9,15 +9,15 @@ The installed components have separate responsibilities:
 
 The rule matches the I2C adapter and its FL2000 USB ancestor, rather than the
 initial USB event. This ensures the I2C bus exists before enumeration begins.
-Systemd fills the empty service instance with the escaped full sysfs path.
-The unit binds its lifetime to that device and passes the unescaped path to
-the program. Concurrent manual invocations are serialized with `flock`.
+Systemd fills the empty service instance with the escaped full sysfs path. The
+unit binds its lifetime to that device and passes the unescaped path to the
+program. Concurrent manual invocations are serialized with `flock`.
 
 ## Configuration format
 
-The configuration is data, not a sourced shell script. Blank lines and comments
-starting with `#` are ignored. Whitespace separates fields; commas separate
-addresses and identification checks. Both settings are required:
+The configuration is data, not a sourced shell script. Blank lines and
+comments starting with `#` are ignored. Whitespace separates fields; commas
+separate addresses and identification checks. Both settings are required:
 
 ```text
 adapter_name FL2000 bridge I2C bus
@@ -40,12 +40,12 @@ Every address, register, mask, and value uses two-digit hexadecimal notation.
 All identification checks must match. The mask applies to both the register
 value and the expected value, allowing revision bits to be ignored. Use only
 read-only identification registers whose reads have no destructive effects.
-The shipped [configuration](../userspace/enumerator.conf) supplies IT66121 data.
-No bridge-specific constants are embedded in the enumeration program.
+The shipped [configuration](../userspace/enumerator.conf) supplies IT66121
+data. No bridge-specific constants are embedded in the enumeration program.
 Candidate records describe how to identify and instantiate supported hardware;
 they do not adapt a bridge driver. A new provider must implement the component
-and IRQ integration described in [the architecture](ARCHITECTURE.md).
-The FL2000 kernel driver publishes adapter software-node properties before
+and IRQ integration described in [the architecture](ARCHITECTURE.md). The
+FL2000 kernel driver publishes adapter software-node properties before
 registering the I2C bus. The supplied bridge reads explicit transport, wiring,
 reset and interrupt electrical settings; it does not identify the controller.
 See [adapter properties](ARCHITECTURE.md) for their meanings and defaults.
@@ -56,27 +56,34 @@ power/reset, and IRQ setup when adapter properties are absent.
 Enumerator records select bridge candidates and driver names. They do not set
 adapter properties, program pixel timing, or supply IRQ numbers. `new_device`
 creates an I2C client without a firmware graph; the bridge reads hardware
-properties and waits for its adapter IRQ domain
-before registering a component. It obtains its IRQ from that domain at bind
-time. Native OF graphs retain their existing attachment path. Changing
-controller wiring or transport constraints requires changing
-the kernel-side device description, not adding fields to `enumerator.conf`.
-No candidate match reports an enumeration failure; it does not select native
-VGA or create a bridge-free DRM display.
+properties and waits for its adapter IRQ domain before registering a
+component. This software-node path needs no Device Tree or OF support. It
+obtains its IRQ from that domain at bind time. Native OF graphs retain their
+existing attachment path. Changing controller wiring or transport constraints
+requires updating the kernel-side device description. If no candidate matches,
+enumeration fails; it does not select native VGA or create a bridge-free DRM
+display.
 
 The program uses combined I2C transfers through `i2ctransfer`, rather than
-SMBus address scanning. It checks only configured addresses. Existing configured
-clients are handled first, and occupied addresses are never probed. A module
-is loaded and a client instantiated only after its identity matches.
+SMBus address scanning. It checks only configured addresses. Existing
+configured clients are handled first, and occupied addresses are never probed.
+A module is loaded and a client instantiated only after its identity matches.
 
 ## Binding and removal
 
-An existing client of the expected type is reused. Successful enumeration
-requires binding to the configured driver. A missing module fails enumeration;
-a client that has not bound by the deadline is preserved for deferred probing
-or a later driver load. The program does not treat a timeout as a rejected ID,
-remove another caller's client, or try another type against that occupied
-address. Rejected identification candidates never create clients.
+An existing client of the expected type is reused. A registered driver needs
+no module load, including built-in drivers with no `/sys/module` entry. Loaded
+modules are also left alone. An existing bound client is accepted without
+another identification read. An unbound client with a registered driver gets
+one explicit reprobe through the I2C bus `drivers_probe` attribute. Restarting
+the service can therefore retry an ordinary probe failure.
+
+Success requires binding to the configured driver. Module-loading errors fail
+enumeration. A client that remains unbound at the deadline is preserved for
+deferred probing or a later driver load. The program does not replace clients
+or try another type at an occupied address. Rejected identification candidates
+never create clients. Adapter removal cancels the service; the I2C core owns
+client removal.
 
 After success, the service exits; no enumeration daemon remains running.
 Normal driver binding events and DRM hotplug notifications handle subsequent
@@ -85,10 +92,10 @@ operation. Removing the USB adapter removes its I2C clients in the kernel.
 ## Installation and diagnostics
 
 Install with `make install-enumerator`; use `DESTDIR` for a package staging
-root.
-An existing `/etc/fl2000/enumerator.conf` is preserved. Reload udev rules after
-installation. Reconnecting the adapter then activates enumeration automatically.
-For an already-connected adapter, start its service explicitly:
+root. An existing `/etc/fl2000/enumerator.conf` is preserved. Reload udev
+rules after installation. Reconnecting the adapter then activates enumeration
+automatically. For an already-connected adapter, start its service explicitly
+(use `restart` to retry an earlier failure):
 
 ```sh
 adapter=$(readlink -f /sys/bus/i2c/devices/i2c-0)
@@ -104,16 +111,7 @@ run:
 sudo /usr/libexec/fl2000-enumerate /sys/bus/i2c/devices/i2c-0
 ```
 
-The only additional I2C utility is `i2ctransfer` from i2c-tools. The other
-runtime
-requirements are POSIX shell, awk, base utilities, kmod, util-linux, udev, and
-systemd. Python is used by repository tests, not by the installed enumerator.
-
-The module field names a loadable fallback. If the configured I2C driver is
-already registered, enumeration does not invoke `modprobe`; this includes
-built-in drivers with no `/sys/module` entry. Already loaded modules also
-skip loading. An existing bound client is accepted without another ID read.
-For an existing unbound client with a registered driver, each invocation
-requests one reprobe through the I2C bus `drivers_probe` attribute. This
-allows a service restart to retry an ordinary probe failure while preserving
-clients that are waiting for deferred probing.
+Runtime tools are POSIX shell, awk, base utilities, `modprobe` (kmod), `flock`
+(util-linux) and `i2ctransfer` (i2c-tools). Automatic activation additionally
+requires udev and systemd; direct execution does not. Python is used only by
+repository tests.

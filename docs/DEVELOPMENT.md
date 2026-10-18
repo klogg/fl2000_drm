@@ -1,78 +1,166 @@
-# Development tools and remaining work
+# Development and validation
 
-## Shared helpers
+## Build and source checks
 
-`tests/source_helpers.py` extracts actual driver functions and structures for
-userspace harnesses. Import it normally; do not execute fragments of another
-test module. Source extraction is deliberately limited to the C constructs used
-by these tests; the harnesses are not a complete C parser or USB emulator.
+Build against matching Linux 7.0 headers with warnings treated as errors:
 
-`tests/qemu_utils.py` owns QEMU selection, firmware discovery, kernel headers,
-module-version checks, and newc overlay creation. The compressed base is copied
-unchanged, with four-byte alignment before the overlay and 512-byte archive
-padding. Launchers only load modules inside their guests.
+```sh
+make KVER=7.0.0-38-generic W=1 KCFLAGS=-Werror
+```
 
-`tests/kms_smoke.c` checks all three framebuffer formats in a hardware guest.
-It exercises atomic geometry rejection, nonblocking plane and CRTC-only commits,
-software flip-completion events, and dirty-framebuffer updates. These events do
-not confirm physical presentation. Its `--hold` mode checks that an open DRM
-handle returns `ENODEV` after device unbind or removal. Use `--list-modes` to
-inspect the connected display and `--mode INDEX` to test a particular advertised
-mode. The default still prefers 800×600 at 60 Hz when available.
+Repeat for `FL2000_FRAME_BACKEND=generic`, `ssse3` and `bmi2` on a supported
+x86-64 target. In-tree and other-architecture validation are separate tasks.
+See [build instructions](../README.md#build) for missing DRM helpers.
 
-`tests/compile_commands.py` merges backend compilation databases. It retains
-the default build's command for shared sources and adds optional-backend
-sources. This covers both implementations, rather than claiming that every
-preprocessor configuration of every shared source was analyzed.
+Use clang-format 18 and the checked-in `.clang-format`:
 
-## Style checks
+```sh
+scripts/clang-format.sh --dry-run
+scripts/checkpatch.sh
+shellcheck scripts/*.sh userspace/*.sh
+ruff check tests
+pymarkdown scan README.md docs/*.md
+```
 
-Use clang-format 18 with the checked-in `.clang-format`. Production C and its
-headers are checked by `scripts/clang-format.sh --dry-run`. The standalone C
-utilities follow the same format. Python utilities use conventional multiline
-formatting. `scripts/checkpatch.sh` remains strict, with two narrow exceptions:
+The C scripts cover production sources and headers, including bridge, backend
+and compatibility objects. Checkpatch permits `NEW_TYPEDEFS` only for GCC vector
+aliases in `frame/ssse3.c`, and `CAMELCASE` only for kernel USB descriptor fields
+in the USB driver and interrupt source. Standalone test C utilities follow the
+same formatting but are not included in those scripts.
 
-- `NEW_TYPEDEFS` in `frame/ssse3.c`: GCC builtins require vector type aliases.
-- `CAMELCASE` in the USB driver and interrupt source: kernel USB descriptor
-  field names use that spelling.
+Kernel callback types must match their framework declarations. Sonar exclusions
+live in `.github/workflows/sonarcloud.yaml`, not source annotations. Its
+file-scoped `c:S995` exceptions also affect ordinary functions, so review their
+const correctness manually. `tests/compile_commands.py` merges default and BMI2
+build databases; it does not analyze every shared-source configuration.
 
-The exceptions do not apply to other files or disable other checks.
-Kernel callback parameter types must match their framework declarations.
-Sonar rule exceptions belong in `.github/workflows/sonarcloud.yaml`, keeping
-source free of analyzer suppression tags. The pointer-to-const rule (`c:S995`)
-is excluded for `fl2000_drm.c`, `fl2000_i2c.c` and `bridge/it66121_drv.c`, which
-contain callbacks whose pointer types are fixed by the kernel ABI. Sonar
-file/rule exclusions also cover ordinary functions in those files; review
-their const correctness manually. Other rules still apply to these files,
-and S995 remains enabled elsewhere.
+## Source API documentation
 
-CI sets `UBSAN_OPTIONS=halt_on_error=1` for sanitizer regressions so undefined
-behavior fails the job rather than producing diagnostics followed by success.
-The bridge harness also disables sanitizer recovery when compiled directly.
+Use Linux kernel-doc syntax for all production functions and important types,
+operation tables, ownership and locking contracts. Document parameters,
+sleeping/locking context and return values at the definition; shared types and
+backend interfaces are documented in headers.
+Keep every code contract in source, with concise comments for trivial helpers.
+Markdown adds setup, overall design and validation evidence; sources must not
+refer back to Markdown for required documentation.
 
-## USB capture without a GUI
+With a full Linux 7.0 source tree, check comments and generate reStructuredText:
 
-The supplied base initramfs must include its own guest usbmon module, capture
-tools, and their dependencies for these diagnostics. They are not in the
-standard driver overlay. Load usbmon only in the guest.
+```sh
+kernel_src=/path/to/linux-7.0
+python3 "$kernel_src/tools/docs/kernel-doc" -Wall -Werror -none \
+  fl2000.h fl2000_frame.h fl2000_registers.h fl2000_*.c \
+  bridge/*.[ch] frame/*.[ch]
+python3 "$kernel_src/tools/docs/kernel-doc" -Wall -Werror -rst \
+  fl2000.h fl2000_frame.h fl2000_registers.h fl2000_*.c \
+  bridge/*.[ch] frame/*.[ch] \
+  > /tmp/fl2000-api.rst
+```
 
-Start QEMU without attaching the device:
+The checker needs its matching `tools/lib/python/kdoc` package; distribution
+headers may omit it. In-tree `W=1` builds check C comments; external-module
+builds do not run that check. Validate headers and external sources explicitly
+as above. `tests/test_tools.py` checks function/type/table coverage and forbids
+source references to Markdown. The generated reference can be included in
+kernel Sphinx documentation; generated output is not tracked here. Use the
+[kernel-doc format][kernel-doc] rather than Doxygen commands such as `@param`.
+
+[kernel-doc]: https://docs.kernel.org/doc-guide/kernel-doc.html
+
+## Hardware-free regressions
+
+Run all sanitizer and script harnesses with Python 3 and an ASan/UBSan-capable
+C compiler:
+
+```sh
+for test in logic register_locking registers edid bridge bridge_probe \
+    driver drm interrupt tools enumerator; do
+    UBSAN_OPTIONS=halt_on_error=1 python3 "tests/test_$test.py" || exit 1
+done
+```
+
+`test_logic.py` exercises portable, SSSE3 and BMI2 conversion with independent
+byte references. `test_registers.py` includes forced big-endian scalar storage.
+The enumerator harness uses synthetic sysfs and tool responses, including
+built-in drivers, deferred clients and explicit reprobe.
+`tests/source_helpers.py` extracts production functions and structures; these
+harnesses model kernel interfaces rather than emulate a complete kernel or USB
+controller. They do not replace lockdep, KASAN, KCSAN or hardware tests.
+
+The hardware-free QEMU smoke test checks 100 alternating module load/unload
+cycles. See [QEMU setup](../README.md#isolated-qemu-testing). Frame computation
+benchmarks and live profiling are described in [profiling](PROFILING.md).
+
+## Hardware guest tests
+
+Use the prepared initramfs and USB port passthrough; load modules only in the
+guest. `tests/qemu_utils.py` checks module versions, copies installed dependency
+modules and appends a newc overlay without decompressing the base image.
+`/fl2000-startup` loads dependencies, bridge candidates and FL2000, then runs the
+production enumerator. The minimal guest does not test udev/systemd activation.
+
+Build `tests/kms_smoke.c` and `tests/usb_reset.c` as static executables for the
+minimal guest. The KMS test checks XRGB8888, RGB888 and RGB565, invalid geometry,
+nonblocking plane and CRTC-only commits, flip events and dirty-framebuffer
+updates. Options are `--list-modes`, `--mode INDEX` and `--hold`. The default
+prefers 800x600 at 60 Hz when advertised, otherwise the first mode. `--hold`
+keeps an open DRM file until `/tmp/release-hold` exists, then expects `ENODEV`
+after unbind/removal; remove any old marker before repeating it. KMS completion
+does not establish physical presentation.
+
+Build `tests/lifecycle_fault.c` as a separate external module against the guest
+kernel, with `obj-m := lifecycle_fault.o` in a temporary Makefile. It needs
+kprobes and rejects non-QEMU DMI systems. Include helpers in the overlay:
+
+```sh
+python3 tests/qemu_hardware.py --output .qemu-build/hw \
+  --kms-test PATH/kms-smoke --guest-file PATH/usb-reset \
+  --guest-file PATH/lifecycle_fault.ko --i2ctransfer PATH/i2ctransfer
+```
+
+`--guest-file` copies each file to the guest root under its basename, preserving
+its mode. Keep output paths short enough for QEMU's Unix-domain socket. Run
+`/fl2000-startup`, mount debugfs, then run `/kms-smoke`. Useful lifecycle checks
+include bridge unbind/rebind with an open DRM file, USB interface unbind/rebind,
+USB reset and QMP removal/addition. Resolve device names from current guest
+sysfs; host bus/device numbers are not guest numbers.
+
+For status and IRQ-acknowledgment injection, load `lifecycle_fault.ko` with
+`mode=status` or `mode=i2c`, `failures=3`, then unbind/rebind the bridge to
+restart interrupt processing. Allow at least ten seconds and inspect `injected`,
+`polling_on` and `polling_off` under `/sys/module/lifecycle_fault/parameters/`.
+These counters show flag transitions; inspect DRM worker execution separately
+to establish that polling actually ran. The DRM regression checks that fallback
+calls `drm_kms_helper_poll_reschedule()` to queue work.
+
+For bulk recovery, disable fbcon cursor blinking and load the injector with
+`mode=bulk failures=1` while a static image streams. Require `injected=1`, a
+recovery, sustained `bulk_completions` and zero `frame_updates`. This checks
+recovery without a new framebuffer update. The tested run recovered once and
+recorded 193 successful completions in three seconds. Injection modifies
+software results, not physical USB behavior. The injector assumes one adapter;
+its I2C mode targets the supplied IT66121 IRQ handler. Unload it before either
+production module.
+
+## USB capture
+
+Supply guest usbmon, capture tools and their dependencies in the base initramfs;
+the driver overlay does not include them. Load usbmon only in the guest. Start
+without attaching the device:
 
 ```sh
 scripts/emulate.sh --no-device --hostbus 2 --hostport 2
 ```
 
-Start a capture on `usbmon0` inside the guest before attaching the adapter.
-Use Ctrl-a c to enter the QEMU monitor, then attach the physical port:
+Start a guest capture on `usbmon0`, then use Ctrl-a c to enter the QEMU monitor:
 
 ```text
 device_add usb-host,id=fl2000,bus=xhci.0,hostbus=2,hostport=2
 ```
 
-Return to the guest console with Ctrl-a c and run `/fl2000-startup`. Include
-enumeration in the capture so Wireshark learns USB product ID `1d5c:2000`.
-After exporting the capture, replay it as a regular user with Lua-enabled
-TShark and readable scripts:
+Return with Ctrl-a c and run `/fl2000-startup`. Capture USB enumeration so the
+dissector learns product ID `1d5c:2000`. Replay the exported capture as a regular
+user with Lua-enabled TShark:
 
 ```sh
 tshark -X lua_script:scripts/fl2k.lua -r capture.pcapng -Y fl2k
@@ -80,192 +168,75 @@ tshark -X lua_script:tests/fl2k_headless.lua \
   -X lua_script1:scripts/fl2k.lua -r capture.pcapng -q
 ```
 
-Require `HEADLESS_GUI_CALLBACKS_PASS`; TShark may exit zero after Lua errors.
-The callback test replaces window widgets, while packet decoding, fields, and
-listeners use the real Wireshark Lua API. Visual layout needs a separate GUI
-test. Hardware-free fixtures are generated by `tests/test_fl2k.py`.
+Require `HEADLESS_GUI_CALLBACKS_PASS`; Lua errors can coexist with a zero TShark
+exit status. The callback test substitutes window widgets but uses real packet
+decoding and listeners. Test visual layout separately in Wireshark.
+`python3 tests/test_fl2k.py` generates hardware-free capture fixtures.
 
-## Register definitions
+## Validation scope
 
-See [the register audit](REGISTERS.md) for manual coverage, additions, and
-unresolved documentation conflicts. Unused definitions are retained.
+External x86-64 builds have used Ubuntu 7.0.0-34 and 7.0.0-38 headers. Physical
+passthrough testing used patched QEMU 11.1.2, KVM and one HDMI display advertising
+800x480 at 66 Hz, with a 32 MHz pixel clock. Covered paths include all formats
+and backends, physical HDMI unplug/reconnect, open-file lifetime and bridge
+rebind, USB interface cycles/reset, QMP removal/addition and software fault
+injection. These are targeted observations, not a claim that every revision or
+hardware configuration passed. SSE/AVX preservation and runtime CPU fallback
+have also been tested in guests.
 
-## Validation results, 2026-10-17
+Local build/test logs are ignored under `.qemu-build/`. The latest maintainer
+fix run records its revisions and checks in `maintainer-fixes/results.json`;
+its guest logs are under `mf/`. Earlier lifecycle evidence is under
+`lifecycle-validation/`, `lv/` and `pm/`. These artifacts are not distributed.
+Published CPU measurements remain in the tracked JSON files linked from
+[profiling](PROFILING.md).
 
-Production source: `dd58d4b`. Test utilities were extended during this run;
-no production driver changes were made. Tests used KVM, patched QEMU 11.1.2,
-`-cpu host`, 1 GiB RAM, the supplied base initramfs, and a physical FL2000
-(`1d5c:2000`) passed through by host bus 2, port 2 to an emulated xHCI
-controller. Driver modules were loaded only in guests.
+## Validation backlog
 
-The attached HDMI display advertises one mode: 800×480 at 66 Hz, pixel clock
-32 MHz. Passing KMS ioctls and software completion events does not establish
-physical presentation or image fidelity.
+- **System PM:** `pm_test=devices` hangs in the emulated xHCI resume path even
+  with both drivers unloaded; the freezer-only control passed. Diagnose that
+  environment, then test S3, s2idle, reset-resume, repeated active/idle cycles
+  and unplug during suspend on a physical host or dedicated USB controller.
+- **Physical faults and allocation failures:** test power loss, real stalls,
+  short transfers, failed submissions, retry exhaustion and memory pressure
+  across USB controllers and hubs. Require bounded bulk retries, correct DMA
+  ownership, polling fallback and clean reconnect with open DRM files.
+- **Native bridge users:** validate IT6610/21/22 OF boards, regulators, reset
+  GPIO, IRQ wiring, bridge chaining, audio and probe deferral. FL2000 testing
+  cannot establish compatibility for existing upstream users.
+- **Multiple adapters:** simultaneous enumeration and scanout, mixed bridges,
+  independent IRQ/reset and removal of one adapter while another streams.
+- **Modes and fidelity:** additional resolutions, clocks and displays; verify
+  channel order, quantization, pitch, crops, damage edges and modeset transitions
+  with visible output or capture. Flip events and byte tests are insufficient.
+- **Kernel integration:** full built-in/modular kernel builds, helper selection,
+  non-x86 architectures, endian/alignment and DMA constraints. External x86
+  header builds do not cover this.
+- **Concurrency and endurance:** sustained modesets, EDID, damage, reset and
+  teardown under lockdep, KASAN and KCSAN. Check reference/memory growth and
+  work/URB drainage. Investigate observed `Frame conversion failed: -2`
+  teardown diagnostics rather than treating successful rebind as resolution.
+- **Distribution services:** packaged udev/systemd ordering, boot-time devices,
+  late module loading, registered built-in bridges, failed probe retries and
+  cancellation during removal. Direct enumeration in a minimal guest does not
+  exercise service management.
 
-| Test | Result | Scope |
-| --- | --- | --- |
-| Strict module builds | Pass | Two kernels; three configurations |
-| Module lifetime | Pass | 100 cycles per configuration |
-| Sanitizer regressions | Pass | All 11 CI harnesses; three frame backends |
-| Script/source checks | Pass | Python, shell, workflows, C and Lua |
-| Live atomic KMS | Pass | All three formats and frame backends |
-| Bridge unbind/open handle | Pass | Module pinning, `ENODEV`, rebind |
-| USB interface unbind/rebind | Pass | Interfaces 0, 1 and 2 |
-| Repeated USB unbind/rebind | Pass | Ten control-interface cycles |
-| Guest USB reset | Pass | Re-enumeration and all-format KMS |
-| QEMU USB hot-remove/add | Pass | Open handle, sysfs cleanup, KMS recovery |
-| FL2000 status-read injection | Pass | Polling fallback and recovery |
-| Bridge IRQ I2C injection | Pass | Polling fallback and recovery |
-| System device suspend/resume | Blocked | Driver-free control also hangs |
+## Remaining implementation work
 
-Strict builds used `W=1 KCFLAGS=-Werror`: kernel 7.0.0-34 with auto selection,
-and 7.0.0-38 with portable and BMI2 selections. The hardware-free lifetime test
-alternated module load/unload order. The sanitizer run used fatal UBSan;
-conversion tests exercised portable, SSSE3 and BMI2 implementations.
-Live KMS covered XRGB8888, RGB888 and RGB565 on all three backends, including
-geometry validation, flips, CRTC-only commits and completion events.
-Ruff, ShellCheck 0.9, actionlint, checkpatch, C formatting and headless Lua
-checks passed.
+Controller reset excludes individual I2C transfers but not complete bridge
+register sequences. Resolve serialization with DDC/HPD sequences before claiming
+reset concurrency safety. Upstream submission also needs patches against the
+existing `ite-it66121.c` and its Kconfig, rather than a second implementation
+with the same module name. Review the local adapter-property and component-bind
+contracts as part of that integration.
 
-Injection changes function return values after real transactions. It exercises
-software recovery but does not reproduce electrical faults, lost USB packets,
-or a genuinely stalled endpoint. The injector reported zero missed probes.
-An initial I2C experiment also affected non-IRQ traffic; only the revised
-IRQ-scoped experiment counts as bridge acknowledgment coverage.
+Native VGA requires output selection, VGA connector/EDID handling, monitor
+interrupts and analog validation. LBUF halt and VGA error recovery are not
+implemented; current code only acknowledges overflow/underflow flags. HDMI audio
+transport on FL2000 and color management need implementation. Resolve the AVI
+packet register-layout conflict documented in [the register reference](REGISTERS.md)
+before changing shared bridge programming.
 
-These injection results recorded polling flag transitions, not execution of
-the DRM poll worker. A later review found that fallback needed
-`drm_kms_helper_poll_reschedule()` when HPD polling was already initialized.
-The DRM regression now checks that transition queues work.
-
-The PM freezer-only control test passed. The device-suspend test also hung
-after both production modules were unloaded (`PM_CONTROL_NO_DRIVERS=0`),
-with xHCI reporting an error on resume and lost root-hub power. This reproduces
-the blocker without either driver loaded; full driver PM remains unvalidated.
-
-The bind/unbind log contains repeated `Frame conversion failed: -2` messages
-during teardown. The cycles recover, and no kernel BUG, Oops or warning was
-observed in the saved lifecycle log. Investigate these messages rather than
-silencing them without establishing their cause. Expected module taint is
-out-of-tree plus unsigned (`12288`).
-
-Local artifacts are ignored by Git and remain under `.qemu-build/`:
-
-- `lifecycle-validation/`: strict builds and their `build.log`, hardware-free
-  `load-*` logs, sanitizer `regressions/`, helper binaries and `results.json`.
-- `lv/hardware-a_7qf9ym/guest.log`: KMS, status injection, bridge/open-handle
-  tests, USB reset, interface tests, hot-remove/add and ten rebind cycles.
-- `lv/hardware-1yhv7j6v/guest.log`: IRQ-scoped I2C injection and live backend
-  checks; final PM control experiment.
-- `pm/hardware-_anpu5ma/guest.log`: suspend hang and SysRq task stacks.
-
-### Maintainer fix validation
-
-A later Linux 7.0.0-38 QEMU run used the retained physical USB port and the
-updated driver. All three formats passed the atomic KMS tests. With cursor
-blinking disabled, `lifecycle_fault.ko mode=bulk failures=1` injected one
-`-EPIPE` completion. One recovery restarted streaming; the next three seconds
-recorded 193 successful bulk completions and zero frame updates. This tests
-software recovery of an unchanged image, not an electrical endpoint stall.
-The log is `.qemu-build/mf/hardware-jap8w8wc/guest.log`.
-
-### Repeating targeted guest tests
-
-Build `tests/kms_smoke.c` as a static executable using the installed DRM UAPI
-headers, and `tests/usb_reset.c` as a static executable. The latter refuses to
-run without the prepared guest marker. Build `tests/lifecycle_fault.c` as a
-separate external test module against the guest kernel; it requires kprobes
-and refuses non-QEMU DMI systems. It is never linked into the driver.
-
-The interactive launcher accepts repeatable `--guest-file PATH` arguments;
-each file is copied to the guest root under its basename, preserving its mode.
-For example, include the two helpers with:
-
-```sh
-python3 tests/qemu_hardware.py --output .qemu-build/lv \
-  --kms-test PATH/kms-smoke --guest-file PATH/usb-reset \
-  --guest-file PATH/lifecycle_fault.ko --i2ctransfer PATH/i2ctransfer
-```
-
-Keep the output path short enough for QEMU's Unix-domain QMP socket. Run
-`/fl2000-startup` in the guest before tests. For fault injection, load
-`lifecycle_fault.ko` with `mode=status` or `mode=i2c` and `failures=3`, then
-unbind and rebind the bridge driver to restart interrupt processing. Wait for
-`injected=3`, `polling_on` to increase and a later `polling_off` increase in
-`/sys/module/lifecycle_fault/parameters/`. Allow at least ten seconds after
-rebind. Unload the injector before removing either production module.
-The I2C mode targets the IT66121 IRQ handler and assumes one test adapter.
-
-Resolve guest USB names from sysfs each time. QEMU hot-add may change the guest
-port, and enumeration may change bus/device numbers. Pass the current guest
-`/dev/bus/usb/BUS/DEVICE` to `/usb-reset`; host numbers are not guest numbers.
-
-## Separate validation backlog
-
-These are acceptance tests, not claims of implemented or validated features.
-
-1. **PM blocker and system sleep.** With `pm_test=devices`, the guest never
-   returns from `echo mem > /sys/power/state`. PID 1 waits in `dpm_resume`;
-   an async worker waits in `xhci_alloc_dev`, via
-   `usb_reset_and_verify_device` and `usb_port_resume`. Sibling devices wait
-   for their parent. QMP reports the VM running. The same hang occurs with both
-   production modules unloaded, while the freezer-only test passes. FL2000
-   system PM is therefore blocked by this environment; it has not passed.
-   Diagnose the emulated-controller/passthrough path, then test S3,
-   s2idle, reset-resume, repeated cycles, active and idle scanout, and unplug
-   while suspended. Require bounded completion, restored KMS/HPD and no leaked
-   references. Confirm on a physical host or a dedicated passed-through USB
-   controller as well.
-2. **Physical disconnect and controller faults.** Test real cable removal,
-   power loss, controller reset, USB 2/3 controllers and hubs, and reconnect
-   with open DRM files and active streaming. QMP removal and guest USB reset
-   cover only part of this behavior. Require clean teardown and recovery
-   without restarting the host.
-3. **USB and allocation error paths.** Real short transfers, `-EPIPE`, failed
-   submissions, stalled-endpoint retry exhaustion, and memory pressure need a
-   fault-capable guest/kernel or transport fixture. Existing userspace mocks
-   and return probes do not validate host-controller DMA behavior. Require
-   bounded retries, polling fallback, correct buffer ownership and no spinning.
-4. **Native bridge users.** Test IT6610, IT66121 and IT66122 on native firmware
-   graph boards with their regulators, reset GPIO, IRQ wiring, CEC and audio.
-   Check probe deferral and repeated bind/unbind. FL2000 passthrough cannot
-   validate the upstream driver's contract on these boards.
-5. **Multiple adapters.** Connect at least two real adapters, including mixed
-   bridge configurations. Test simultaneous scanout, independent enumeration,
-   IRQ delivery, reset, module pinning and removal of one adapter while the
-   other streams. Require no cross-device state or lock interference.
-6. **Modes and fidelity.** Use additional HDMI/DVI displays or an EDID fixture
-   for different resolutions, refresh rates and pixel clocks. Capture output
-   to check channel order, RGB565 quantization, stride/padding, crop and damage
-   edges, all formats, modeset transitions and stale pixels. Software buffer
-   comparisons and flip events cannot replace visible-output checks.
-7. **Kernel integration and architectures.** Build and boot full kernels with
-   core and bridge built-in and modular independently, helper dependencies,
-   and each backend selection. Add non-x86 builds and hardware runs, including
-   endian, alignment and DMA constraints. This environment has installed x86
-   headers, but no full kernel tree, cross toolchain or non-x86 emulator;
-   external-module builds do not close this item.
-8. **Concurrency and endurance.** Run hours of modesets, damage updates,
-   reset/removal and bridge rebind under lockdep, KASAN and KCSAN kernels.
-   Check memory/reference growth and workqueue/URB drainage. Ten hardware
-   cycles and userspace sanitizers are insufficient. Investigate the teardown
-   `Frame conversion failed: -2` messages as part of this work.
-9. **Distribution service integration.** Exercise packaged udev/systemd
-   enumeration on a full distribution, with built-in or preloaded bridges,
-   boot-time devices, late module loading, simultaneous devices, failed
-   candidates and service cancellation during removal. The minimal guest runs
-   the production enumerator directly; it does not test systemd ordering.
-
-## Deferred features
-
-Native VGA support is deferred. The current driver waits for an external
-bridge component. Supporting the integrated DAC requires output selection,
-VGA connector/EDID handling, native monitor interrupts and analog validation.
-
-FL2000 LBUF halt and VGA error recovery remain unimplemented. Current handling
-acknowledges overflow/underflow flags; define and hardware-test recovery
-sequences before marking these paths complete. HDMI audio transport and color
-management also require implementation before their end-to-end tests apply.
-
-Compression, if added later, must remain optional. Measure bandwidth savings,
-CPU cost and image quality against the uncompressed default.
+Compression remains deferred. Any future implementation must be optional and
+measure bandwidth savings, CPU cost and image quality against uncompressed
+transport.

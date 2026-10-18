@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0
-# Load only the test-guest modules; the prepared base supplies DRM dependencies.
+# Load dependencies and enumerate bridges only in the prepared test guest.
 set -eu
 
 if [ "${1:-}" = "--help" ]; then

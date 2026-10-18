@@ -5,13 +5,14 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=klogg_fl2000_drm&metric=alert_status)](https://sonarcloud.io/dashboard?id=klogg_fl2000_drm)
 
 An out-of-tree DRM/KMS driver for Fresco Logic FL2000 USB display adapters
-(USB ID `1d5c:2000`) with an ITE IT66121 HDMI bridge. The bridge core derives
-from Linux v7.0, with adaptations for FL2000 I2C, reset, and USB lifetime.
+(USB ID `1d5c:2000`), targeting **Linux 7.0**. The core connects to an external
+bridge; the supplied IT6610/21/22 module adapts Linux v7.0's bridge driver for
+firmware-less attachment and the controller's I2C/reset constraints. Native VGA
+is not implemented.
 
-This development revision targets **Linux 7.0**. Strict x86-64 builds and
-hardware tests used Ubuntu kernels 7.0.0-34 and 7.0.0-38. Older kernels need an
-API port. Hardware validation used one 800x480 HDMI display in patched QEMU;
-visual output was not independently confirmed.
+Hardware testing covers one IT66121 HDMI adapter through QEMU/KVM. Other kernel
+versions require API review. See [validation scope and backlog](docs/DEVELOPMENT.md#validation-scope)
+for tested configurations and remaining limits.
 
 ## Build
 
@@ -75,10 +76,13 @@ The external build continues to accept `FL2000_FRAME_BACKEND` overrides.
 FL2000 registers an I2C adapter without assuming which bridge is attached.
 Device Tree and a kernel rebuild are not required for userspace enumeration.
 The core supplies adapter software-node properties for transport constraints,
-pixel input wiring, reset ownership, and interrupt and attachment settings.
-The bridge consumes these settings without identifying the controller. This
-is a local module interface, documented in [the architecture](docs/ARCHITECTURE.md);
-standard I2C quirks separately describe transfer limits.
+pixel input wiring and reset ownership. It also exposes the bridge IRQ through
+an IRQ domain keyed by that software node. The bridge reads these settings
+without identifying the controller. These local interfaces are described in
+[the architecture](docs/ARCHITECTURE.md);
+standard I2C quirks separately describe transfer limits. On x86 the bridge
+uses component attachment and this IRQ domain, without an OF node. Existing
+Device Tree boards retain firmware-graph attachment.
 Install the four enumeration components after installing the driver modules:
 
 ```sh
@@ -108,7 +112,7 @@ the same enumerator and configuration in its minimal guest. Supply
 
 ## Isolated QEMU testing
 
-Tests load modules only inside a marked guest. Requirements are QEMU with KVM
+These procedures load modules inside QEMU guests. Requirements are QEMU with KVM
 and USB-host support, access to `/dev/kvm` and the selected USB port, and the
 matching kernel image in `/boot`. Containers must expose those device nodes.
 The hardware and profiling launchers also need host `flock` and
@@ -120,15 +124,14 @@ The tested QEMU 11.1.2 needs the included
 
 Supply your own `base-initramfs.cpio.gz`; it is **not included**. Its init must
 provide a root shell, mounted `/proc`, `/sys`, and `/dev`, and module tools.
-The launchers append installed module dependencies and load them inside the
-guest before the driver. Matching dependency modules must be available on the
-host. Compressed `.zst`
-modules require Python 3.14 or the zstd command.
-DRM, shmem, I2C, component, and USB host-controller dependencies must already
-be built into the guest kernel or loaded by the base init. The unattended
-smoke test and kernel benchmark replace `/init`, so their dependencies must
-be built into the kernel. Merely including module files is insufficient:
-`/fl2000-startup` uses `insmod`.
+The launchers collect installed dependency modules for the selected kernel and
+include a guest loader in the overlay. Matching dependency modules must exist
+on the host. Compressed `.zst` modules need Python 3.14 or the zstd command.
+The hardware-free smoke test also loads these dependencies from its replacement
+`/init`. The standalone computation benchmark replaces `/init` and includes only
+its benchmark module. Base utilities, mounted filesystems and USB host support
+must be available when each guest procedure needs them; included module files
+alone do not arrange guest boot or USB-controller setup.
 
 The bridge callback module stays referenced until the DRM device and its open
 files are released. Unload `fl2000` first and close outstanding DRM files before
@@ -158,11 +161,11 @@ Inside the guest:
 /fl2000-startup
 ```
 
-Startup preloads supplied bridge modules from the candidate configuration,
-skips registered or already loaded drivers, and loads FL2000 before
-enumeration. It is safe to repeat. No host USB controller is unbound. Logs
-default to `.qemu-build/fl2000-tests`. Use
-`KVER`, `MODULE_DIR`, or `QEMU_OUTPUT_DIR` to override the wrapper's defaults.
+Startup loads dependency modules, preloads bridge candidates that are not
+already registered or loaded, and loads FL2000 before enumeration. It is safe
+to repeat. No host USB controller is unbound. Logs default to
+`.qemu-build/fl2000-tests`. Use `KVER`, `MODULE_DIR`, or `QEMU_OUTPUT_DIR` to
+override the wrapper's defaults.
 
 The guest colour-bar exerciser needs libdrm development headers, pkg-config,
 and static libc development files when built for the minimal initramfs:
@@ -208,50 +211,30 @@ Interlaced, double-scan, stereoscopic, and fractional source rectangles are
 rejected. Suspend/resume, multiple dongles, extensive mode coverage, and error
 recovery still need broader hardware validation. LBUF halt and VGA error
 recovery are not implemented. See the
-[remaining work](docs/DEVELOPMENT.md#remaining-work).
+[validation backlog](docs/DEVELOPMENT.md#validation-backlog) and
+[remaining implementation work](docs/DEVELOPMENT.md#remaining-implementation-work).
 
 ## Performance
 
-Revision `f9e99ef` was measured on an i3-6100T under QEMU/KVM at
-800x480 and 60 updates/s. All backends ran in the same guest, with order reversed
-on the second pass. Values are median update-process CPU as a percentage of one
-core, from two 10-second trials per case.
+Frame preparation is the main measured guest CPU cost. The default x86-64
+SSSE3 backend accelerates XRGB8888 conversion; native RGB888/RGB565 use portable
+wire reordering. Damage clips reduce preparation work, while USB still sends
+complete frames. Measurements must include asynchronous and host work before
+being described as total driver CPU.
 
-Full-frame updates:
-
-| Input | Portable | SSSE3 | BMI2 |
-| --- | ---: | ---: | ---: |
-| XRGB8888 | 10.65% | 5.32% | 5.46% |
-| RGB888 | 3.83% | 3.95% | 3.96% |
-| RGB565 | 2.92% | 2.79% | 2.87% |
-
-64x64 damage updates:
-
-| Input | Portable | SSSE3 | BMI2 |
-| --- | ---: | ---: | ---: |
-| XRGB8888 | 1.39% | 1.40% | 1.30% |
-| RGB888 | 1.20% | 1.20% | 1.27% |
-| RGB565 | 1.14% | 1.03% | 1.09% |
-
-Native RGB888/RGB565 reordering remains portable in all three builds.
-These figures include synchronous ioctl work, but exclude asynchronous driver
-work and host passthrough overhead. They are not total driver CPU utilization.
-See [profiling methodology and historical results](docs/PROFILING.md) and the
-[current raw data](tests/cpu_profile_current_results.json).
+See [profiling](docs/PROFILING.md) for the Portable / SSSE3 / BMI2 comparison,
+measurement procedures and raw data. The published tables measure revision
+`f9e99ef`, not the current checkout.
 
 ## Tests and CI
 
 Run hardware-free regressions with Python 3 and an ASan/UBSan-capable C compiler:
 
 ```sh
-python3 tests/test_logic.py
-python3 tests/test_edid.py
-python3 tests/test_bridge.py
-python3 tests/test_bridge_probe.py
-python3 tests/test_driver.py
-python3 tests/test_interrupt.py
-python3 tests/test_tools.py
-python3 tests/test_enumerator.py
+for test in logic register_locking registers edid bridge bridge_probe \
+    driver drm interrupt tools enumerator; do
+    UBSAN_OPTIONS=halt_on_error=1 python3 "tests/test_$test.py" || exit 1
+done
 ```
 
 For synthetic USB decoding and analysis callbacks, install headless TShark with
@@ -279,7 +262,8 @@ without the secret skip the scan.
 
 ## Further documentation
 
+- [Bridge enumeration and service configuration](docs/ENUMERATION.md)
 - [Driver architecture and backend interface](docs/ARCHITECTURE.md)
-- [Development tools, USB capture, and remaining work](docs/DEVELOPMENT.md)
-- [Hardware investigation and QEMU workaround](docs/HARDWARE.md)
+- [Development, USB capture and validation backlog](docs/DEVELOPMENT.md)
+- [Hardware constraints and QEMU workaround](docs/HARDWARE.md)
 - [Profiling methodology and results](docs/PROFILING.md)
