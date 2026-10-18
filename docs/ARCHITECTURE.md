@@ -200,9 +200,13 @@ avoid rebuilding unchanged scatter-gather entries. Both paths reuse unchanged
 pixels without a copy. Five buffers allow three distinct in-flight frames, the
 newest frame and a free conversion destination. Controller scatter-gather
 support is required only for the page-based fallback; contiguous DMA allocations
-also work on controllers without it. Queue errors stop transmission; a later
-framebuffer update or modeset can drain the old queue and clear the endpoint
-halt before restarting it.
+also work on controllers without it. Recoverable queue errors schedule up to
+three delayed restart attempts using
+the latest immutable frame, without requiring new damage. Successful frame
+completion resets that budget. Short transfers are diagnosed. Explicit stop
+and terminal removal/cancellation errors suppress recovery; resource release
+waits for the worker before freeing buffers. After retry exhaustion, a later
+framebuffer update or modeset can explicitly start a new attempt.
 
 FL2000 mode validation checks hardware timing field sizes, the 25–148.5 MHz
 input clock

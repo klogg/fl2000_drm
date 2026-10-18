@@ -9,13 +9,16 @@
 #include <linux/scatterlist.h>
 #include <linux/usb.h>
 #include <linux/vmalloc.h>
+#include <linux/workqueue.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_rect.h>
 #include <linux/overflow.h>
 #include <linux/unaligned.h>
 #include "fl2000_frame.h"
 
-#define FL2000_QUEUE_DEPTH 3
+#define FL2000_QUEUE_DEPTH	 3
+#define FL2000_RECOVERY_RETRIES	 3
+#define FL2000_RECOVERY_DELAY_MS 100
 /* Three in-flight frames, a latest frame, and a free conversion target. */
 #define FL2000_FRAME_COUNT (FL2000_QUEUE_DEPTH + 2)
 
@@ -62,6 +65,9 @@ struct fl2000_stream {
 	unsigned int height;
 	unsigned int pitch;
 	u32 format;
+	struct delayed_work recovery;
+	unsigned int retries; /* Protected by stream->lock. */
+	bool running; /* Scanout requested; protected by stream->lock. */
 	bool enabled;
 };
 
@@ -109,6 +115,32 @@ static int fl2000_alloc_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 	return frame->vaddr ? 0 : -ENOMEM;
 }
 
+/* Called with stream->lock held; cancellation must never restart scanout. */
+static void fl2000_schedule_recovery(struct fl2000_stream *stream, int error)
+{
+	stream->enabled = false;
+	if (!stream->running)
+		return;
+	switch (error) {
+	case -ENOENT:
+	case -ECONNRESET:
+	case -ESHUTDOWN:
+	case -ENODEV:
+	case -EPERM:
+	case -EINVAL:
+		stream->running = false;
+		return;
+	default:
+		break;
+	}
+	if (stream->retries < FL2000_RECOVERY_RETRIES)
+		mod_delayed_work(system_wq, &stream->recovery,
+				 msecs_to_jiffies(FL2000_RECOVERY_DELAY_MS << stream->retries));
+	else
+		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming recovery exhausted: %d\n",
+				    error);
+}
+
 /* Called with IRQs saved and lock held; no allocation or copying here. */
 static int fl2000_submit_transfer(struct fl2000_transfer *transfer)
 {
@@ -152,7 +184,7 @@ static int fl2000_submit_transfer(struct fl2000_transfer *transfer)
 	if (ret) {
 		frame->users--;
 		transfer->frame = NULL;
-		stream->enabled = false;
+		fl2000_schedule_recovery(stream, ret);
 	}
 	return ret;
 }
@@ -164,14 +196,19 @@ static void fl2000_data_completion(struct urb *urb)
 	unsigned long flags;
 	int ret = 0;
 	int status = urb->status;
+	unsigned int actual = urb->actual_length;
 
 	spin_lock_irqsave(&stream->lock, flags);
 	transfer->frame->users--;
 	transfer->frame = NULL;
-	if (status || urb->actual_length != stream->buf_size)
-		stream->enabled = false;
-	else
-		ret = fl2000_submit_transfer(transfer);
+	if (stream->enabled) {
+		if (status || actual != stream->buf_size) {
+			fl2000_schedule_recovery(stream, status ? status : -EREMOTEIO);
+		} else {
+			stream->retries = 0;
+			ret = fl2000_submit_transfer(transfer);
+		}
+	}
 	spin_unlock_irqrestore(&stream->lock, flags);
 	if (ret)
 		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming submission failed: %d\n",
@@ -179,10 +216,13 @@ static void fl2000_data_completion(struct urb *urb)
 	if (status && status != -ENOENT && status != -ECONNRESET && status != -ESHUTDOWN)
 		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming transfer failed: %d\n",
 				    status);
+	if (!status && actual != stream->buf_size)
+		dev_err_ratelimited(&stream->usb_dev->dev, "Short streaming transfer: %u/%u\n",
+				    actual, stream->buf_size);
 }
 
 /* mutex held; setting enabled under lock prevents racing resubmission. */
-static void fl2000_stop_stream(struct fl2000_stream *stream)
+static void fl2000_drain_stream(struct fl2000_stream *stream)
 {
 	unsigned long flags;
 
@@ -193,12 +233,27 @@ static void fl2000_stop_stream(struct fl2000_stream *stream)
 		usb_kill_urb(stream->transfers[i].urb);
 }
 
+/* mutex held; a queued or blocked worker observes running=false. */
+static void fl2000_stop_stream(struct fl2000_stream *stream)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&stream->lock, flags);
+	stream->running = false;
+	spin_unlock_irqrestore(&stream->lock, flags);
+	cancel_delayed_work(&stream->recovery);
+	fl2000_drain_stream(stream);
+}
+
 static void fl2000_streaming_release(struct device *dev __always_unused, void *res)
 {
 	struct fl2000_stream *stream = res;
 
 	mutex_lock(&stream->mutex);
 	fl2000_stop_stream(stream);
+	mutex_unlock(&stream->mutex);
+	cancel_delayed_work_sync(&stream->recovery);
+	mutex_lock(&stream->mutex);
 	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		usb_free_urb(stream->transfers[i].urb);
 		sg_free_table(&stream->transfers[i].sgt);
@@ -575,6 +630,60 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, struct fl2000_stream_b
 	return 0;
 }
 
+/* Caller holds stream->mutex; recovery also restarts an unchanged frame. */
+static int fl2000_start_stream(struct fl2000_stream *stream)
+{
+	unsigned long flags;
+	int ret;
+
+	fl2000_drain_stream(stream);
+	if (!stream->latest)
+		return -EINVAL;
+	ret = usb_clear_halt(stream->usb_dev, usb_sndbulkpipe(stream->usb_dev, STREAMING_EP));
+	if (ret)
+		goto recover;
+	spin_lock_irqsave(&stream->lock, flags);
+	stream->enabled = true;
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
+		ret = fl2000_submit_transfer(&stream->transfers[i]);
+		if (ret)
+			break;
+	}
+	spin_unlock_irqrestore(&stream->lock, flags);
+	if (ret)
+		fl2000_drain_stream(stream);
+	return ret;
+recover:
+	spin_lock_irqsave(&stream->lock, flags);
+	fl2000_schedule_recovery(stream, ret);
+	spin_unlock_irqrestore(&stream->lock, flags);
+	return ret;
+}
+
+static void fl2000_recover_stream(struct work_struct *work)
+{
+	struct fl2000_stream *stream =
+		container_of(to_delayed_work(work), struct fl2000_stream, recovery);
+	unsigned long flags;
+	bool retry;
+	int ret;
+
+	mutex_lock(&stream->mutex);
+	spin_lock_irqsave(&stream->lock, flags);
+	retry = stream->running && !stream->enabled && stream->latest &&
+		stream->retries < FL2000_RECOVERY_RETRIES;
+	if (retry)
+		stream->retries++;
+	spin_unlock_irqrestore(&stream->lock, flags);
+	if (retry) {
+		ret = fl2000_start_stream(stream);
+		if (ret)
+			dev_err_ratelimited(&stream->usb_dev->dev,
+					    "Streaming recovery failed: %d\n", ret);
+	}
+	mutex_unlock(&stream->mutex);
+}
+
 int fl2000_streaming_enable(struct usb_device *usb_dev)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
@@ -587,29 +696,14 @@ int fl2000_streaming_enable(struct usb_device *usb_dev)
 	mutex_lock(&stream->mutex);
 	spin_lock_irqsave(&stream->lock, flags);
 	enabled = stream->enabled;
+	stream->running = true;
+	if (!enabled)
+		stream->retries = 0;
 	spin_unlock_irqrestore(&stream->lock, flags);
-	if (enabled)
-		goto out;
-	/* Drain stopped/error transfers before reusing URBs or resetting the pipe. */
-	fl2000_stop_stream(stream);
-	if (!stream->latest) {
-		ret = -EINVAL;
-		goto out;
+	if (!enabled) {
+		cancel_delayed_work(&stream->recovery);
+		ret = fl2000_start_stream(stream);
 	}
-	ret = usb_clear_halt(usb_dev, usb_sndbulkpipe(usb_dev, STREAMING_EP));
-	if (ret)
-		goto out;
-	spin_lock_irqsave(&stream->lock, flags);
-	stream->enabled = true;
-	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
-		ret = fl2000_submit_transfer(&stream->transfers[i]);
-		if (ret)
-			break;
-	}
-	spin_unlock_irqrestore(&stream->lock, flags);
-	if (ret)
-		fl2000_stop_stream(stream);
-out:
 	mutex_unlock(&stream->mutex);
 	return ret;
 }
@@ -641,6 +735,7 @@ int fl2000_streaming_create(struct usb_interface *interface)
 	if (!stream)
 		return -ENOMEM;
 	stream->usb_dev = usb_dev;
+	INIT_DELAYED_WORK(&stream->recovery, fl2000_recover_stream);
 	mutex_init(&stream->mutex);
 	spin_lock_init(&stream->lock);
 	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {

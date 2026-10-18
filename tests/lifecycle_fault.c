@@ -7,6 +7,7 @@
 #include <linux/module.h>
 #include <linux/ptrace.h>
 #include <linux/sched.h>
+#include <linux/usb.h>
 
 static char *mode = "status";
 module_param(mode, charp, 0400);
@@ -14,9 +15,13 @@ static int failures = 3;
 module_param(failures, int, 0600);
 static struct task_struct *irq_task;
 static bool i2c_mode;
+static bool bulk_mode;
 static atomic_t injected = ATOMIC_INIT(0);
 static atomic_t polling_on = ATOMIC_INIT(0);
 static atomic_t polling_off = ATOMIC_INIT(0);
+static atomic_t bulk_completions = ATOMIC_INIT(0);
+static atomic_t recovery_runs = ATOMIC_INIT(0);
+static atomic_t frame_updates = ATOMIC_INIT(0);
 
 static int count_get(char *buffer, const struct kernel_param *parameter)
 {
@@ -27,6 +32,9 @@ static const struct kernel_param_ops count_ops = { .get = count_get };
 module_param_cb(injected, &count_ops, &injected, 0400);
 module_param_cb(polling_on, &count_ops, &polling_on, 0400);
 module_param_cb(polling_off, &count_ops, &polling_off, 0400);
+module_param_cb(bulk_completions, &count_ops, &bulk_completions, 0400);
+module_param_cb(recovery_runs, &count_ops, &recovery_runs, 0400);
+module_param_cb(frame_updates, &count_ops, &frame_updates, 0400);
 
 static void inject(struct pt_regs *regs)
 {
@@ -102,14 +110,81 @@ static struct kprobe polling_probe = {
 	.pre_handler = polling_entry,
 };
 
+static int bulk_entry(struct kprobe *probe __always_unused, struct pt_regs *regs)
+{
+	struct urb *urb = (void *)regs_get_kernel_argument(regs, 0);
+	int count = READ_ONCE(failures);
+
+	if (urb->status || urb->actual_length != urb->transfer_buffer_length)
+		return 0;
+	if (count > 0 && cmpxchg(&failures, count, count - 1) == count) {
+		urb->status = -EPIPE;
+		urb->actual_length = 0;
+		atomic_inc(&injected);
+	} else if (atomic_read(&injected)) {
+		atomic_inc(&bulk_completions);
+	}
+	return 0;
+}
+
+static int recovery_entry(struct kprobe *probe __always_unused,
+			  struct pt_regs *regs __always_unused)
+{
+	atomic_inc(&recovery_runs);
+	return 0;
+}
+
+static int update_entry(struct kprobe *probe __always_unused, struct pt_regs *regs __always_unused)
+{
+	atomic_inc(&frame_updates);
+	return 0;
+}
+
+static struct kprobe bulk_probe = {
+	.symbol_name = "fl2000_data_completion",
+	.pre_handler = bulk_entry,
+};
+
+static struct kprobe recovery_probe = {
+	.symbol_name = "fl2000_recover_stream",
+	.pre_handler = recovery_entry,
+};
+
+static struct kprobe update_probe = {
+	.symbol_name = "fl2000_streaming_update",
+	.pre_handler = update_entry,
+};
+
+static int bulk_probes_init(void)
+{
+	int ret;
+
+	ret = register_kprobe(&update_probe);
+	if (ret)
+		return ret;
+	ret = register_kprobe(&recovery_probe);
+	if (ret)
+		goto update;
+	ret = register_kprobe(&bulk_probe);
+	if (!ret)
+		return 0;
+	unregister_kprobe(&recovery_probe);
+update:
+	unregister_kprobe(&update_probe);
+	return ret;
+}
+
 static int __init lifecycle_fault_init(void)
 {
 	int ret;
 
 	if (!dmi_match(DMI_SYS_VENDOR, "QEMU"))
 		return -EPERM;
-	if (strcmp(mode, "status") && strcmp(mode, "i2c"))
+	if (strcmp(mode, "status") && strcmp(mode, "i2c") && strcmp(mode, "bulk"))
 		return -EINVAL;
+	bulk_mode = !strcmp(mode, "bulk");
+	if (bulk_mode)
+		return bulk_probes_init();
 	i2c_mode = !strcmp(mode, "i2c");
 	ret = register_kprobe(&polling_probe);
 	if (ret)
@@ -137,6 +212,15 @@ polling:
 
 static void __exit lifecycle_fault_exit(void)
 {
+	if (bulk_mode) {
+		unregister_kprobe(&bulk_probe);
+		unregister_kprobe(&recovery_probe);
+		unregister_kprobe(&update_probe);
+		pr_info("LIFECYCLE_BULK injected=%d recoveries=%d completions=%d updates=%d\n",
+			atomic_read(&injected), atomic_read(&recovery_runs),
+			atomic_read(&bulk_completions), atomic_read(&frame_updates));
+		return;
+	}
 	if (i2c_mode) {
 		unregister_kretprobe(&i2c_probe);
 		unregister_kretprobe(&irq_probe);
@@ -150,4 +234,4 @@ static void __exit lifecycle_fault_exit(void)
 module_init(lifecycle_fault_init);
 module_exit(lifecycle_fault_exit);
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("QEMU-only FL2000 status and I2C return fault injection");
+MODULE_DESCRIPTION("QEMU-only FL2000 interrupt, I2C and bulk fault injection");

@@ -159,6 +159,16 @@ Local artifacts are ignored by Git and remain under `.qemu-build/`:
   checks; final PM control experiment.
 - `pm/hardware-_anpu5ma/guest.log`: suspend hang and SysRq task stacks.
 
+### Maintainer fix validation
+
+A later Linux 7.0.0-38 QEMU run used the retained physical USB port and the
+updated driver. All three formats passed the atomic KMS tests. With cursor
+blinking disabled, `lifecycle_fault.ko mode=bulk failures=1` injected one
+`-EPIPE` completion. One recovery restarted streaming; the next three seconds
+recorded 193 successful bulk completions and zero frame updates. This tests
+software recovery of an unchanged image, not an electrical endpoint stall.
+The log is `.qemu-build/mf/hardware-jap8w8wc/guest.log`.
+
 ### Repeating targeted guest tests
 
 Build `tests/kms_smoke.c` as a static executable using the installed DRM UAPI

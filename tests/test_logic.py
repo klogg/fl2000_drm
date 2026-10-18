@@ -71,6 +71,17 @@ static unsigned int fl2000_frame_convert(u8 *d, const u8 *s, unsigned int n, uns
 #define spin_unlock_irqrestore(lock, flags) ((void)(lock), (void)(flags))
 #define mutex_lock(lock) ((void)(lock))
 #define mutex_unlock(lock) ((void)(lock))
+struct work_struct { bool pending; };
+struct delayed_work { struct work_struct work; unsigned long delay; };
+#define to_delayed_work(w) container_of(w,struct delayed_work,work)
+#define msecs_to_jiffies(v) (v)
+#define system_wq NULL
+static bool mod_delayed_work(void *q,struct delayed_work *w,unsigned long delay)
+{ (void)q;bool was=w->work.pending;w->work.pending=true;w->delay=delay;return was; }
+static bool cancel_delayed_work(struct delayed_work *w)
+{ bool was=w->work.pending;w->work.pending=false;return was; }
+static void cancel_delayed_work_sync(struct delayed_work *w) { w->work.pending=false; }
+
 #define dev_err_ratelimited(...) (++log_count)
 #define DRM_MODE_FLAG_INTERLACE BIT(0)
 #define DRM_MODE_FLAG_DBLSCAN BIT(1)
@@ -231,7 +242,8 @@ static int usb_submit_urb(struct urb *urb, int flags)
  return 0;
 }
 static int usb_sndbulkpipe(struct usb_device *usb, int ep) { (void)usb; return ep; }
-static int usb_clear_halt(struct usb_device *usb, int pipe) { (void)usb; (void)pipe; return 0; }
+static int halt_error;
+static int usb_clear_halt(struct usb_device *usb, int pipe) { (void)usb; (void)pipe; return halt_error; }
 static void usb_kill_urb(struct urb *urb);
 static unsigned int urb_frees;
 static void usb_free_urb(struct urb *urb)
@@ -1045,6 +1057,51 @@ static void test_queue(void)
  assert(stream.enabled);
  fl2000_stop_stream(&stream);
  for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) assert(!stream.frames[i].users);
+ /* Restart the retained image without a framebuffer update. */
+ assert(!fl2000_streaming_enable(&usb));
+ struct fl2000_frame *latest=stream.latest;
+ complete(&urbs[0],-EPIPE);
+ assert(stream.recovery.work.pending && !stream.enabled && stream.running);
+ stream.recovery.work.pending=false;fl2000_recover_stream(&stream.recovery.work);
+ assert(stream.enabled && stream.latest==latest && latest->users==FL2000_QUEUE_DEPTH);
+ assert(stream.retries==1);
+ complete(&urbs[0],0);assert(!stream.retries);
+ /* Successful short completions are diagnosed and repaired too. */
+ int logs_before=log_count;
+ urbs[0].submitted=false;urbs[0].status=0;urbs[0].actual_length=7;
+ fl2000_data_completion(&urbs[0]);
+ assert(stream.recovery.work.pending && !stream.enabled && log_count>logs_before);
+ stream.recovery.work.pending=false;fl2000_recover_stream(&stream.recovery.work);
+ assert(stream.enabled);
+ complete(&urbs[0],0);assert(!stream.retries);
+ /* Persistent transport errors stop after three delayed restart attempts. */
+ for(unsigned int i=0;i<FL2000_RECOVERY_RETRIES;i++) {
+  complete(&urbs[0],-EPIPE);
+  assert(stream.recovery.work.pending && stream.recovery.delay==(100U<<i));
+  stream.recovery.work.pending=false;fl2000_recover_stream(&stream.recovery.work);
+  assert(stream.enabled && stream.retries==i+1);
+ }
+ complete(&urbs[0],-EPIPE);
+ assert(!stream.enabled && !stream.recovery.work.pending);
+ fl2000_streaming_disable(&usb);
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)assert(!stream.frames[i].users);
+ /* A failed halt-clear is retried with the same bounded budget. */
+ assert(!fl2000_streaming_enable(&usb));complete(&urbs[0],-EPROTO);halt_error=-EPIPE;
+ for(unsigned int i=0;i<FL2000_RECOVERY_RETRIES;i++) {
+  assert(stream.recovery.work.pending);stream.recovery.work.pending=false;
+  fl2000_recover_stream(&stream.recovery.work);
+ }
+ assert(!stream.enabled && !stream.recovery.work.pending);halt_error=0;
+ /* Explicit stop and terminal completions must not restart the device. */
+ assert(!fl2000_streaming_enable(&usb));complete(&urbs[0],-EPIPE);
+ assert(stream.recovery.work.pending);fl2000_streaming_disable(&usb);
+ int previous_submits=submit_count;
+ fl2000_recover_stream(&stream.recovery.work);
+ assert(!stream.running && !stream.recovery.work.pending && submit_count==previous_submits);
+ assert(!fl2000_streaming_enable(&usb));complete(&urbs[0],-ESHUTDOWN);
+ assert(!stream.running && !stream.recovery.work.pending);
+ fl2000_streaming_disable(&usb);
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)assert(!stream.frames[i].users);
 }
 int main(void)
 {
@@ -1117,14 +1174,19 @@ parts += [
         "fl2000_frame_layout_valid",
         "fl2000_find_free_frame",
         "fl2000_streaming_update",
+        "fl2000_schedule_recovery",
         "fl2000_submit_transfer",
         "fl2000_data_completion",
+        "fl2000_drain_stream",
         "fl2000_stop_stream",
         "fl2000_streaming_release",
         "fl2000_streaming_free_buffers",
         "fl2000_streaming_prepare",
         "fl2000_streaming_mode_set",
+        "fl2000_start_stream",
+        "fl2000_recover_stream",
         "fl2000_streaming_enable",
+        "fl2000_streaming_disable",
     )
 ]
 parts.append(structure(drm, "fl2000_plane_state"))
