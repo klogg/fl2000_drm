@@ -25,6 +25,8 @@ static void store(u8 *dst, v16qi value)
 void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned int bytes_pix)
 {
 	const v16qi rgb = { 0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14, -1, -1, -1, -1 };
+	const v16qi rgb_join = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 1, 2, 4 };
+	const v16qi rgb_tail = { 10, 12, 13, 14, 5, 6, 8, 9, -1, -1, -1, -1, -1, -1, -1, -1 };
 	const v16qi wire = { 4, 5, 6, 7, 0, 1, 2, 3, 12, 13, 14, 15, 8, 9, 10, 11 };
 
 	for (unsigned int i = 0; i < pixels; i += 8, src += 32) {
@@ -34,16 +36,9 @@ void fl2000_ssse3_convert(u8 *dst, const u8 *src, unsigned int pixels, unsigned 
 
 		if (bytes_pix == 3) {
 			a = __builtin_ia32_pshufb128(a, rgb);
-			b = __builtin_ia32_pshufb128(b, rgb);
-			const v16qi zero = { 0 };
-
-			out = a | __builtin_shufflevector(b, zero, 16, 17, 18, 19, 20, 21, 22, 23,
-							  24, 25, 26, 27, 0, 1, 2, 3);
-			out = __builtin_ia32_pshufb128(out, wire);
-			store(dst, out);
-			out = __builtin_shufflevector(b, zero, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
-						      15, 16, 17, 18, 19);
-			out = __builtin_ia32_pshufb128(out, wire);
+			out = a | __builtin_ia32_pshufb128(b, rgb_join);
+			store(dst, __builtin_ia32_pshufb128(out, wire));
+			out = __builtin_ia32_pshufb128(b, rgb_tail);
 			__builtin_memcpy(dst + 16, &out, 8);
 			dst += 24;
 		} else {
