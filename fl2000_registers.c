@@ -8,7 +8,6 @@
 #include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/regmap.h>
-#include <linux/slab.h>
 #include <linux/usb.h>
 #include "fl2000_registers.h"
 #include <linux/bitfield.h>
@@ -33,50 +32,26 @@ static bool fl2000_reg_volatile(struct device *dev __always_unused, unsigned int
 /* Protected by internal regmap mutex */
 static int fl2000_reg_read(void *context, unsigned int reg, unsigned int *val)
 {
-	int ret;
-	__le32 *usb_rw_data;
 	struct usb_device *usb_dev = context;
-	u16 offset = (u16)reg;
+	__le32 data;
+	int ret;
 
-	usb_rw_data = kmalloc_obj(*usb_rw_data, GFP_KERNEL | GFP_DMA);
-	if (!usb_rw_data)
-		return -ENOMEM;
-
-	ret = usb_control_msg(usb_dev, usb_rcvctrlpipe(usb_dev, 0), CONTROL_MSG_READ,
-			      (USB_DIR_IN | USB_TYPE_VENDOR), 0, offset, usb_rw_data, sizeof(u32),
-			      USB_CTRL_GET_TIMEOUT);
-	if (ret >= 0)
-		ret = ret == sizeof(*usb_rw_data) ? 0 : -EIO;
-
+	ret = usb_control_msg_recv(usb_dev, 0, CONTROL_MSG_READ, USB_DIR_IN | USB_TYPE_VENDOR, 0,
+				   (u16)reg, &data, sizeof(data), USB_CTRL_GET_TIMEOUT, GFP_KERNEL);
 	if (!ret)
-		*val = le32_to_cpu(*usb_rw_data);
-
-	kfree(usb_rw_data);
+		*val = le32_to_cpu(data);
 	return ret;
 }
 
 /* Protected by internal regmap mutex */
 static int fl2000_reg_write(void *context, unsigned int reg, unsigned int val)
 {
-	int ret;
-	__le32 *usb_rw_data;
 	struct usb_device *usb_dev = context;
-	u16 offset = (u16)reg;
+	__le32 data = cpu_to_le32(val);
 
-	usb_rw_data = kmalloc_obj(*usb_rw_data, GFP_KERNEL | GFP_DMA);
-	if (!usb_rw_data)
-		return -ENOMEM;
-
-	*usb_rw_data = cpu_to_le32(val);
-
-	ret = usb_control_msg(usb_dev, usb_sndctrlpipe(usb_dev, 0), CONTROL_MSG_WRITE,
-			      (USB_DIR_OUT | USB_TYPE_VENDOR), 0, offset, usb_rw_data, sizeof(u32),
-			      USB_CTRL_SET_TIMEOUT);
-	if (ret >= 0)
-		ret = ret == sizeof(*usb_rw_data) ? 0 : -EIO;
-
-	kfree(usb_rw_data);
-	return ret;
+	return usb_control_msg_send(usb_dev, 0, CONTROL_MSG_WRITE, USB_DIR_OUT | USB_TYPE_VENDOR, 0,
+				    (u16)reg, &data, sizeof(data), USB_CTRL_SET_TIMEOUT,
+				    GFP_KERNEL);
 }
 
 /* We do not use default values as per documentation because:

@@ -86,9 +86,7 @@ static int regmap_read(struct regmap *m,unsigned int reg,u32 *value)
 #define regmap_read_poll_timeout(m,r,v,condition,delay,timeout) \
  ({ int err=regmap_read(m,r,&(v)); (void)(delay);(void)(timeout); \
     err?err:poll_error?poll_error:(condition)?0:-ETIMEDOUT; })
-static int usb_rcvctrlpipe(struct usb_device *u,int ep) { (void)u;return ep; }
-static int usb_sndctrlpipe(struct usb_device *u,int ep) { (void)u;return ep; }
-static int usb_control_msg(struct usb_device *u,int pipe,int request,int type,int value,
+static int control_message(struct usb_device *u,int pipe,int request,int type,int value,
                           u16 offset,void *buffer,size_t size,int timeout)
 {
  (void)u;(void)pipe;(void)type;(void)value;(void)offset;(void)timeout;assert(size==4);
@@ -98,6 +96,24 @@ static int usb_control_msg(struct usb_device *u,int pipe,int request,int type,in
  }
  return wire_result;
 }
+static int usb_control_msg_recv(struct usb_device *usb, int ep, int request, int type,
+                               int value, u16 offset, void *data, size_t size,
+                               int timeout, int flags)
+{
+ (void)flags;
+ int ret = control_message(usb, ep, request, type, value, offset, data, size, timeout);
+ return ret < 0 ? ret : ret == (int)size ? 0 : -EREMOTEIO;
+}
+static int usb_control_msg_send(struct usb_device *usb, int ep, int request, int type,
+                               int value, u16 offset, const void *data, size_t size,
+                               int timeout, int flags)
+{
+ (void)flags;
+ int ret = control_message(usb, ep, request, type, value, offset, (void *)data,
+                           size, timeout);
+ return ret < 0 ? ret : 0;
+}
+
 static void expect(unsigned int index,char type,unsigned int reg,u32 mask,u32 value)
 { assert(index<count && ops[index].type==type && ops[index].reg==reg && ops[index].mask==mask && ops[index].value==value); }
 """
@@ -202,8 +218,8 @@ int main(void)
  data=0;assert(!fl2000_reg_read(&usb,0x802c,&data) && data==0x89abcdef);
  for(int length=0;length<4;length++) {
   wire_result=length;data=0x12345678;
-  assert(fl2000_reg_read(&usb,0x802c,&data)==-EIO && data==0x12345678);
-  assert(fl2000_reg_write(&usb,0x802c,0x89abcdef)==-EIO);
+  assert(fl2000_reg_read(&usb,0x802c,&data)==-EREMOTEIO && data==0x12345678);
+  assert(!fl2000_reg_write(&usb,0x802c,0x89abcdef));
  }
  wire_result=-ENODEV;assert(fl2000_reg_read(&usb,0x802c,&data)==-ENODEV);
  assert(fl2000_reg_write(&usb,0x802c,0x89abcdef)==-ENODEV);

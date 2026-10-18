@@ -291,9 +291,7 @@ typedef u32 __le32;
 #define USB_CTRL_SET_TIMEOUT 1000
 static int control_result;
 static u32 control_value;
-static int usb_rcvctrlpipe(struct usb_device *usb, int ep) { (void)usb; return ep; }
-static int usb_sndctrlpipe(struct usb_device *usb, int ep) { (void)usb; return ep; }
-static int usb_control_msg(struct usb_device *usb, int pipe, int request, int type,
+static int control_message(struct usb_device *usb, int pipe, int request, int type,
                           int value, u16 offset, void *data, size_t size, int timeout)
 {
  (void)usb; (void)pipe; (void)type; (void)value; (void)offset; (void)timeout;
@@ -302,6 +300,23 @@ static int usb_control_msg(struct usb_device *usb, int pipe, int request, int ty
   memcpy(data, &control_value, control_result < 4 ? control_result : 4);
  if (request == CONTROL_MSG_WRITE) control_value = *(u32 *)data;
  return control_result;
+}
+static int usb_control_msg_recv(struct usb_device *usb, int ep, int request, int type,
+                               int value, u16 offset, void *data, size_t size,
+                               int timeout, int flags)
+{
+ (void)flags;
+ int ret = control_message(usb, ep, request, type, value, offset, data, size, timeout);
+ return ret < 0 ? ret : ret == (int)size ? 0 : -EREMOTEIO;
+}
+static int usb_control_msg_send(struct usb_device *usb, int ep, int request, int type,
+                               int value, u16 offset, const void *data, size_t size,
+                               int timeout, int flags)
+{
+ (void)flags;
+ int ret = control_message(usb, ep, request, type, value, offset, (void *)data,
+                           size, timeout);
+ return ret < 0 ? ret : 0;
 }
 
 #define DMA_TO_DEVICE 1
@@ -945,11 +960,11 @@ static void test_register_io(void)
   int ret = fl2000_reg_read(&usb, 0x1234, &value);
   if (control_result == 4) assert(!ret && value == control_value);
   else {
-   assert(ret == (control_result < 0 ? control_result : -EIO));
+   assert(ret == (control_result < 0 ? control_result : -EREMOTEIO));
    assert(value == 0xa5a5a5a5);
   }
   ret = fl2000_reg_write(&usb, 0x1234, 0x12345678);
-  assert(ret == (control_result == 4 ? 0 : control_result < 0 ? control_result : -EIO));
+  assert(ret == (control_result < 0 ? control_result : 0));
  }
 }
 
