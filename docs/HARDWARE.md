@@ -47,3 +47,14 @@ running `scripts/emulate.sh`. Launchers infer adjacent `pc-bios` firmware for
 source builds; `--bios-path PATH` overrides it. The patch neither changes device
 descriptors nor replaces the system QEMU installation. Check other QEMU versions
 independently rather than assuming this version-specific patch applies.
+
+## Bulk transfer queueing
+
+A matched synthetic 1080p60 test delivered approximately 30 USB frames/s through
+the tested QEMU build, compared with 60/s after experimentally enabling
+bulk-OUT pipelining. This is a passthrough limitation, not evidence that the
+pixel conversion path cannot sustain 60/s. See the
+[transport investigation](PROFILING.md#follow-up-lbuf-status-and-qemu-queues)
+for the comparison, USBFS memory constraint and remaining emulator work.
+The experimental binary is separate from the restored normal QEMU executable;
+its pipeline change is not included in the descriptor workaround above.

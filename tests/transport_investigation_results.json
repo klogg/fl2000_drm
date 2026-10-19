@@ -1,0 +1,592 @@
+{
+  "date": "2026-10-19",
+  "base_revision": "98c7b189251e5562167a1e3e3569855751e3da1c",
+  "source_state": "Uncommitted ordered-format, LBUF-clear and optional-DMA-warning fixes; packaging remains pending separately.",
+  "source_sha256": {
+    "fl2000_registers.c": "d8e66986b936beb4681105b76494b4d6f09749a4986632f02bc2834603c4cf4d",
+    "fl2000_registers.h": "1346ab9be1f29ea40ff8fe104d98cc3ca735d1f7849b4391772c9f9924cd95c6",
+    "fl2000_streaming.c": "801717cd9cd9d67ff29847d33d59453b544f359e0904e56402a7cb8dd2f749e2",
+    "tests/kms_smoke.c": "25e54be4bd84855929b32a0df30e98fa3c1332f576c607bd04b3c8bb79cffb34",
+    "tests/test_logic.py": "988c018553bad1ef82e340cbfb8c44249a601447b2df34e7ae7dc730973f182e",
+    "tests/test_registers.py": "32bfa76ccdf4b47bab88384ea050d698443c508037519a4144b3c3cbe1ae1af3"
+  },
+  "kernel": "7.0.0-38-generic",
+  "host_cpu": "Intel Core i3-6100T",
+  "environment": "KVM, one host-model vCPU, 1 GiB guest RAM, qemu-xhci, physical USB port hostbus=2 hostport=2, patched QEMU 11.1.2.",
+  "display": "Only 800x480 at 66 Hz advertised. 1080p60 uses synthetic timings and is not visual validation.",
+  "module_sha256": {
+    "production": "c67cc445bd26c6eb2659f6269722fd28db28bc3d34d392e02f78f8a0c4e3046a",
+    "queue2": "ade87d8af3db50bab9abfda5705da79d1c14087fb40a050ad09315d6fd129bef",
+    "clear12": "c452bdd78230d5abb86478ef1f2d34ddcf1b6295045ff64305b64ad0f0ee781a",
+    "clear31": "df67370741096245ac0750573a832a0e772af3fa2c5ebbb18f6b31d3fd36451b",
+    "noack": "fb20e13b9a7d09977cccc476c8824b0b4a7ac0c8331ea33a072b48fc29419359"
+  },
+  "qemu_sha256": {
+    "normal": "c38683bb57b8dcb0119950f7172974930ab946109723db81002a96e0fe1eadbf",
+    "experimental_pipeline": "be435a8d2417793da62963902a78890a5c2186448995d8badf59ec2cea048683"
+  },
+  "method": [
+    "Status matrix compares no acknowledgment, status register bit 31, and the dedicated PXCLK bit-12 clear strobe. Test-only status sampling runs through the existing interrupt worker at one-second intervals.",
+    "Matched comparison uses exactly the same two-frame driver module in both emulators. Only experimental QEMU endpoint bulk-OUT pipelining differs. Both retain separate payload and zero-packet requests.",
+    "Each matched trial requests 60 full-frame DIRTYFB updates/s for 20 seconds, with function profiling and usbmon enabled. CPU-load cases add a busy loop on the sole guest vCPU. These are diagnostic runs, not clean CPU comparisons.",
+    "Steady-state statistics select the longest contiguous sequence of successful completions with the expected wire frame size and trim two seconds from each end. Rates use decimal MB/s.",
+    "Frame-counter and LBUF measurements use status reply data from the same USB trace and measurement window. They do not depend on dmesg retention or add a second status reader.",
+    "All performance variants predate the optional-DMA __GFP_NOWARN fix. The final production module was tested separately with panic_on_warn=1, default three-frame queue, and no periodic test sampler.",
+    "Bulk completion errno -2 is ENOENT from deliberate modeset/restore cancellation. The production driver separately still logs Frame conversion failed: -2 during removal."
+  ],
+  "findings": [
+    "The dedicated 0x8004 bit-12 strobe clears LBUF flags. Status bit 31 and writing observed bits 8/9 do not clear the observed overflow on this adapter. Blanked clear12 phases replace stale overflow with underflow; active streaming reasserts overflow in all modes.",
+    "Matched normal QEMU delivers about 30 USB frames/s at synthetic 1080p60, while experimental pipelining delivers about 60/s for both formats, including guest CPU load. Controller frame count remains about 60/s. Emulator bulk-OUT serialization explains the measured rate halving.",
+    "Overflow also appears with full-rate USB delivery, so its presence alone does not identify the rate-halving cause or establish visible glitches. LBUF fault recovery remains unimplemented.",
+    "The production allocation warning came from direct DMA requesting order 11, beyond the tested kernel maximum order 10. __GFP_NOWARN suppresses expected optional allocation failure, preserving existing page fallback and IOMMU support."
+  ],
+  "status_phases": {
+    "noack-BEGIN": {
+      "0x2c1": 4,
+      "0x2e3": 1
+    },
+    "noack-UNBLANK": {
+      "0x2c1": 42
+    },
+    "noack-BLANK": {
+      "0x2c1": 7
+    },
+    "clear31-BEGIN": {
+      "0x2c1": 4,
+      "0x2e3": 1
+    },
+    "clear31-UNBLANK": {
+      "0x2c1": 42
+    },
+    "clear31-BLANK": {
+      "0x2c1": 5
+    },
+    "clear12-BEGIN": {
+      "0x2c1": 1,
+      "0x2e3": 1,
+      "0x1c1": 3
+    },
+    "clear12-UNBLANK": {
+      "0x1c1": 1,
+      "0x2c1": 42
+    },
+    "clear12-BLANK": {
+      "0x2c1": 1,
+      "0x1c1": 3
+    }
+  },
+  "experiments": [
+    {
+      "name": "serial-queue2-1080p-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-6wc13v_z/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-6wc13v_z/serial-queue2-1080p-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 564,
+      "duration": 18.773753,
+      "fps": 29.988676,
+      "MBps": 186.553557,
+      "gap_median_ms": 33.339,
+      "gap_p99_ms": 35.138,
+      "gap_max_ms": 37.517,
+      "completion_errors": {
+        "-2": 4
+      },
+      "status_sample_count": 19,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "controller_fps": 59.948074
+    },
+    {
+      "name": "serial-queue2-1080p-RGB565",
+      "log": ".qemu-build/transport-investigation/hardware-6wc13v_z/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-6wc13v_z/serial-queue2-1080p-RGB565.mon",
+      "frame_bytes": 4147200,
+      "completions": 563,
+      "duration": 18.736198,
+      "fps": 29.995413,
+      "MBps": 124.396977,
+      "gap_median_ms": 33.3395,
+      "gap_p99_ms": 34.24,
+      "gap_max_ms": 35.861,
+      "completion_errors": {
+        "-2": 2
+      },
+      "status_sample_count": 18,
+      "overflow_samples": 18,
+      "underflow_samples": 0,
+      "controller_fps": 59.970918
+    },
+    {
+      "name": "serial-queue2-1080p-loaded-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-6wc13v_z/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-6wc13v_z/serial-queue2-1080p-loaded-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 564,
+      "duration": 18.769832,
+      "fps": 29.994941,
+      "MBps": 186.592528,
+      "gap_median_ms": 33.343,
+      "gap_p99_ms": 33.459,
+      "gap_max_ms": 33.567,
+      "completion_errors": {
+        "-2": 2
+      },
+      "status_sample_count": 19,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "controller_fps": 59.956495
+    },
+    {
+      "name": "timed-clear12-1080p-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-c7ofemqr/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-c7ofemqr/timed-clear12-1080p-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 564,
+      "duration": 18.769911,
+      "fps": 29.994815,
+      "MBps": 186.591742,
+      "gap_median_ms": 33.346,
+      "gap_p99_ms": 36.979,
+      "gap_max_ms": 37.582,
+      "completion_errors": {
+        "-2": 3
+      },
+      "status_sample_count": 18,
+      "overflow_samples": 18,
+      "underflow_samples": 0,
+      "controller_fps": 59.973391
+    },
+    {
+      "name": "timed-clear12-1080p-RGB565",
+      "log": ".qemu-build/transport-investigation/hardware-c7ofemqr/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-c7ofemqr/timed-clear12-1080p-RGB565.mon",
+      "frame_bytes": 4147200,
+      "completions": 566,
+      "duration": 18.836384,
+      "fps": 29.995141,
+      "MBps": 124.39585,
+      "gap_median_ms": 33.342,
+      "gap_p99_ms": 35.698,
+      "gap_max_ms": 37.408,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 18,
+      "overflow_samples": 18,
+      "underflow_samples": 0,
+      "controller_fps": 59.98793
+    },
+    {
+      "name": "timed-clear12-1080p-loaded-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-c7ofemqr/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-c7ofemqr/timed-clear12-1080p-loaded-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 565,
+      "duration": 18.803104,
+      "fps": 29.995048,
+      "MBps": 186.593192,
+      "gap_median_ms": 33.34,
+      "gap_p99_ms": 33.505,
+      "gap_max_ms": 37.487,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 19,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "controller_fps": 60.004311
+    },
+    {
+      "name": "noack-native-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/noack-native-RGB888.mon",
+      "frame_bytes": 1152000,
+      "completions": 377,
+      "duration": 5.725653,
+      "fps": 65.669366,
+      "MBps": 75.651109,
+      "gap_median_ms": 15.2245,
+      "gap_p99_ms": 15.684,
+      "gap_max_ms": 15.832,
+      "completion_errors": {
+        "-2": 3
+      },
+      "status_sample_count": 6,
+      "overflow_samples": 6,
+      "underflow_samples": 0,
+      "controller_fps": 65.614953
+    },
+    {
+      "name": "noack-1080p-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/noack-1080p-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 265,
+      "duration": 8.801268,
+      "fps": 29.995678,
+      "MBps": 186.597113,
+      "gap_median_ms": 33.34,
+      "gap_p99_ms": 36.77,
+      "gap_max_ms": 37.43,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 9,
+      "overflow_samples": 9,
+      "underflow_samples": 0,
+      "controller_fps": 60.018884
+    },
+    {
+      "name": "noack-1080p-RGB565",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/noack-1080p-RGB565.mon",
+      "frame_bytes": 4147200,
+      "completions": 265,
+      "duration": 8.801755,
+      "fps": 29.994018,
+      "MBps": 124.391192,
+      "gap_median_ms": 33.3405,
+      "gap_p99_ms": 35.355,
+      "gap_max_ms": 35.945,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 8,
+      "overflow_samples": 8,
+      "underflow_samples": 0,
+      "controller_fps": 59.988638
+    },
+    {
+      "name": "clear31-native-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/clear31-native-RGB888.mon",
+      "frame_bytes": 1152000,
+      "completions": 384,
+      "duration": 5.83202,
+      "fps": 65.671928,
+      "MBps": 75.654062,
+      "gap_median_ms": 15.214,
+      "gap_p99_ms": 15.648,
+      "gap_max_ms": 16.16,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 6,
+      "overflow_samples": 6,
+      "underflow_samples": 0,
+      "controller_fps": 65.811559
+    },
+    {
+      "name": "clear31-1080p-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/clear31-1080p-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 264,
+      "duration": 8.768684,
+      "fps": 29.993098,
+      "MBps": 186.581065,
+      "gap_median_ms": 33.343,
+      "gap_p99_ms": 36.749,
+      "gap_max_ms": 37.09,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 9,
+      "overflow_samples": 9,
+      "underflow_samples": 0,
+      "controller_fps": 60.021351
+    },
+    {
+      "name": "clear31-1080p-RGB565",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/clear31-1080p-RGB565.mon",
+      "frame_bytes": 4147200,
+      "completions": 264,
+      "duration": 8.76792,
+      "fps": 29.995712,
+      "MBps": 124.398215,
+      "gap_median_ms": 33.376,
+      "gap_p99_ms": 35.045,
+      "gap_max_ms": 35.74,
+      "completion_errors": {
+        "-2": 3
+      },
+      "status_sample_count": 8,
+      "overflow_samples": 8,
+      "underflow_samples": 0,
+      "controller_fps": 59.989065
+    },
+    {
+      "name": "clear12-native-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/clear12-native-RGB888.mon",
+      "frame_bytes": 1152000,
+      "completions": 383,
+      "duration": 5.83199,
+      "fps": 65.500798,
+      "MBps": 75.45692,
+      "gap_median_ms": 15.223,
+      "gap_p99_ms": 15.968,
+      "gap_max_ms": 26.09,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 6,
+      "overflow_samples": 6,
+      "underflow_samples": 0,
+      "controller_fps": 65.811199
+    },
+    {
+      "name": "clear12-1080p-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/clear12-1080p-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 265,
+      "duration": 8.80342,
+      "fps": 29.988345,
+      "MBps": 186.551499,
+      "gap_median_ms": 33.3395,
+      "gap_p99_ms": 35.996,
+      "gap_max_ms": 37.325,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 8,
+      "overflow_samples": 8,
+      "underflow_samples": 0,
+      "controller_fps": 59.991668
+    },
+    {
+      "name": "clear12-1080p-RGB565",
+      "log": ".qemu-build/transport-investigation/hardware-p1ch8m6g/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-p1ch8m6g/clear12-1080p-RGB565.mon",
+      "frame_bytes": 4147200,
+      "completions": 264,
+      "duration": 8.768065,
+      "fps": 29.995216,
+      "MBps": 124.396158,
+      "gap_median_ms": 33.333,
+      "gap_p99_ms": 33.662,
+      "gap_max_ms": 34.926,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 9,
+      "overflow_samples": 9,
+      "underflow_samples": 0,
+      "controller_fps": 60.049951
+    },
+    {
+      "name": "pipeline-queue2-1080p-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-uzwdvh1j/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-uzwdvh1j/pipeline-queue2-1080p-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 1129,
+      "duration": 18.802504,
+      "fps": 59.99201,
+      "MBps": 373.198293,
+      "gap_median_ms": 16.669,
+      "gap_p99_ms": 17.191,
+      "gap_max_ms": 17.464,
+      "completion_errors": {
+        "-2": 4
+      },
+      "status_sample_count": 19,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "controller_fps": 59.939463
+    },
+    {
+      "name": "pipeline-queue2-1080p-RGB565",
+      "log": ".qemu-build/transport-investigation/hardware-uzwdvh1j/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-uzwdvh1j/pipeline-queue2-1080p-RGB565.mon",
+      "frame_bytes": 4147200,
+      "completions": 1127,
+      "duration": 18.769105,
+      "fps": 59.992205,
+      "MBps": 248.799674,
+      "gap_median_ms": 16.671,
+      "gap_p99_ms": 16.999,
+      "gap_max_ms": 18.656,
+      "completion_errors": {
+        "-2": 4
+      },
+      "status_sample_count": 19,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "controller_fps": 60.007179
+    },
+    {
+      "name": "pipeline-queue2-1080p-loaded-RGB888",
+      "log": ".qemu-build/transport-investigation/hardware-uzwdvh1j/guest.log",
+      "raw_trace": ".qemu-build/transport-investigation/hardware-uzwdvh1j/pipeline-queue2-1080p-loaded-RGB888.mon",
+      "frame_bytes": 6220800,
+      "completions": 1128,
+      "duration": 18.786459,
+      "fps": 59.990017,
+      "MBps": 373.185899,
+      "gap_median_ms": 16.668,
+      "gap_p99_ms": 16.791,
+      "gap_max_ms": 17.395,
+      "completion_errors": {
+        "-2": 2
+      },
+      "status_sample_count": 18,
+      "overflow_samples": 18,
+      "underflow_samples": 0,
+      "controller_fps": 60.026147
+    }
+  ],
+  "host_transfer_traces": [
+    {
+      "trace": ".qemu-build/transport-investigation/qemu-timed.trace",
+      "initial_bulk_requests_before_first_completion": 1,
+      "failed_host_completions": 0,
+      "latencies": [
+        {
+          "bytes": 0,
+          "count": 5577,
+          "median_ms": 0.101089,
+          "p99_ms": 0.236034
+        },
+        {
+          "bytes": 1152000,
+          "count": 3512,
+          "median_ms": 14.999509,
+          "p99_ms": 15.261889
+        },
+        {
+          "bytes": 4147200,
+          "count": 697,
+          "median_ms": 33.064127,
+          "p99_ms": 33.325911
+        },
+        {
+          "bytes": 6220800,
+          "count": 1375,
+          "median_ms": 33.142805,
+          "p99_ms": 33.250809
+        }
+      ]
+    },
+    {
+      "trace": ".qemu-build/transport-investigation/qemu-queue2.trace",
+      "initial_bulk_requests_before_first_completion": 1,
+      "failed_host_completions": 0,
+      "latencies": [
+        {
+          "bytes": 0,
+          "count": 4268,
+          "median_ms": 0.066996,
+          "p99_ms": 0.228882
+        },
+        {
+          "bytes": 768000,
+          "count": 317,
+          "median_ms": 14.984846,
+          "p99_ms": 15.202999
+        },
+        {
+          "bytes": 1152000,
+          "count": 1898,
+          "median_ms": 15.14411,
+          "p99_ms": 16.025066
+        },
+        {
+          "bytes": 4147200,
+          "count": 691,
+          "median_ms": 33.035994,
+          "p99_ms": 33.291101
+        },
+        {
+          "bytes": 6220800,
+          "count": 1374,
+          "median_ms": 33.131003,
+          "p99_ms": 33.274174
+        }
+      ]
+    },
+    {
+      "trace": ".qemu-build/transport-investigation/qemu-pipeline.trace",
+      "initial_bulk_requests_before_first_completion": 4,
+      "failed_host_completions": 0,
+      "latencies": [
+        {
+          "bytes": 0,
+          "count": 6244,
+          "median_ms": 29.718995,
+          "p99_ms": 32.100916
+        },
+        {
+          "bytes": 1152000,
+          "count": 2131,
+          "median_ms": 29.77109,
+          "p99_ms": 30.36499
+        },
+        {
+          "bytes": 4147200,
+          "count": 1369,
+          "median_ms": 33.002138,
+          "p99_ms": 33.23102
+        },
+        {
+          "bytes": 6220800,
+          "count": 2744,
+          "median_ms": 32.597065,
+          "p99_ms": 32.870054
+        }
+      ]
+    }
+  ],
+  "experimental_qemu_failure": {
+    "log": ".qemu-build/transport-investigation/hardware-wificzb6/guest.log",
+    "trace": ".qemu-build/transport-investigation/qemu-pipeline-failed.trace",
+    "observation": "The first three-frame pipeline attempt hit a QEMU USB-core assertion after the third RGB888 host submission failed. No guest-kernel crash occurred in that experiment.",
+    "usbfs_memory_mb": 16,
+    "three_rgb888_payload_bytes": 18662400,
+    "interpretation": "The payload requirement exceeds the host USBFS allowance, making allocation failure a likely explanation; the precise libusb error code was not recorded. Two-frame trials completed. The experimental patch needs proper submission-error handling before deployment.",
+    "experimental_patch": ".qemu-build/transport-investigation/qemu-pipeline.patch"
+  },
+  "production_validation": {
+    "log": ".qemu-build/transport-investigation/hardware-pfp4567a/guest.log",
+    "panic_on_warn": 1,
+    "synthetic_1080p_formats": [
+      "RGB888",
+      "RGB565"
+    ],
+    "native_formats": [
+      "XRGB8888",
+      "RGB888",
+      "RGB565"
+    ],
+    "atomic_checks_passed": true,
+    "all_kms_suites_passed": true,
+    "kernel_warning_bug_oops_panic_found": false,
+    "module_and_dependency_unload_completed": true,
+    "guest_poweroff_completed": true,
+    "known_teardown_diagnostic": "Frame conversion failed: -2"
+  },
+  "production_changes": [
+    "Use the dedicated LBUF clear strobe instead of writing the event status register.",
+    "Mark the optional noncoherent DMA allocation as expected to fail, without changing its page fallback."
+  ],
+  "unchanged": [
+    "Three-frame production queue",
+    "Pixel conversion and reordering",
+    "Detection bit policy",
+    "Bandwidth selection",
+    "Frame pacing",
+    "IT66121 bridge driver"
+  ],
+  "remaining_work": [
+    "Robust QEMU bulk-OUT pipelining, submission-error handling, USBFS allocation limits and cancellation/replug testing.",
+    "Visual validation with a 1080p-capable sink/capture and testing on a dedicated controller or physical host.",
+    "Competing USB traffic, longer alternating trials, and investigation of active-scanout LBUF overflow/recovery.",
+    "Pre-existing Frame conversion failed: -2 teardown diagnostic."
+  ],
+  "restoration": "Normal QEMU source, executable and build object restored. Experimental binary and patches remain separate under .qemu-build. All test guests shut down.",
+  "kernel_references": [
+    "https://github.com/torvalds/linux/blob/v7.0/kernel/dma/mapping.c",
+    "https://github.com/torvalds/linux/blob/v7.0/mm/page_alloc.c"
+  ]
+}

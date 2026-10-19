@@ -1,0 +1,252 @@
+{
+  "date": "2026-10-19",
+  "base_revision": "98c7b189251e5562167a1e3e3569855751e3da1c",
+  "source_state": "Base revision plus the ordered pixel-format programming change and KMS test extensions; packaging changes pending separately.",
+  "source_sha256": {
+    "fl2000_registers.c": "eea450f58e493feaa5823cf3a5f20f3fb7e87336a543df0677d0e5dfd31df31e",
+    "fl2000_interrupt.c": "cae9ee14283bf599f004623251223c8cc44a434f5df43573e7364349c7260ff8",
+    "tests/kms_smoke.c": "25e54be4bd84855929b32a0df30e98fa3c1332f576c607bd04b3c8bb79cffb34"
+  },
+  "kernel": "7.0.0-38-generic",
+  "qemu": "Patched 11.1.2, KVM, host CPU, one vCPU, 1 GiB RAM",
+  "host_cpu": "Intel(R) Core(TM) i3-6100T CPU @ 3.20GHz",
+  "usb": "Physical FL2000 on hostbus=2 hostport=2; QEMU qemu-xhci with usb-host passthrough",
+  "display": "EDID advertises only 800x480 at 66 Hz / 32 MHz. 1080p60 is a synthetic transport stress mode, not a monitor fidelity test.",
+  "module_sha256": {
+    "production": "d63ca363cf065799a612a29001d9114242b7c858cfddf892d9e8d9f42e165dc9",
+    "sampled": "fc32534ca4b457d819f183a5aea8dca81ec7d993b8d0de19afe32bed72995c7e",
+    "edid-off": "fa0b73b22de285f3c922b50d4456d1a55472620b29cc8d0e5f1cfd93fbe2e9f4"
+  },
+  "method": [
+    "20-second full-frame DIRTYFB loop at 60 requested updates/s, with a one-second settle before and after; function profiling and usbmon enabled. These are diagnostic traced runs, not clean CPU benchmarks.",
+    "Throughput uses successful whole-frame bulk completions from the longest contiguous run matching the expected wire frame size, excluding two seconds at each end. Units are decimal MB/s.",
+    "Sampled variant adds one status-consumption run per second to the existing interrupt worker, and logs its already-read status. No competing raw status reader or permanent production interface is added.",
+    "edid-off additionally clears only bit 30 in each outgoing 0x8020 register write, including initialization and every I2C command. All other bits and the bridge driver are unchanged.",
+    "Loaded case runs a busy shell loop alongside the KMS workload on the sole guest vCPU. No competing physical USB traffic was generated.",
+    "Controller frame-counter rate is computed over the same steady-state window. It does not establish that distinct complete images reached the HDMI sink.",
+    "Bulk completion errno -2 is ENOENT from deliberate modeset/restore URB cancellation; these are outside the selected steady-state completion run.",
+    "Source hashes describe final files; the only edit after module builds was a kernel-doc sentence explaining the frame-sync bit."
+  ],
+  "experiments": [
+    {
+      "name": "edid-off-1080p-RGB888",
+      "log": ".qemu-build/adcds-tests/hardware-94bk8a8u/guest.log",
+      "frame_bytes": 6220800,
+      "completions": 565,
+      "duration": 18.801207,
+      "fps": 29.998074,
+      "MBps": 186.612019,
+      "gap_median_ms": 33.3305,
+      "gap_p99_ms": 36.235,
+      "gap_max_ms": 36.959,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 19,
+      "controller_fps": 60.004711,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "detection_writes": 454,
+      "detection_bit30_set_writes": 0,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-94bk8a8u/edid-off-1080p-RGB888.mon"
+    },
+    {
+      "name": "edid-off-1080p-RGB565",
+      "log": ".qemu-build/adcds-tests/hardware-94bk8a8u/guest.log",
+      "frame_bytes": 4147200,
+      "completions": 564,
+      "duration": 18.767895,
+      "fps": 29.998037,
+      "MBps": 124.407857,
+      "gap_median_ms": 33.344,
+      "gap_p99_ms": 35.572,
+      "gap_max_ms": 36.331,
+      "completion_errors": {
+        "-2": 3
+      },
+      "status_sample_count": 18,
+      "controller_fps": 59.972519,
+      "overflow_samples": 18,
+      "underflow_samples": 0,
+      "detection_writes": 238,
+      "detection_bit30_set_writes": 0,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-94bk8a8u/edid-off-1080p-RGB565.mon"
+    },
+    {
+      "name": "edid-off-1080p-loaded-RGB888",
+      "log": ".qemu-build/adcds-tests/hardware-94bk8a8u/guest.log",
+      "frame_bytes": 6220800,
+      "completions": 566,
+      "duration": 18.836449,
+      "fps": 29.995038,
+      "MBps": 186.593131,
+      "gap_median_ms": 33.342,
+      "gap_p99_ms": 33.578,
+      "gap_max_ms": 35.451,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 19,
+      "controller_fps": 59.949927,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "detection_writes": 271,
+      "detection_bit30_set_writes": 0,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-94bk8a8u/edid-off-1080p-loaded-RGB888.mon"
+    },
+    {
+      "name": "sampled-1080p-RGB888",
+      "log": ".qemu-build/adcds-tests/hardware-_0qrf97d/guest.log",
+      "frame_bytes": 6220800,
+      "completions": 565,
+      "duration": 18.804726,
+      "fps": 29.99246,
+      "MBps": 186.577098,
+      "gap_median_ms": 33.349,
+      "gap_p99_ms": 36.343,
+      "gap_max_ms": 37.099,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 19,
+      "controller_fps": 60.003595,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "detection_writes": 454,
+      "detection_bit30_set_writes": 454,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-_0qrf97d/sampled-1080p-RGB888.mon"
+    },
+    {
+      "name": "sampled-1080p-RGB565",
+      "log": ".qemu-build/adcds-tests/hardware-_0qrf97d/guest.log",
+      "frame_bytes": 4147200,
+      "completions": 559,
+      "duration": 18.48617,
+      "fps": 30.184727,
+      "MBps": 125.182101,
+      "gap_median_ms": 33.328,
+      "gap_p99_ms": 35.61,
+      "gap_max_ms": 35.933,
+      "completion_errors": {
+        "-2": 3
+      },
+      "status_sample_count": 18,
+      "controller_fps": 59.969488,
+      "overflow_samples": 18,
+      "underflow_samples": 0,
+      "detection_writes": 232,
+      "detection_bit30_set_writes": 232,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-_0qrf97d/sampled-1080p-RGB565.mon"
+    },
+    {
+      "name": "sampled-1080p-loaded-RGB888",
+      "log": ".qemu-build/adcds-tests/hardware-_0qrf97d/guest.log",
+      "frame_bytes": 6220800,
+      "completions": 565,
+      "duration": 18.803114,
+      "fps": 29.995032,
+      "MBps": 186.593093,
+      "gap_median_ms": 33.342,
+      "gap_p99_ms": 33.477,
+      "gap_max_ms": 33.885,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 19,
+      "controller_fps": 60.004422,
+      "overflow_samples": 19,
+      "underflow_samples": 0,
+      "detection_writes": 272,
+      "detection_bit30_set_writes": 272,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-_0qrf97d/sampled-1080p-loaded-RGB888.mon"
+    },
+    {
+      "name": "native-RGB888",
+      "log": ".qemu-build/adcds-tests/hardware-kzwel995/guest.log",
+      "frame_bytes": 1152000,
+      "completions": 1405,
+      "duration": 21.437113,
+      "fps": 65.493894,
+      "MBps": 75.448966,
+      "gap_median_ms": 15.22,
+      "gap_p99_ms": 17.104,
+      "gap_max_ms": 28.004,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 0,
+      "detection_writes": 306,
+      "detection_bit30_set_writes": 306,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-kzwel995/native-RGB888.mon"
+    },
+    {
+      "name": "native-RGB565",
+      "log": ".qemu-build/adcds-tests/hardware-kzwel995/guest.log",
+      "frame_bytes": 768000,
+      "completions": 1237,
+      "duration": 18.818152,
+      "fps": 65.681263,
+      "MBps": 50.44321,
+      "gap_median_ms": 15.222,
+      "gap_p99_ms": 16.932,
+      "gap_max_ms": 18.599,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 0,
+      "detection_writes": 306,
+      "detection_bit30_set_writes": 306,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-kzwel995/native-RGB565.mon"
+    },
+    {
+      "name": "1080p-RGB888",
+      "log": ".qemu-build/adcds-tests/hardware-kzwel995/guest.log",
+      "frame_bytes": 6220800,
+      "completions": 565,
+      "duration": 18.803606,
+      "fps": 29.994247,
+      "MBps": 186.588211,
+      "gap_median_ms": 33.3355,
+      "gap_p99_ms": 36.579,
+      "gap_max_ms": 36.897,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 0,
+      "detection_writes": 306,
+      "detection_bit30_set_writes": 306,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-kzwel995/1080p-RGB888.mon"
+    },
+    {
+      "name": "1080p-RGB565",
+      "log": ".qemu-build/adcds-tests/hardware-kzwel995/guest.log",
+      "frame_bytes": 4147200,
+      "completions": 565,
+      "duration": 18.786389,
+      "fps": 30.021735,
+      "MBps": 124.506141,
+      "gap_median_ms": 33.34,
+      "gap_p99_ms": 35.442,
+      "gap_max_ms": 36.02,
+      "completion_errors": {
+        "-2": 6
+      },
+      "status_sample_count": 0,
+      "detection_writes": 306,
+      "detection_bit30_set_writes": 306,
+      "raw_trace": ".qemu-build/adcds-tests/hardware-kzwel995/1080p-RGB565.mon"
+    }
+  ],
+  "conclusions": [
+    "Native formats and atomic smoke checks passed with ordered programming; physical register traces show separate watermark-reset and format-selection writes.",
+    "1080p completed USB frame rate is about 30/s for both wire depths while the controller counter advances about 60/s. Neither RGB565 nor clearing bit 30 resolved it in this setup.",
+    "All sampled steady-state status words retain LBUF overflow, with no sampled underflow. Existing acknowledgment writes observed bits 8/9, whereas the manual specifies writing bit 31 and separately documents 0x8004 bit 12. Sticky status cannot establish an overflow event rate.",
+    "Keep current detection and bandwidth policy. No pacing algorithm is justified from this limited transport-only test."
+  ],
+  "remaining_tests": [
+    "Use a 1080p-capable display or HDMI capture to assess actual distinct frames and glitches; repeat with a dedicated controller or physical host to separate passthrough effects.",
+    "Validate LBUF clear semantics and recovery before treating sampled flags as event counters.",
+    "Measure sustained bandwidth and scanline margin under real competing USB traffic; these tests did not achieve the 373.248 MB/s required for full 1080p60 RGB888 delivery.",
+    "Repeat longer, alternating A/B trials and HPD tests before changing detection policy or introducing pacing."
+  ]
+}
