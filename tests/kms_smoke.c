@@ -305,7 +305,7 @@ int main(int argc, char **argv)
 		profile(0);
 		report_profile(names[n]);
 		saved.set_connectors_ptr = (uintptr_t)connectors;
-		saved.count_connectors = 1;
+		saved.count_connectors = saved.mode_valid ? 1 : 0;
 		check(ioctl(fd, DRM_IOCTL_MODE_SETCRTC, &saved), "restore CRTC");
 		check(ioctl(fd, DRM_IOCTL_MODE_RMFB, &fb.fb_id), "remove framebuffer");
 		munmap(pixels, dumb.size);
