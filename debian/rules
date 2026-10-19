@@ -1,0 +1,41 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: GPL-2.0
+include /usr/share/dpkg/pkg-info.mk
+
+%:
+	dh $@
+
+# DKMS builds modules against the target kernel during installation.
+override_dh_auto_configure:
+	cd debian/vendor/linux-7.0 && sha256sum --check SHA256SUMS
+
+override_dh_auto_build:
+
+override_dh_auto_clean:
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	sh -n userspace/fl2000-enumerate.sh
+	python3 tests/test_enumerator.py
+endif
+
+override_dh_auto_install:
+	set -e; driver_dir=debian/fl2000-dkms/usr/src/fl2000-drm-$(DEB_VERSION_UPSTREAM); \
+	install -d "$$driver_dir"; \
+	install -m644 Makefile Kbuild LICENSE fl2000_*.c fl2000*.h "$$driver_dir/"; \
+	for part in bridge frame compat; do \
+		install -d "$$driver_dir/$$part"; \
+		install -m644 "$$part/"*.[ch] "$$driver_dir/$$part/"; \
+	done; \
+	install -d "$$driver_dir/compat/linux-7.0"; \
+	install -m644 debian/vendor/linux-7.0/*.c "$$driver_dir/compat/linux-7.0/"
+	$(MAKE) install-enumerator DESTDIR=$(CURDIR)/debian/fl2000-enumerator
+
+override_dh_dkms:
+	dh_dkms -V $(DEB_VERSION_UPSTREAM)
+
+override_dh_installudev:
+	dh_installudev -pfl2000-enumerator --name=fl2000 --priority=70
+
+override_dh_installsystemd:
+	dh_installsystemd -pfl2000-enumerator --no-enable --no-start

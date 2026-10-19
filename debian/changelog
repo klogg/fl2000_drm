@@ -1,0 +1,7 @@
+fl2000-drm (0.0.1-0ubuntu1~ppa1) resolute; urgency=medium
+
+  * Package the FL2000 and adapted IT66121 modules with DKMS.
+  * Install bridge enumeration with udev and systemd integration.
+  * Bundle pinned Linux 7.0 DRM helpers for offline kernel rebuilds.
+
+ -- Artem Mygaiev <joculator@gmail.com>  Mon, 19 Oct 2026 12:45:11 +0300

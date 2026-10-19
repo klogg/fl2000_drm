@@ -1,0 +1,4 @@
+Unmodified sources from Linux v7.0, drivers/gpu/drm/display/.
+Source: https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/v7.0/drivers/gpu/drm/display/
+Checksums match scripts/fetch-bridge-connector.sh.
+Bundled for offline DKMS builds; see debian/copyright for licenses.

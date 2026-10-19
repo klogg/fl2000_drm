@@ -1,0 +1,29 @@
+FL2000 for Ubuntu 26.04
+======================
+
+The supported target is amd64 with Linux 7.0. DKMS skips other kernel
+series and architectures. Install headers matching every target kernel.
+The package includes the checksum-pinned DRM helpers needed by Ubuntu's
+kernel configuration, so DKMS does not download source during rebuilds.
+
+Both fl2000 and the adapted it66121 module must be used. DKMS installs
+these in updates/dkms; it does not overwrite distribution module files.
+The adapted it66121 takes precedence over any same-named stock module.
+It is not a validated replacement on native OF bridge boards. A built-in
+stock IT66121 driver cannot be replaced by DKMS.
+
+Install fl2000-enumerator for automatic discovery after connecting the
+adapter. It uses /etc/fl2000/enumerator.conf, a udev rule, and an instance
+of fl2000-enumerate@.service. Installation does not force-load the modules
+or start enumeration for already connected devices; reconnect the adapter.
+The kernel modules are autoloaded through ordinary USB/I2C device aliases.
+
+Secure Boot uses the distribution's DKMS signing mechanism. Enroll the
+local signing certificate when prompted; a PPA's archive signature does
+not grant trust to locally built kernel modules.
+
+Disconnect the adapter before removing or upgrading the driver. Package
+removal does not unload modules still in use. Reconnect after installation
+or reboot to ensure the installed versions are running. Removing the
+package removes its DKMS modules and restores normal stock-module lookup.
+Purge fl2000-enumerator to remove its configuration file.

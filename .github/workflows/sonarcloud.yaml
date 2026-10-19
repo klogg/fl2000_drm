@@ -89,7 +89,7 @@ jobs:
             -Dsonar.projectName=fl2000_drm
             -Dsonar.sources=.
             -Dsonar.tests=tests
-            -Dsonar.exclusions=tests/**,.github/**,**/*.mod.c
+            -Dsonar.exclusions=tests/**,.github/**,debian/vendor/**,**/*.mod.c
             -Dsonar.issue.ignore.multicriteria=drmCallbackConst,i2cCallbackConst,bridgeCallbackConst
             -Dsonar.issue.ignore.multicriteria.drmCallbackConst.ruleKey=c:S995
             -Dsonar.issue.ignore.multicriteria.drmCallbackConst.resourceKey=fl2000_drm.c

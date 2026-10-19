@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+set -eu
+kernel=$(uname -r)
+case "$kernel" in
+    7.0.*) ;;
+    *) echo "Unsupported test kernel: $kernel"; exit 77 ;;
+esac
+if [ ! -f "/lib/modules/$kernel/build/Makefile" ]; then
+    echo "Headers missing for running kernel: $kernel"
+    exit 77
+fi
+version=$(dpkg-query -W -f '${Version}' fl2000-dkms)
+version=${version%-*}
+dkms build --force -m fl2000-drm -v "$version" -k "$kernel"
+dkms install --force -m fl2000-drm -v "$version" -k "$kernel"
+for module in fl2000 it66121; do
+    path=$(modinfo -k "$kernel" -n "$module")
+    case "$path" in
+        */updates/dkms/"$module".ko*) ;;
+        *) echo "Unexpected module path: $path" >&2; exit 1 ;;
+    esac
+    vermagic=$(modinfo -k "$kernel" -F vermagic "$module")
+    [ "${vermagic%% *}" = "$kernel" ]
+done
+dkms status -m fl2000-drm -v "$version" -k "$kernel"

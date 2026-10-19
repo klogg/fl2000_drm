@@ -1,0 +1,7 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0
+set -eu
+/usr/libexec/fl2000-enumerate --help
+test -s /etc/fl2000/enumerator.conf
+systemd-analyze verify --man=no /usr/lib/systemd/system/fl2000-enumerate@.service
+udevadm verify /usr/lib/udev/rules.d/70-fl2000.rules

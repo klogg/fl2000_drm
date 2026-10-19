@@ -27,3 +27,12 @@ spelling.txt
 
 __pycache__/
 *.pyc
+
+# Debian package build products.
+/debian/.debhelper/
+/debian/debhelper-build-stamp
+/debian/files
+/debian/*.substvars
+/debian/*.debhelper
+/debian/fl2000-dkms/
+/debian/fl2000-enumerator/

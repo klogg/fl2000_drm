@@ -1,0 +1,7 @@
+Tests: dkms
+Architecture: amd64
+Depends: @, linux-headers-generic
+Restrictions: needs-root, isolation-machine, skippable
+
+Tests: enumerator
+Depends: @

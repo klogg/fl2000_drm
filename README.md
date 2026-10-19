@@ -56,6 +56,12 @@ If module signing is needed, `scripts/sign.sh` signs both modules. Run
 `scripts/sign.sh --help` for signing-key and tool overrides. Signing does not
 by itself enroll the certificate in the target kernel's trust store.
 
+### Ubuntu packages
+
+PPA-ready Debian packaging builds separate DKMS and bridge-enumerator packages
+for Ubuntu 26.04 amd64 with Linux 7.0. See [packaging](docs/PACKAGING.md) for local
+builds, installation, module precedence and source-upload preparation.
+
 ### In-tree integration
 
 Copy the driver sources, `bridge/`, `frame/`, `Kbuild`, and `Kconfig` into

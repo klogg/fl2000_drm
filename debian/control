@@ -1,0 +1,32 @@
+Source: fl2000-drm
+Section: kernel
+Priority: optional
+Maintainer: Artem Mygaiev <joculator@gmail.com>
+Build-Depends: debhelper-compat (= 13), dh-sequence-dkms, python3
+Standards-Version: 4.7.2
+Rules-Requires-Root: no
+Homepage: https://github.com/klogg/fl2000_drm
+Vcs-Git: https://github.com/klogg/fl2000_drm.git
+Vcs-Browser: https://github.com/klogg/fl2000_drm
+
+Package: fl2000-dkms
+Architecture: all
+Depends: ${misc:Depends}, libdw1t64
+Recommends: fl2000-enumerator (= ${binary:Version}), linux-headers-generic
+Description: DRM/KMS driver for Fresco Logic FL2000 adapters (DKMS)
+ Builds the FL2000 USB display driver and its adapted IT66121 HDMI bridge
+ using DKMS. Both modules are rebuilt automatically for supported kernels.
+ .
+ This release targets Ubuntu 26.04 amd64 with Linux 7.0. The adapted it66121
+ module takes precedence over a same-named distribution module while this
+ package is installed. Native OF bridge boards are not a validated target.
+
+Package: fl2000-enumerator
+Section: admin
+Architecture: all
+Depends: ${misc:Depends}, fl2000-dkms (= ${binary:Version}), i2c-tools,
+ kmod, udev, systemd
+Description: automatic HDMI bridge discovery for FL2000 adapters
+ Identifies configured bridges on an FL2000 I2C adapter and creates the
+ matching I2C client. A udev rule activates a systemd service; supported
+ bridge identifiers and parameters are kept in a separate configuration.
