@@ -39,10 +39,11 @@
  * outside those tables. Do not invent meanings for reserved or test-only bits.
  *
  * Status at 0x8000 consumes events on read. LBUF overflow is bit 9 and
- * underflow bit 8. The manual says to clear them by writing bit 31, which is
- * also an EDID event; the driver instead writes observed bits 8/9 back. That
- * acknowledgment discrepancy still needs hardware confirmation. LBUF halt and
- * VGA error recovery are not implemented.
+ * underflow bit 8. Clear both flags through VGA_CTRL_REG_PXCLK bit 12.
+ * The status table's bit-31 clear description does not match tested hardware;
+ * writing observed bits 8/9 back does not clear them either. Active streaming
+ * may reassert overflow after clearing. LBUF halt and VGA error recovery are
+ * not implemented.
  *
  * On tested hardware, VGA_CTRL_REG_ACLK bit 4 inhibits read-to-clear when set,
  * contrary to its documented enable meaning. Keep it clear. Bit 25 forces VGA

@@ -426,10 +426,12 @@ int fl2000_check_interrupt(struct usb_device *usb_dev)
 	sink_event = status & (FL2000_VGA_STATUS_HDMI_EVENT | FL2000_VGA_STATUS_MONITOR_EVENT |
 			       FL2000_VGA_STATUS_EDID_EVENT);
 
-	/* Acknowledge recoverable LBUF errors without rereading self-clear events. */
+	/* Clear LBUF flags without writing the read-to-clear event register. */
 	errors = status & (FL2000_VGA_STATUS_LBUF_OVERFLOW | FL2000_VGA_STATUS_LBUF_UNDERFLOW);
 	if (errors) {
-		ret = regmap_write(regmap, FL2000_VGA_STATUS_REG, errors);
+		ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK,
+					FL2000_VGA_CTRL_PXCLK_CLEAR_LBUF_STATUS,
+					FL2000_VGA_CTRL_PXCLK_CLEAR_LBUF_STATUS);
 		if (ret)
 			return ret;
 	}

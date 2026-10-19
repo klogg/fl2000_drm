@@ -187,17 +187,25 @@ int main(void)
  expect(0,'b',0x803c,0x0120201c,0x0120000c);
  expect(1,'b',0x8064,0x180000,0x80000);
 
- /* Read the precious status register once; write only observed LBUF errors. */
+ /* Read status once; clear LBUF flags through the dedicated PXCLK strobe. */
  for(unsigned int bit=0;bit<32;bit++) {
   count=0;map.regs[0x8000/4]=UINT32_C(1)<<bit;
   assert(fl2000_check_interrupt(&usb)==(bit==26 || bit==30 || bit==31));
   assert(count==(bit==8 || bit==9?2U:1U));
   expect(0,'r',0x8000,0,0);
-  if(count==2)expect(1,'w',0x8000,UINT32_MAX,UINT32_C(1)<<bit);
+  if(count==2)expect(1,'b',0x8004,0x1000,0x1000);
  }
  count=0;map.regs[0x8000/4]=0x84000300;
+ map.regs[0x8004/4]=0x001003dc;
  assert(fl2000_check_interrupt(&usb)==1 && count==2);
- expect(1,'w',0x8000,UINT32_MAX,0x300);
+ expect(1,'b',0x8004,0x1000,0x1000);
+ assert(map.regs[0x8004/4]==0x001013dc);
+ assert(map.regs[0x8000/4]==0x84000300);
+ for(unsigned int failure=1;failure<=2;failure++) {
+  count=0;fail_at=failure;
+  assert(fl2000_check_interrupt(&usb)==-EIO && count==failure);
+ }
+ fail_at=0;
 
  /* I2C command fields and status decoding, preserving unrelated SC bits. */
  u32 data=0x12345678;map.regs[0x8020/4]=0x205a0000;map.regs[0x8024/4]=0x89abcdef;
