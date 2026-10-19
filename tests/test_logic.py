@@ -331,6 +331,7 @@ static int usb_control_msg_send(struct usb_device *usb, int ep, int request, int
 
 #define DMA_TO_DEVICE 1
 #define __GFP_ZERO 2
+#define __GFP_NOWARN 4
 #define VM_MAP 0
 #define PAGE_KERNEL 0
 #define DIV_ROUND_UP(n,d) (((n)+(d)-1)/(d))
@@ -340,7 +341,7 @@ static unsigned int dma_allocs,dma_frees,page_allocs,page_frees,fail_page_at;
 static void *usb_alloc_noncoherent(struct usb_device *usb,unsigned int size,int flags,
                                   dma_addr_t *dma,int dir,struct sg_table **sgt)
 {
- (void)usb;(void)flags;assert(dir==DMA_TO_DEVICE);
+ (void)usb;assert((flags & __GFP_NOWARN) && dir==DMA_TO_DEVICE);
  if(fail_dma_alloc)return NULL;
  void *buffer=malloc(size);
  *sgt=calloc(1,sizeof(**sgt)); *dma=0x12340000;dma_allocs++;

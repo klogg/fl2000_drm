@@ -189,8 +189,9 @@ static int fl2000_alloc_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 			      unsigned int size)
 {
 	frame->size = size;
-	frame->vaddr = usb_alloc_noncoherent(usb_dev, size, GFP_KERNEL, &frame->dma, DMA_TO_DEVICE,
-					     &frame->dma_sgt);
+	/* Direct DMA may require contiguous pages; failure has a page fallback. */
+	frame->vaddr = usb_alloc_noncoherent(usb_dev, size, GFP_KERNEL | __GFP_NOWARN, &frame->dma,
+					     DMA_TO_DEVICE, &frame->dma_sgt);
 	if (frame->vaddr) {
 		memset(frame->vaddr, 0, size);
 		return 0;
