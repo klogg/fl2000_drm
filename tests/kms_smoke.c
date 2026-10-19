@@ -155,10 +155,28 @@ int main(int argc, char **argv)
 {
 	setbuf(stdout, NULL);
 	int mode_index = -1;
+	unsigned int duration = 2, first_format = 0, last_format = 3;
+	bool stream = argc == 4 &&
+		      (!strcmp(argv[1], "--stream") || !strcmp(argv[1], "--test-1080p"));
+	bool test_1080p = stream && !strcmp(argv[1], "--test-1080p");
 	bool list_modes = argc == 2 && !strcmp(argv[1], "--list-modes");
 	bool hold = argc == 2 && !strcmp(argv[1], "--hold");
 
-	if (argc == 3 && !strcmp(argv[1], "--mode")) {
+	if (stream) {
+		char *end;
+		const char *names[] = { "XRGB8888", "RGB888", "RGB565" };
+
+		for (; first_format < 3; first_format++)
+			if (!strcmp(argv[2], names[first_format]))
+				break;
+		errno = 0;
+		unsigned long value = strtoul(argv[3], &end, 10);
+		if (first_format == 3 || errno || end == argv[3] || *end || argv[3][0] == '-' ||
+		    !value || value > 600)
+			return 2;
+		last_format = first_format + 1;
+		duration = (unsigned int)value;
+	} else if (argc == 3 && !strcmp(argv[1], "--mode")) {
 		char *end;
 
 		errno = 0;
@@ -167,7 +185,10 @@ int main(int argc, char **argv)
 			return 2;
 		mode_index = (int)index;
 	} else if (argc != 1 && !list_modes && !hold) {
-		fprintf(stderr, "Usage: %s [--hold | --list-modes | --mode INDEX]\n", argv[0]);
+		fprintf(stderr,
+			"Usage: %s [--hold | --list-modes | --mode INDEX |\n"
+			"  --stream FORMAT SECONDS | --test-1080p FORMAT SECONDS]\n",
+			argv[0]);
 		return 2;
 	}
 	const char *device = getenv("DRM_DEVICE");
@@ -225,6 +246,26 @@ int main(int argc, char **argv)
 		mode = &modes[mode_index];
 	else if (!mode)
 		mode = &modes[0];
+	/* Explicit transport stress mode; the attached monitor may not accept it. */
+	struct drm_mode_modeinfo stress = {
+		.clock = 148500,
+		.hdisplay = 1920,
+		.hsync_start = 2008,
+		.hsync_end = 2052,
+		.htotal = 2200,
+		.vdisplay = 1080,
+		.vsync_start = 1084,
+		.vsync_end = 1089,
+		.vtotal = 1125,
+		.vrefresh = 60,
+		.flags = DRM_MODE_FLAG_PHSYNC | DRM_MODE_FLAG_PVSYNC,
+		.type = DRM_MODE_TYPE_USERDEF,
+		.name = "1920x1080",
+	};
+	if (test_1080p) {
+		mode = &stress;
+		puts("KMS_STRESS: synthetic mode; transport results do not validate the monitor");
+	}
 	struct drm_mode_crtc saved = { .crtc_id = crtcs[0] };
 	check(ioctl(fd, DRM_IOCTL_MODE_GETCRTC, &saved), "save CRTC");
 	const uint32_t formats[] = { DRM_FORMAT_XRGB8888, DRM_FORMAT_RGB888, DRM_FORMAT_RGB565 };
@@ -237,7 +278,7 @@ int main(int argc, char **argv)
 			perror("filter");
 		close(filter);
 	}
-	for (unsigned int n = 0; n < 3; n++) {
+	for (unsigned int n = first_format; n < last_format; n++) {
 		struct drm_mode_create_dumb dumb = { .width = mode->hdisplay,
 						     .height = mode->vdisplay,
 						     .bpp = cpp[n] * 8 };
@@ -255,6 +296,12 @@ int main(int argc, char **argv)
 				unsigned int bar = x * 8 / dumb.width;
 				unsigned int r = (bar & 1) ? 255 : 0, g = (bar & 2) ? 255 : 0,
 					     b = (bar & 4) ? 255 : 0;
+				/* Fine RGB detail exposes dword-order mistakes hidden by solid bars. */
+				if (y >= dumb.height / 2) {
+					r = x & 1 ? 255 : 0;
+					g = y & 1 ? 255 : 0;
+					b = (x ^ y) & 1 ? 255 : 0;
+				}
 				unsigned char *p = pixels + (size_t)y * dumb.pitch + x * cpp[n];
 				if (cpp[n] == 2) {
 					uint16_t value = (r >> 3) << 11 | (g >> 2) << 5 | (b >> 3);
@@ -282,7 +329,8 @@ int main(int argc, char **argv)
 		check(ioctl(fd, DRM_IOCTL_MODE_SETCRTC, &active), "set mode");
 		printf("KMS_ACTIVE %s %ux%u pitch=%u fb=%u\n", names[n], dumb.width, dumb.height,
 		       dumb.pitch, fb.fb_id);
-		atomic_checks(fd, crtcs[0], fb.fb_id, dumb.width, dumb.height);
+		if (!stream)
+			atomic_checks(fd, crtcs[0], fb.fb_id, dumb.width, dumb.height);
 		sleep(1);
 		profile(1);
 		struct drm_clip_rect clip = { .x2 = dumb.width, .y2 = dumb.height };
@@ -290,7 +338,7 @@ int main(int argc, char **argv)
 						       .num_clips = 1,
 						       .clips_ptr = (uintptr_t)&clip };
 		double start = seconds(CLOCK_MONOTONIC), cpu = seconds(CLOCK_PROCESS_CPUTIME_ID);
-		for (int frame = 0; frame < 120; frame++) {
+		for (unsigned int frame = 0; frame < duration * 60; frame++) {
 			pixels[0] = frame;
 			check(ioctl(fd, DRM_IOCTL_MODE_DIRTYFB, &dirty), "dirty framebuffer");
 			struct timespec until = { (time_t)start, 0 };
@@ -299,8 +347,9 @@ int main(int argc, char **argv)
 			until.tv_nsec = (long)((deadline - until.tv_sec) * 1e9);
 			clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &until, NULL);
 		}
-		printf("KMS_UPDATES %s 120 updates wall=%.3fs process_cpu=%.3fs\n", names[n],
-		       seconds(CLOCK_MONOTONIC) - start, seconds(CLOCK_PROCESS_CPUTIME_ID) - cpu);
+		printf("KMS_UPDATES %s %u updates wall=%.3fs process_cpu=%.3fs\n", names[n],
+		       duration * 60, seconds(CLOCK_MONOTONIC) - start,
+		       seconds(CLOCK_PROCESS_CPUTIME_ID) - cpu);
 		sleep(1);
 		profile(0);
 		report_profile(names[n]);

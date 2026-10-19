@@ -102,8 +102,14 @@ production enumerator. The minimal guest does not test udev/systemd activation.
 Build `tests/kms_smoke.c` and `tests/usb_reset.c` as static executables for the
 minimal guest. The KMS test checks XRGB8888, RGB888 and RGB565, invalid geometry,
 nonblocking plane and CRTC-only commits, flip events and dirty-framebuffer
-updates. Options are `--list-modes`, `--mode INDEX` and `--hold`. The default
-prefers 800x600 at 60 Hz when advertised, otherwise the first mode. `--hold`
+updates. The image combines color bars with single-pixel RGB detail. Options
+are `--list-modes`, `--mode INDEX` and `--hold`. The default prefers 800x600 at
+60 Hz when advertised, otherwise the first mode. `--stream FORMAT SECONDS`
+runs one format at 60 requested full-frame updates/s for 1–600 seconds,
+without the atomic validation suite. Formats are `XRGB8888`, `RGB888` and
+`RGB565`. `--test-1080p FORMAT SECONDS` runs the same workload with synthetic
+1920x1080 at 60 Hz timings, even when the monitor does not advertise that mode;
+use it for transport stress, not image-fidelity validation. `--hold`
 keeps an open DRM file until `/tmp/release-hold` exists, then expects `ENODEV`
 after unbind/removal; remove any old marker before repeating it. KMS completion
 does not establish physical presentation.
