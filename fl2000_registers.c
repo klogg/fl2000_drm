@@ -191,25 +191,45 @@ int fl2000_set_timings(struct usb_device *usb_dev, const struct fl2000_timings *
 }
 
 /**
- * fl2000_set_pixfmt() - Select the wire pixel representation
+ * fl2000_set_pixfmt() - Select wire depth after resetting the format watermark
  * @usb_dev: USB parent whose interface resources remain alive.
  * @bytes_pix: Validated wire pixel size: 2 for RGB565 or 3 for RGB888.
  *
- * Context: Process context. May sleep.
+ * Clear the previous format, reset the watermark, select the new format,
+ * then enable output, following the controller programming sequence. The
+ * watermark reset must not share a write with format selection.
+ * Clear frame-sync mode to keep scanout timing independent of USB delivery.
+ *
+ * Context: Process context. Caller has drained streaming and serialized modesets.
  * Return: 0 on success or a negative error code.
  */
 int fl2000_set_pixfmt(struct usb_device *usb_dev, u32 bytes_pix)
 {
 	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
-	u32 mask = FL2000_VGA_CTRL_PXCLK_DAC_OUTPUT_EN | FL2000_VGA_CTRL_PXCLK_DROP_CNT |
+	u32 mask = FL2000_VGA_CTRL_PXCLK_DROP_CNT | FL2000_VGA_CTRL_PXCLK_FRAME_SYNC |
 		   FL2000_VGA_CTRL_PXCLK_VGA565_MODE | FL2000_VGA_CTRL_PXCLK_VGA332_MODE |
 		   FL2000_VGA_CTRL_PXCLK_VGA555_MODE | FL2000_VGA_CTRL_PXCLK_VGA_COMPRESS |
+		   FL2000_VGA_CTRL_PXCLK_VGA_COLOR_PALETTE_EN |
+		   FL2000_VGA_CTRL_PXCLK_VGA_FIRST_BT_ENC_EN |
 		   FL2000_VGA_CTRL_PXCLK_CLEAR_WATERMARK;
-	u32 value = FL2000_VGA_CTRL_PXCLK_DAC_OUTPUT_EN | FL2000_VGA_CTRL_PXCLK_CLEAR_WATERMARK;
+	int ret;
 
-	if (bytes_pix == 2)
-		value |= FL2000_VGA_CTRL_PXCLK_VGA565_MODE;
-	return regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, value);
+	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK, mask, 0);
+	if (ret)
+		return ret;
+	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK,
+				FL2000_VGA_CTRL_PXCLK_CLEAR_WATERMARK,
+				FL2000_VGA_CTRL_PXCLK_CLEAR_WATERMARK);
+	if (ret)
+		return ret;
+	ret = regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK,
+				FL2000_VGA_CTRL_PXCLK_VGA565_MODE,
+				bytes_pix == 2 ? FL2000_VGA_CTRL_PXCLK_VGA565_MODE : 0);
+	if (ret)
+		return ret;
+	return regmap_write_bits(regmap, FL2000_VGA_CTRL_REG_PXCLK,
+				 FL2000_VGA_CTRL_PXCLK_DAC_OUTPUT_EN,
+				 FL2000_VGA_CTRL_PXCLK_DAC_OUTPUT_EN);
 }
 
 /**

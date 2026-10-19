@@ -152,9 +152,22 @@ int main(void)
  expect(4,'b',0x8004,0xc,4);
  timings.vstart=2048;count=0;assert(!fl2000_set_timings(&usb,&timings));
  expect(3,'w',0x8014,UINT32_MAX,0x3ff40800);
+ /* Start from stale palette, packed formats and frame-sync settings. */
  for(unsigned int bytes=2;bytes<=3;bytes++) {
-  count=0;assert(!fl2000_set_pixfmt(&usb,bytes) && count==1);
-  expect(0,'b',0x8004,0x830020c1,bytes==2?0xc1:0x81);
+  map.regs[0x8004/4]=UINT32_MAX;
+  count=0;assert(!fl2000_set_pixfmt(&usb,bytes) && count==4);
+  expect(0,'b',0x8004,0x8f002043,0);
+  expect(1,'b',0x8004,1,1);
+  expect(2,'b',0x8004,0x40,bytes==2?0x40:0);
+  expect(3,'b',0x8004,0x80,0x80);
+  assert((map.regs[0x8004/4] & ~UINT32_C(0x8f0020c3))==
+         (UINT32_MAX & ~UINT32_C(0x8f0020c3)));
+  assert((map.regs[0x8004/4]&0x8f002043)==(bytes==2?0x41:1));
+  for(unsigned int failure=1;failure<=4;failure++) {
+   count=0;fail_at=failure;
+   assert(fl2000_set_pixfmt(&usb,bytes)==-EIO && count==failure);
+  }
+  fail_at=0;
  }
  count=0;assert(!fl2000_set_transfers(&usb) && count==2);
  expect(0,'b',0x803c,0x39000000,0x11000000);
