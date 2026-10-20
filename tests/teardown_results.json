@@ -1,0 +1,152 @@
+{
+  "date": "2026-10-20",
+  "base_revision": "08d2c7fb18145a7b805d8208d3a57395ab6e05e4",
+  "source_state": "Uncommitted USB-core physical-removal detection, removal of private disconnect/master-registration flags, serialized DRM teardown, explicit stream error policy, completion-status separation, stop-aware bulk restart and IRQ fallback, and unfiltered error reporting.",
+  "kernel": "7.0.0-38-generic",
+  "environment": "Patched QEMU 11.1.2, KVM, host CPU, one vCPU, 1 GiB RAM; USB physical port hostbus=2 hostport=2.",
+  "source_sha256": {
+    "fl2000.h": "7390c9897d1713813c049b5fbcd74c596eab18b9293af5f57d8368449fcd0e4b",
+    "fl2000_drv.c": "c1fcb0c22c9096ea5cf6ce602550e959b83733254aca84c6a2e5092059709069",
+    "fl2000_drm.c": "d2d027b7e5e746236c5c4df44554fb56558573033c2e9d931625bac0d62b5f4f",
+    "fl2000_interrupt.c": "405207692d9403ac3e4ba9841d5c0e8f36328d203efbb21e3af4cfd815173db0",
+    "fl2000_streaming.c": "f7953348f9348a19ae9bd2666b70686297fc834e784968a8a54541037dfdbf59",
+    "bridge/it66121_drv.c": "6da2ec85648646644cdf856b391967c51650876eb2127221a554ba23708fe4ef",
+    "tests/test_driver.py": "22f11453ba9d6b3512c883d843ec0dca9fb769b2f331f8f374c41bd3e93c08f3",
+    "tests/test_drm.py": "592c3764de804ef5d60d5253b18ade253e5f525357be402c68f1d02cd0ec74f8",
+    "tests/test_interrupt.py": "e2a92b27ada91e99e24478dbe6d7ce22f5afc0c1c17e37b2a6832854e97a56b2",
+    "tests/test_logic.py": "f068b27f52b785fb31505d0cffb9b56aad00b96fd5e18df18b4599446d85be46",
+    "tests/lifecycle_fault.c": "04a39ee42a37d3aa87badefde41645018583c325ba9a4e5d4d7224ca0a61954a",
+    "tests/kms_smoke.c": "25e54be4bd84855929b32a0df30e98fa3c1332f576c607bd04b3c8bb79cffb34"
+  },
+  "module_sha256": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+  "baseline": {
+    "log": ".qemu-build/teardown/hardware-_gnplp8q/guest.log",
+    "failed_submit_enoent": 2,
+    "failed_halt_clear": 0,
+    "frame_conversion_messages": 2,
+    "observed_callers": [
+      "fbdev hotplug modeset from output_poll_execute",
+      "fbdev damage work through DRM atomic dirtyfb"
+    ],
+    "observed_path": [
+      "fl2000_plane_atomic_update",
+      "fl2000_streaming_enable",
+      "fl2000_start_stream",
+      "fl2000_submit_transfer",
+      "usb_submit_urb: -ENOENT"
+    ]
+  },
+  "cause": "Hard USB unbind disables interface endpoints before disconnect. Existing fbdev poll/damage workers can reach stream restart while the endpoint is disabled and before DRM unplug quiesces them. The conversion-error label reports the failed stream enable.",
+  "fix": "Use default hard unbind and USB_STATE_NOTATTACHED for physical-removal checks. Remove the component master unconditionally. Serialized DRM unbind unplugs DRM, stops IRQs, polling and streaming, then detaches the bridge before interface resources are freed. Bulk restart rechecks scanout intent after draining and halt clearing; IRQ recovery checks queue state before selecting fallback. Stream error handling explicitly separates terminal stop from bounded recovery. Error reporting does not filter USB error codes.",
+  "regression": {
+    "log": ".qemu-build/full-hw-validation/regressions.log",
+    "harnesses": [
+      "tests/test_logic.py",
+      "tests/test_register_locking.py",
+      "tests/test_registers.py",
+      "tests/test_edid.py",
+      "tests/test_bridge.py",
+      "tests/test_bridge_probe.py",
+      "tests/test_driver.py",
+      "tests/test_drm.py",
+      "tests/test_interrupt.py",
+      "tests/test_tools.py",
+      "tests/test_enumerator.py"
+    ],
+    "coverage": "All 11 harnesses passed, including portable/SSSE3/BMI2 ASan/UBSan; physical and hard unbind, unbound component master and partial probe cleanup; stop during halt clear, status processing and bulk restart drain; cancellation-preserved restart intent and invalid submissions."
+  },
+  "fixed": {
+    "logs": {
+      "lifecycle": ".qemu-build/full-hw-validation/lifecycle-guest.log",
+      "faults_and_stress": ".qemu-build/full-hw-validation/stress-guest.log",
+      "no_hardware_smoke": ".qemu-build/full-hw-validation/smoke.log",
+      "qmp": ".qemu-build/full-hw-validation/qmp.log"
+    },
+    "panic_on_warn": 1,
+    "soft_unbind": false,
+    "no_hardware_alternating_load_unload_cycles": 100,
+    "hardware_immediate_load_unload_cycles": 3,
+    "interface_unbind_rebind_with_open_file": [
+      0,
+      1,
+      2
+    ],
+    "interface_unbind_rebind_during_active_updates": [
+      0,
+      1,
+      2
+    ],
+    "bridge_unbind_rebind": true,
+    "open_drm_files_returned_enodev": 6,
+    "bridge_module_pinned_until_last_drm_file_closed": true,
+    "unbound_component_master_load_unload": true,
+    "usb_reset_and_display_recovery": true,
+    "qmp_removal_and_reattachment_with_open_file": true,
+    "qmp_removal_and_reattachment_during_active_updates": true,
+    "kms_suites_completed": 4,
+    "kms_atomic_format_checks": 12,
+    "formats": [
+      "XRGB8888",
+      "RGB888",
+      "RGB565"
+    ],
+    "sustained_updates": [
+      {
+        "format": "XRGB8888",
+        "updates": 600,
+        "seconds": 10.0
+      },
+      {
+        "format": "RGB888",
+        "updates": 600,
+        "seconds": 10.0
+      },
+      {
+        "format": "RGB565",
+        "updates": 600,
+        "seconds": 10.0
+      }
+    ],
+    "irq_fault_injection": [
+      {
+        "mode": "status",
+        "injected": 3,
+        "polling_on": 1,
+        "polling_off": 2
+      },
+      {
+        "mode": "i2c",
+        "injected": 3,
+        "polling_on": 1,
+        "polling_off": 2
+      }
+    ],
+    "bulk_fault_injection": {
+      "injected": 1,
+      "recovery_runs": 1,
+      "successful_completions_after_recovery": 260,
+      "frame_updates": 0
+    },
+    "failed_usb_submit_or_halt_clear_returns_in_traced_software_removal": 0,
+    "kernel_warning_bug_oops_panic_found": false,
+    "final_kernel_taint": 12288,
+    "module_and_dependency_unload_completed": true,
+    "both_hardware_guests_powered_off": true
+  },
+  "limits": [
+    "One adapter, one 800x480 HDMI display and one USB controller; sustained format tests ran for ten seconds each.",
+    "QMP removal tests guest USB disconnect and reattachment, not electrical unplug, power loss or HDMI HPD edges.",
+    "Visual image fidelity, native IT66121 boards, other architectures, long endurance and real bus faults remain separate validation.",
+    "System suspend/reset-resume remains unvalidated; the known emulated xHCI PM limitation is documented in docs/DEVELOPMENT.md.",
+    "The minimal initramfs invokes the production enumerator directly; it does not test udev/systemd activation or package installation."
+  ],
+  "references": [
+    "https://github.com/torvalds/linux/blob/v7.0/drivers/usb/core/driver.c",
+    "https://github.com/torvalds/linux/blob/v7.0/include/linux/usb.h"
+  ],
+  "bridge_module_sha256": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb",
+  "artifacts_directory": ".qemu-build/full-hw-validation",
+  "source_patch_sha256": "6f465974ec8d622bdd251e0e1fc39911133b7805a5427ba89ceb9cce943148be",
+  "diagnostics": "Unfiltered IRQ reporting records cancellation/shutdown and DRM-unplug errors during teardown. Fault injection deliberately produces I/O and stall errors. No kernel safety reports or unexpected taint occurred.",
+  "test_tooling": "The initially prepared KMS binary lacked --stream. It passed initial format/lifecycle checks; the standalone utility was rebuilt from current tests/kms_smoke.c with installed DRM headers and the complete fault-plus-stream script passed in the second guest."
+}

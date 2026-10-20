@@ -178,6 +178,12 @@ the status matrix, matched trials, hashes and validation outcomes. Detailed
 logs, traces and temporary experiment patches remain under
 `.qemu-build/transport-investigation/`.
 
+The removal-time `Frame conversion failed: -2` recorded in these measurements
+was subsequently traced to USB endpoint disable preceding DRM quiescence.
+The [teardown follow-up](../tests/teardown_results.json) verifies ordered DRM
+and USB cleanup with default hard unbind, including removal during active
+framebuffer updates.
+
 ## Measuring the driver
 
 Measure backends in the same guest and alternate their order across trials.

@@ -197,6 +197,21 @@ its guest logs are under `mf/`. Earlier lifecycle evidence is under
 Published CPU measurements remain in the tracked JSON files linked from
 [profiling](PROFILING.md).
 
+The [teardown results](../tests/teardown_results.json) record removal with USB
+core disabling endpoints before the driver disconnect callback. Repeated module
+removal, all three USB interface unbind/rebind paths, bridge rebind and QMP
+removal/reattachment passed with open DRM-file checks and fatal kernel warnings.
+Physical removal is detected through USB core's `USB_STATE_NOTATTACHED` state
+and transfer errors. Manual unbind removes the component master, unplugs DRM,
+then stops IRQ delivery and streaming before detaching the bridge and releasing
+interface resources. Cancellation stops the affected queue; explicit queue
+restart does not require another USB probe while the device remains attached.
+Register I/O returns errors without changing lifecycle state. The driver uses
+the default hard-unbind policy. The recorded tests also cover an unbound
+component master, active updates during interface/USB removal, retained bridge
+module ownership, status/I2C recovery, and bulk recovery without a framebuffer
+update.
+
 ## Validation backlog
 
 - **System PM:** `pm_test=devices` hangs in the emulated xHCI resume path even
@@ -228,8 +243,9 @@ Published CPU measurements remain in the tracked JSON files linked from
   header builds do not cover this.
 - **Concurrency and endurance:** sustained modesets, EDID, damage, reset and
   teardown under lockdep, KASAN and KCSAN. Check reference/memory growth and
-  work/URB drainage. Investigate observed `Frame conversion failed: -2`
-  teardown diagnostics rather than treating successful rebind as resolution.
+  work/URB drainage. Keep removal tests with pending fbdev work and open DRM
+  files; the verified hard-unbind paths cover endpoint-disable ordering,
+  not all concurrency or physical-fault scenarios.
 - **Distribution services:** packaged udev/systemd ordering, boot-time devices,
   late module loading, registered built-in bridges, failed probe retries and
   cancellation during removal. Direct enumeration in a minimal guest does not
