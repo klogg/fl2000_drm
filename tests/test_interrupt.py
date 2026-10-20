@@ -29,7 +29,10 @@ struct delayed_work { struct work_struct work; unsigned long delay; };
 #define to_delayed_work(w) container_of(w,struct delayed_work,work)
 #define system_wq NULL
 #define msecs_to_jiffies(ms) (ms)
-struct usb_device { int dev; };
+enum usb_device_state { USB_STATE_CONFIGURED, USB_STATE_NOTATTACHED };
+struct usb_device { int dev; enum usb_device_state state; };
+static inline bool fl2000_usb_unavailable(const struct usb_device *usb);
+static inline bool fl2000_usb_error_terminal(int error);
 struct urb { int status,pipe;void *context;bool submitted; };
 #define FL2000_INTR_STALL_RETRIES 3
 #define FL2000_INTR_STATUS_RETRY_MS 1000
@@ -41,7 +44,8 @@ struct urb { int status,pipe;void *context;bool submitted; };
 #define spin_lock_irqsave(lock,flags) ((void)(lock),(flags)=0)
 #define spin_unlock_irqrestore(lock,flags) ((void)(lock),(void)(flags))
 #define GFP_ATOMIC 1
-#define mutex_lock(p) ((void)(p))
+static void (*mutex_hook)(void);
+#define mutex_lock(p) ((void)(p), (mutex_hook ? mutex_hook() : (void)0))
 #define mutex_unlock(p) ((void)(p))
 struct fl2000_interrupt;
 typedef int atomic_t;
@@ -69,7 +73,7 @@ static void usb_free_urb(struct urb *urb) { assert(!urb || !urb->submitted); }
 static void kfree(void *buf) { assert(!buf); }
 #define resource device.interrupt
 static void *dev_get_drvdata(const void *dev) { (void)dev;return &device; }
-static int submissions,submit_error,clear_count,clear_error,status_reads,status_result,hotplugs,logs;
+static int submissions,submit_error,clear_count,clear_error,status_reads,status_result,hotplugs,logs,transfer_logs;
 static int poll_enables,poll_disables,hotplug_result,irq_calls;
 static bool irq_error;
 static bool polling_current;
@@ -77,7 +81,13 @@ static void (*submit_hook)(void);
 static void fl2000_drm_set_polling(struct usb_device *usb,bool enabled)
 { (void)usb;polling_current=enabled;if(enabled)poll_enables++;else poll_disables++; }
 static void (*clear_hook)(void);
-#define dev_err_ratelimited(...) (++logs)
+static void record_error(const char *message,int error)
+{
+ assert(error<0);
+ if(!strcmp(message,"Interrupt transfer failed: %d\n"))transfer_logs++;
+ else logs++;
+}
+#define dev_err_ratelimited(dev,message,error) record_error(message,error)
 static void msleep(int ms) { assert(ms==20); }
 static int usb_clear_halt(struct usb_device *usb,int pipe)
 { (void)usb;assert(pipe==3);clear_count++;if(clear_hook)clear_hook();return clear_error; }
@@ -88,7 +98,8 @@ static bool schedule_delayed_work(struct delayed_work *work,unsigned long delay)
 static bool mod_delayed_work(void *queue,struct delayed_work *work,unsigned long delay)
 { (void)queue;bool pending=work->work.pending;work->work.pending=true;work->delay=delay;return pending; }
 static void cancel_delayed_work_sync(struct delayed_work *work) { work->work.pending=false; }
-static int fl2000_check_interrupt(struct usb_device *usb) { (void)usb;status_reads++;return status_result; }
+static void (*status_hook)(void);
+static int fl2000_check_interrupt(struct usb_device *usb) { (void)usb;status_reads++;if(status_hook)status_hook();return status_result; }
 static void handle_nested_irq(unsigned int irq)
 { assert(irq==37);irq_calls++;if(irq_error)device.i2c_errors++; }
 static int fl2000_drm_hotplug(struct usb_device *usb) { (void)usb;hotplugs++;return hotplug_result; }
@@ -96,10 +107,11 @@ struct irq_data { void *chip_data; };
 static void *irq_data_get_irq_chip_data(struct irq_data *data) { return data->chip_data; }
 static void fl2000_intr_completion(struct urb *urb);
 static void usb_kill_urb(struct urb *urb)
-{ if(urb && urb->submitted){urb->submitted=false;urb->status=-ECONNRESET;fl2000_intr_completion(urb);} }
+{ if(urb && urb->submitted){int before=transfer_logs;urb->submitted=false;urb->status=-ECONNRESET;fl2000_intr_completion(urb);assert(transfer_logs==before+1);} }
 """
 checks = r"""
 static struct fl2000_interrupt *current;
+static void disconnect_during_lock(void) { current->usb_dev->state=USB_STATE_NOTATTACHED; }
 static void disable_during_clear(void) { current->enabled=false; }
 static void run_work(struct fl2000_interrupt *intr) { intr->work.work.pending=false;fl2000_intr_work(&intr->work.work); }
 static void immediate_failure(void)
@@ -108,7 +120,8 @@ static void immediate_failure(void)
  current->work.work.pending=true;run_work(current);
 }
 static void complete(struct fl2000_interrupt *intr,int status)
-{ intr->urb->submitted=false;intr->urb->status=status;fl2000_intr_completion(intr->urb); }
+{ int before=transfer_logs;intr->urb->submitted=false;intr->urb->status=status;fl2000_intr_completion(intr->urb);assert(transfer_logs==before+(status!=0)); }
+static void shutdown_during_status(void) { complete(current,-ESHUTDOWN); }
 int main(void)
 {
  struct usb_device usb={0};struct urb urb={.pipe=3};
@@ -264,6 +277,130 @@ int main(void)
  assert(irq_calls==previous_irqs+1 && urb.submitted && !intr.status_polling);
  assert(!polling_current && !intr.work.work.pending);
  fl2000_intr_stop(&intr);
+ /* Explicit restart must retry bridge acknowledgment after the USB event cleared. */
+ urb.status=0;status_result=1;irq_error=true;
+ assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+ assert(intr.status_polling && intr.work.work.pending);
+ fl2000_disable_interrupt(&usb);
+ status_result=0;irq_error=false;previous_irqs=irq_calls;
+ assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+ assert(irq_calls==previous_irqs+1 && !intr.status_polling);
+ assert(intr.enabled && urb.submitted && !intr.work.work.pending);
+ fl2000_disable_interrupt(&usb);
+ /* An unplugged DRM device is terminal even when USB is still present. */
+ int gone[]={-ENODEV,-ESHUTDOWN};
+ for(unsigned int i=0;i<sizeof(gone)/sizeof(gone[0]);i++) {
+  int old_logs=logs,old_polls=poll_enables;
+  intr.enabled=true;intr.rearm=true;status_result=1;hotplug_result=gone[i];
+  run_work(&intr);
+  assert(!intr.enabled && !intr.work.work.pending && !urb.submitted);
+  assert(logs==old_logs+1 && poll_enables==old_polls);
+  fl2000_intr_stop(&intr);
+  assert(!fl2000_usb_unavailable(&usb)); /* DRM loss does not disconnect its USB transport. */
+ }
+ hotplug_result=0;
+ /* Terminal cancellations never enable connector polling or retry. */
+ const int terminal[]={-ENOENT,-ECONNRESET,-ESHUTDOWN,-ENODEV,-EPERM};
+ const int completion_stop[]={-ENOENT,-ECONNRESET,-ESHUTDOWN,-ENODEV};
+ for(unsigned int i=0;i<sizeof(completion_stop)/sizeof(completion_stop[0]);i++) {
+  intr.enabled=true;int old_logs=logs,old_polls=poll_enables;
+  complete(&intr,completion_stop[i]);
+  assert(!intr.enabled && !intr.fallback && !intr.work.work.pending);
+  run_work(&intr);assert(logs==old_logs && poll_enables==old_polls);
+  assert(!fl2000_usb_unavailable(&usb));
+  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+  fl2000_intr_stop(&intr);
+ }
+ /* Concurrent acknowledgment failures must preserve terminal detection errors. */
+ for(unsigned int i=0;i<sizeof(terminal)/sizeof(terminal[0]);i++) {
+  urb.status=0;status_result=1;irq_error=true;hotplug_result=terminal[i];
+  int old_polls=poll_enables;
+  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+  assert(!intr.enabled && !intr.status_polling && !intr.work.work.pending);
+  assert(poll_enables==old_polls);
+  fl2000_disable_interrupt(&usb);irq_error=false;hotplug_result=0;
+ }
+ /* Terminal halt-clear failures stop stall recovery without polling or retry. */
+ for(unsigned int i=0;i<sizeof(terminal)/sizeof(terminal[0]);i++) {
+  urb.status=0;status_result=0;
+  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+  complete(&intr,-EPIPE);clear_error=terminal[i];
+  int old_polls=poll_enables,old_logs=logs;count=submissions;
+  run_work(&intr);
+  assert(!intr.enabled && !intr.work.work.pending && !urb.submitted);
+  assert(poll_enables==old_polls && logs==old_logs+1 && submissions==count);
+  clear_error=0;
+  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+  assert(intr.enabled && urb.submitted);
+  fl2000_disable_interrupt(&usb);
+ }
+ /* Terminal startup and worker submissions must not enable polling. */
+ for(unsigned int i=0;i<sizeof(terminal)/sizeof(terminal[0]);i++) {
+  int old_logs=logs,old_polls=poll_enables;
+  submit_error=terminal[i];urb.status=0;
+  assert(fl2000_enable_interrupt(&usb)==terminal[i] && !fl2000_usb_unavailable(&usb));
+  assert(logs==old_logs && poll_enables==old_polls);
+  fl2000_intr_stop(&intr);submit_error=0;
+  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+  complete(&intr,0);submit_error=terminal[i];run_work(&intr);
+  assert(!fl2000_usb_unavailable(&usb) && !intr.enabled && !intr.work.work.pending);
+  assert(logs==old_logs+1 && poll_enables==old_polls);
+  submit_error=0;
+  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+  fl2000_intr_stop(&intr);
+ }
+ clear_error=-ENODEV;urb.status=-EPIPE;previous_polls=poll_enables;
+ assert(fl2000_enable_interrupt(&usb)==-ENODEV && !fl2000_usb_unavailable(&usb));
+ assert(poll_enables==previous_polls);
+ fl2000_intr_stop(&intr);clear_error=0;urb.status=0;
+ assert(!fl2000_enable_interrupt(&usb));fl2000_intr_stop(&intr);
+ assert(!fl2000_usb_unavailable(&usb)); /* Intentional stop does not change USB core state. */
+ /* A status read failure also stops locally and permits an explicit restart. */
+ for(unsigned int i=0;i<sizeof(terminal)/sizeof(terminal[0]);i++) {
+  status_result=terminal[i];previous_polls=poll_enables;previous_logs=logs;
+  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+  assert(!intr.enabled && !intr.work.work.pending && !fl2000_usb_unavailable(&usb));
+  assert(poll_enables==previous_polls && logs==previous_logs+1);
+  status_result=0;
+  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+  fl2000_intr_stop(&intr);
+ }
+ /* Disconnect drains queued work and URBs before resource teardown. */
+ assert(!fl2000_enable_interrupt(&usb));
+ assert(urb.submitted && intr.work.work.pending);
+ usb.state=USB_STATE_NOTATTACHED;
+ fl2000_disable_interrupt(&usb);
+ int removal_logs=logs,removal_polls=poll_enables,removal_reads=status_reads;
+ count=submissions;complete(&intr,0);run_work(&intr);
+ assert(!intr.enabled && !intr.rearm && !intr.work.work.pending && !intr.fallback);
+ assert(!urb.submitted);
+ assert(fl2000_enable_interrupt(&usb)==-ENODEV && submissions==count);
+ assert(logs==removal_logs && poll_enables==removal_polls && status_reads==removal_reads);
+ /* Logging is independent of disconnect state; genuine errors stay visible. */
+ previous_logs=transfer_logs;complete(&intr,-EIO);
+ assert(transfer_logs==previous_logs+1 && !intr.enabled && !intr.fallback);
+ /* Enable must check removal after acquiring the start/stop mutex. */
+ usb.state=USB_STATE_CONFIGURED;mutex_hook=disconnect_during_lock;
+ assert(fl2000_enable_interrupt(&usb)==-ENODEV && submissions==count);
+ assert(!intr.enabled && !urb.submitted && !intr.work.work.pending);
+ mutex_hook=NULL;
+ usb.state=USB_STATE_CONFIGURED;
+
+ /* Stop observed during halt clearing prevents fallback, even on I/O failure. */
+ urb.status=0;status_result=0;
+ assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+ complete(&intr,-EPIPE);clear_error=-EIO;clear_hook=disable_during_clear;
+ previous_polls=poll_enables;previous_logs=logs;count=submissions;run_work(&intr);
+ assert(!intr.enabled && !urb.submitted && submissions==count);
+ assert(poll_enables==previous_polls && logs==previous_logs+1);
+ clear_hook=NULL;clear_error=0;fl2000_intr_stop(&intr);
+ /* Shutdown during status processing prevents fallback and delayed retry. */
+ urb.status=0;status_result=-EIO;assert(!fl2000_enable_interrupt(&usb));
+ previous_polls=poll_enables;count=submissions;status_hook=shutdown_during_status;
+ run_work(&intr);status_hook=NULL;
+ assert(!intr.enabled && !urb.submitted && submissions==count);
+ assert(!intr.status_polling && !intr.work.work.pending && poll_enables==previous_polls);
+ status_result=0;fl2000_intr_stop(&intr);
  /* Resource release drains active URBs and queued work without outer disable. */
  intr.irq=0;intr.enabled=true;urb.submitted=true;intr.work.work.pending=true;
  fl2000_intr_release(NULL,&intr);
@@ -272,7 +409,12 @@ int main(void)
 }
 """
 parts = (
-    [pre, structure(source, "fl2000_interrupt")]
+    [
+        pre,
+        function((ROOT / "fl2000.h").read_text(), "fl2000_usb_unavailable"),
+        function((ROOT / "fl2000.h").read_text(), "fl2000_usb_error_terminal"),
+        structure(source, "fl2000_interrupt"),
+    ]
     + [
         function(source, n)
         for n in (
@@ -285,6 +427,7 @@ parts = (
             "fl2000_intr_irq_init",
             "fl2000_intr_release",
             "fl2000_enable_interrupt",
+            "fl2000_disable_interrupt",
         )
     ]
     + [checks]

@@ -29,14 +29,15 @@
  * @stalled: Worker must clear the endpoint halt before resubmission.
  * @rearm: Completion awaits acknowledgment before resubmission.
  * @fallback: Worker must enable polling after reception has stopped.
- * @irq_rescan: IRQ unmask requested a bridge rescan; consumed with xchg().
+ * @irq_rescan: Startup or IRQ unmask requested a rescan; consumed with xchg().
  * @status_polling: Status retry mode; worker-owned, reset after cancellation.
  * @enabled: Submission allowed; stop clears it before draining URB and work.
  *
  * The USB worker dispatches the nested IRQ synchronously, so bridge I2C
  * acknowledgment completes before USB rearm. Status or acknowledgment errors
  * retry once per second while enabled. A fourth consecutive endpoint stall
- * stops reception; bulk-stream recovery has its own independent retry budget.
+ * stops reception; cancellation and device loss stop without polling fallback.
+ * Bulk-stream recovery has its own independent retry budget.
  * Stop must not hold a bridge/DRM lock needed by @work. Domain and mapping
  * outlive provider unbind and are freed before the adapter software node.
  */
@@ -161,14 +162,15 @@ static int fl2000_intr_irq_init(struct fl2000_interrupt *intr)
  * fl2000_intr_recover_stall() - Clear a halt outside URB completion context
  * @intr: Interrupt state with a stalled endpoint.
  *
- * After the settle delay, recheck enabled state before submission. Failed halt
- * clear or resubmission stops reception and enables connector polling.
+ * After the settle delay, recheck enabled state before submission. Transfer
+ * cancellation stops reception; other failures enable connector polling.
  *
  * Context: Process context. May sleep.
  */
 static void fl2000_intr_recover_stall(struct fl2000_interrupt *intr)
 {
 	unsigned long flags;
+	bool polling = false;
 	int ret;
 
 	/* Recover a halted endpoint outside completion context. */
@@ -186,17 +188,18 @@ static void fl2000_intr_recover_stall(struct fl2000_interrupt *intr)
 		else
 			ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
 	}
-	if (ret)
+	if (ret) {
 		intr->enabled = false;
-	else if (intr->status_polling)
+		polling = !fl2000_usb_error_terminal(ret);
+	} else if (intr->status_polling)
 		schedule_delayed_work(&intr->work, msecs_to_jiffies(FL2000_INTR_STATUS_RETRY_MS));
 unlock:
 	spin_unlock_irqrestore(&intr->lock, flags);
-	if (ret) {
+	if (polling)
 		fl2000_drm_set_polling(intr->usb_dev, true);
+	if (ret)
 		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt stall recovery failed: %d\n",
 				    ret);
-	}
 }
 
 /**
@@ -204,8 +207,8 @@ unlock:
  * @intr: Enabled interrupt resource.
  *
  * Compare I2C error counts around synchronous nested dispatch and detection.
- * Failures enable fallback polling and status retries without depending on an
- * IRQ handler return value.
+ * The worker uses the result to select polling and retries after rechecking
+ * queue state, without depending on an IRQ handler return value.
  *
  * Context: Process context. May sleep.
  * Return: 0 on success or a negative error code.
@@ -225,20 +228,12 @@ static int fl2000_intr_process_status(struct fl2000_interrupt *intr)
 		handle_nested_irq(intr->irq);
 		ret = fl2000_drm_hotplug(intr->usb_dev);
 		/* IRQ handlers return irqreturn_t, not an I2C transfer errno. */
-		if (atomic_read(&device->i2c_errors) != errors)
+		if (!ret && atomic_read(&device->i2c_errors) != errors)
 			ret = -EIO;
 	}
-	if (ret < 0) {
-		if (!intr->status_polling) {
-			intr->status_polling = true;
-			fl2000_drm_set_polling(intr->usb_dev, true);
-		}
+	if (ret < 0)
 		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt status processing failed: %d\n",
 				    ret);
-	} else if (intr->status_polling) {
-		intr->status_polling = false;
-		fl2000_drm_set_polling(intr->usb_dev, false);
-	}
 
 	return ret;
 }
@@ -255,8 +250,11 @@ static void fl2000_intr_work(struct work_struct *work)
 		container_of(to_delayed_work(work), struct fl2000_interrupt, work);
 	unsigned long flags;
 	const unsigned long retry_delay = msecs_to_jiffies(FL2000_INTR_STATUS_RETRY_MS);
+	bool polling = false;
+	bool update_polling = false;
 	bool retry;
-	int ret;
+	int status;
+	int ret = 0;
 
 	if (!READ_ONCE(intr->enabled)) {
 		if (READ_ONCE(intr->fallback)) {
@@ -269,24 +267,41 @@ static void fl2000_intr_work(struct work_struct *work)
 		fl2000_intr_recover_stall(intr);
 		return;
 	}
-	retry = fl2000_intr_process_status(intr) < 0;
+	status = fl2000_intr_process_status(intr);
+	retry = status < 0;
 
 	/* Acknowledge the device and bridge before requesting another packet. */
-	ret = 0;
 	spin_lock_irqsave(&intr->lock, flags);
-	if (intr->enabled && intr->rearm && !retry) {
+	if (!intr->enabled)
+		goto unlock;
+	if (fl2000_usb_error_terminal(status)) {
+		intr->enabled = false;
+		goto unlock;
+	}
+	if (intr->status_polling != retry) {
+		intr->status_polling = retry;
+		polling = retry;
+		update_polling = true;
+	}
+	if (intr->rearm && !retry) {
 		intr->rearm = false;
 		ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
-		if (ret)
+		if (ret) {
 			intr->enabled = false;
+			if (!fl2000_usb_error_terminal(ret)) {
+				polling = true;
+				update_polling = true;
+			}
+		}
 	}
 	if (intr->enabled && retry)
 		schedule_delayed_work(&intr->work, retry_delay);
+unlock:
 	spin_unlock_irqrestore(&intr->lock, flags);
-	if (ret) {
-		fl2000_drm_set_polling(intr->usb_dev, true);
+	if (update_polling)
+		fl2000_drm_set_polling(intr->usb_dev, polling);
+	if (ret)
 		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt submission failed: %d\n", ret);
-	}
 }
 
 /**
@@ -305,6 +320,17 @@ static void fl2000_intr_completion(struct urb *urb)
 	spin_lock_irqsave(&intr->lock, flags);
 	if (!intr->enabled)
 		goto unlock;
+	switch (status) {
+	case -ENOENT:
+	case -ECONNRESET:
+	case -ENODEV:
+	case -ESHUTDOWN:
+		intr->enabled = false;
+		intr->fallback = false;
+		goto unlock;
+	default:
+		break;
+	}
 	if (status == -EPIPE) {
 		if (++intr->stalls > FL2000_INTR_STALL_RETRIES) {
 			intr->enabled = false;
@@ -329,8 +355,7 @@ unlock:
 	if (exhausted)
 		dev_warn_ratelimited(&intr->usb_dev->dev, "Interrupt endpoint repeatedly stalled; "
 							  "using connector polling\n");
-	if (status && status != -EPIPE && status != -ENOENT && status != -ECONNRESET &&
-	    status != -ESHUTDOWN)
+	if (status)
 		dev_err_ratelimited(&intr->usb_dev->dev, "Interrupt transfer failed: %d\n", status);
 }
 
@@ -383,7 +408,7 @@ static void fl2000_intr_release(struct device *dev __always_unused, void *res)
  * @usb_dev: USB parent whose interface resources remain alive.
  *
  * Idempotent while enabled. A fresh start clears stale halt state, restores
- * HPD-only connector detection and schedules status processing immediately.
+ * HPD-only connector detection and schedules a bridge rescan immediately.
  * Call after bridge IRQ binding and initial display setup.
  *
  * Context: Process context. Takes the interrupt mutex; must not run from its
@@ -401,10 +426,12 @@ int fl2000_enable_interrupt(struct usb_device *usb_dev)
 	if (!intr)
 		return -ENODEV;
 	mutex_lock(&intr->mutex);
+	if (fl2000_usb_unavailable(usb_dev)) {
+		ret = -ENODEV;
+		goto out;
+	}
 	if (!READ_ONCE(intr->enabled)) {
-		usb_kill_urb(intr->urb);
-		cancel_delayed_work_sync(&intr->work);
-		intr->status_polling = false;
+		fl2000_intr_stop(intr);
 		if (intr->urb->status == -EPIPE) {
 			ret = usb_clear_halt(usb_dev, intr->urb->pipe);
 			if (ret)
@@ -413,10 +440,8 @@ int fl2000_enable_interrupt(struct usb_device *usb_dev)
 		/* Restore HPD-only mode before a new completion can request fallback. */
 		fl2000_drm_set_polling(usb_dev, false);
 		spin_lock_irqsave(&intr->lock, flags);
-		intr->stalled = false;
-		intr->rearm = false;
-		intr->fallback = false;
-		intr->stalls = 0;
+		/* The controller event may have been consumed before a failed acknowledgment. */
+		WRITE_ONCE(intr->irq_rescan, true);
 		intr->enabled = true;
 		ret = usb_submit_urb(intr->urb, GFP_ATOMIC);
 		if (ret)
@@ -428,7 +453,7 @@ int fl2000_enable_interrupt(struct usb_device *usb_dev)
 	}
 out:
 	mutex_unlock(&intr->mutex);
-	if (ret)
+	if (ret && !fl2000_usb_error_terminal(ret))
 		fl2000_drm_set_polling(usb_dev, true);
 	return ret;
 }

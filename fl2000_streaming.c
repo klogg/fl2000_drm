@@ -213,17 +213,21 @@ static int fl2000_alloc_frame(struct usb_device *usb_dev, struct fl2000_frame *f
 }
 
 /**
- * fl2000_schedule_recovery() - Stop submission and queue a bounded restart
+ * fl2000_stream_error() - Stop a failed queue or schedule bounded recovery
  * @stream: Owning bulk stream.
- * @error: Submission/completion error deciding retry versus terminal stop.
+ * @error: USB or frame-transfer error.
+ *
+ * Cancellation, shutdown, rejected or invalid requests stop scanout intent.
+ * Other errors retain intent and retry while the physical device is attached.
  *
  * Context: Caller holds the stream spinlock.
  */
-static void fl2000_schedule_recovery(struct fl2000_stream *stream, int error)
+static void fl2000_stream_error(struct fl2000_stream *stream, int error)
 {
 	stream->enabled = false;
 	if (!stream->running)
 		return;
+
 	switch (error) {
 	case -ENOENT:
 	case -ECONNRESET:
@@ -231,17 +235,22 @@ static void fl2000_schedule_recovery(struct fl2000_stream *stream, int error)
 	case -ENODEV:
 	case -EPERM:
 	case -EINVAL:
-		stream->running = false;
-		return;
+		goto stop;
 	default:
 		break;
 	}
+	if (fl2000_usb_unavailable(stream->usb_dev))
+		goto stop;
 	if (stream->retries < FL2000_RECOVERY_RETRIES)
 		mod_delayed_work(system_wq, &stream->recovery,
 				 msecs_to_jiffies(FL2000_RECOVERY_DELAY_MS << stream->retries));
 	else
 		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming recovery exhausted: %d\n",
 				    error);
+	return;
+stop:
+	stream->running = false;
+	cancel_delayed_work(&stream->recovery);
 }
 
 /**
@@ -266,6 +275,10 @@ static int fl2000_submit_transfer(struct fl2000_transfer *transfer)
 
 	if (!stream->enabled || !frame)
 		return 0;
+	if (fl2000_usb_unavailable(stream->usb_dev)) {
+		fl2000_stream_error(stream, -ENODEV);
+		return -ENODEV;
+	}
 	frame->users++;
 	transfer->frame = frame;
 	urb->transfer_buffer_length = stream->buf_size;
@@ -296,7 +309,7 @@ static int fl2000_submit_transfer(struct fl2000_transfer *transfer)
 	if (ret) {
 		frame->users--;
 		transfer->frame = NULL;
-		fl2000_schedule_recovery(stream, ret);
+		fl2000_stream_error(stream, ret);
 	}
 	return ret;
 }
@@ -312,31 +325,56 @@ static void fl2000_data_completion(struct urb *urb)
 	struct fl2000_transfer *transfer = urb->context;
 	struct fl2000_stream *stream = transfer->stream;
 	unsigned long flags;
-	int ret = 0;
 	int status = urb->status;
 	unsigned int actual = urb->actual_length;
+	int ret = 0;
 
 	spin_lock_irqsave(&stream->lock, flags);
 	transfer->frame->users--;
 	transfer->frame = NULL;
-	if (stream->enabled) {
-		if (status || actual != stream->buf_size) {
-			fl2000_schedule_recovery(stream, status ? status : -EREMOTEIO);
-		} else {
-			stream->retries = 0;
-			ret = fl2000_submit_transfer(transfer);
+
+	switch (status) {
+	case 0:
+		break;
+	case -ENODEV:
+	case -ESHUTDOWN:
+		stream->enabled = false;
+		stream->running = false;
+		cancel_delayed_work(&stream->recovery);
+		goto unlock;
+	case -ENOENT:
+	case -ECONNRESET:
+		/* Draining a disabled queue must preserve restart intent. */
+		if (stream->enabled) {
+			stream->enabled = false;
+			stream->running = false;
+			cancel_delayed_work(&stream->recovery);
 		}
+		goto unlock;
+	default:
+		if (stream->enabled)
+			fl2000_stream_error(stream, status);
+		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming transfer failed: %d\n",
+				    status);
+		goto unlock;
 	}
+
+	if (actual != stream->buf_size) {
+		if (stream->enabled)
+			fl2000_stream_error(stream, -EREMOTEIO);
+		dev_err_ratelimited(&stream->usb_dev->dev, "Short streaming transfer: %u/%u\n",
+				    actual, stream->buf_size);
+		goto unlock;
+	}
+	if (stream->enabled) {
+		stream->retries = 0;
+		ret = fl2000_submit_transfer(transfer);
+	}
+unlock:
 	spin_unlock_irqrestore(&stream->lock, flags);
 	if (ret)
 		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming submission failed: %d\n",
 				    ret);
-	if (status && status != -ENOENT && status != -ECONNRESET && status != -ESHUTDOWN)
-		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming transfer failed: %d\n",
-				    status);
-	if (!status && actual != stream->buf_size)
-		dev_err_ratelimited(&stream->usb_dev->dev, "Short streaming transfer: %u/%u\n",
-				    actual, stream->buf_size);
 }
 
 /**
@@ -943,6 +981,9 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, struct fl2000_stream_b
  * fl2000_start_stream() - Drain old transfers and resubmit the retained image
  * @stream: Owning bulk stream.
  *
+ * Recheck scanout intent after draining URBs and clearing the halt; a shutdown
+ * completion can stop the queue during drainage.
+ *
  * Context: Process context. Caller holds the stream mutex.
  * Return: 0 on success or a negative error code.
  */
@@ -952,25 +993,35 @@ static int fl2000_start_stream(struct fl2000_stream *stream)
 	int ret;
 
 	fl2000_drain_stream(stream);
+	if (fl2000_usb_unavailable(stream->usb_dev)) {
+		ret = -ENODEV;
+		goto recover;
+	}
 	if (!stream->latest)
 		return -EINVAL;
 	ret = usb_clear_halt(stream->usb_dev, usb_sndbulkpipe(stream->usb_dev, STREAMING_EP));
 	if (ret)
 		goto recover;
 	spin_lock_irqsave(&stream->lock, flags);
+	/* A shutdown completion during drainage can withdraw restart intent. */
+	if (!stream->running) {
+		ret = -ECANCELED;
+		goto unlock;
+	}
 	stream->enabled = true;
 	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		ret = fl2000_submit_transfer(&stream->transfers[i]);
 		if (ret)
 			break;
 	}
+unlock:
 	spin_unlock_irqrestore(&stream->lock, flags);
 	if (ret)
 		fl2000_drain_stream(stream);
 	return ret;
 recover:
 	spin_lock_irqsave(&stream->lock, flags);
-	fl2000_schedule_recovery(stream, ret);
+	fl2000_stream_error(stream, ret);
 	spin_unlock_irqrestore(&stream->lock, flags);
 	return ret;
 }

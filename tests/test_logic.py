@@ -128,11 +128,14 @@ static void drm_gem_fb_vunmap(struct drm_framebuffer *fb,struct iosys_map *map)
 enum usb_device_speed { USB_SPEED_HIGH, USB_SPEED_SUPER, USB_SPEED_SUPER_PLUS };
 struct device { int unused; };
 struct usb_bus { unsigned int sg_tablesize; };
-struct usb_device { struct usb_bus *bus; struct device dev; enum usb_device_speed speed; };
+enum usb_device_state { USB_STATE_CONFIGURED, USB_STATE_NOTATTACHED };
+struct usb_device { struct usb_bus *bus; struct device dev; enum usb_device_speed speed; enum usb_device_state state; };
 typedef int atomic_t;
 #define atomic_inc(p) (++*(p))
 struct fl2000_device { atomic_t i2c_errors; };
 static struct fl2000_device i2c_device;
+#define READ_ONCE(x) (x)
+#define WRITE_ONCE(x,v) ((x)=(v))
 static void *dev_get_drvdata(const struct device *dev) { (void)dev;return &i2c_device; }
 struct regmap { u32 aclk, ctrl2, pll, regs[0x10000/4]; };
 static struct regmap test_regmap;
@@ -169,6 +172,7 @@ static int regmap_write_bits(struct regmap *map, unsigned int reg, u32 mask, u32
 
 struct drm_device { bool unplugged; };
 struct drm_crtc { struct drm_device *dev; struct drm_crtc_state *state; };
+static inline bool fl2000_usb_unavailable(const struct usb_device *usb);
 struct fl2000_drm_if { struct drm_device drm; struct usb_device *usb_dev; struct drm_crtc crtc; };
 static struct fl2000_drm_if test_drm_if;
 struct drm_atomic_state { struct drm_plane plane; struct drm_plane_state *old_plane,*new_plane; struct drm_crtc_state *crtc; int get_error; bool allow_modeset; };
@@ -240,20 +244,22 @@ static void sg_free_table(struct sg_table *t)
 static void sg_set_page(struct scatterlist *sg, struct page *page, unsigned int length, int offset)
 { assert(!offset); sg_sets++; sg->page = page; sg->length = length; }
 static int submit_count, fail_at, log_count;
+static int submit_error=-ENOMEM;
 static int usb_submit_urb(struct urb *urb, int flags)
 {
  assert(flags == GFP_ATOMIC);
  assert(!urb->submitted);
  submit_count++;
- if (submit_count == fail_at) return -ENOMEM;
+ if (submit_count == fail_at) return submit_error;
  urb->submitted = true;
  urb->status = -EINPROGRESS;
  urb->actual_length = 0;
  return 0;
 }
 static int usb_sndbulkpipe(struct usb_device *usb, int ep) { (void)usb; return ep; }
-static int halt_error;
-static int usb_clear_halt(struct usb_device *usb, int pipe) { (void)usb; (void)pipe; return halt_error; }
+static int halt_error,kill_status=-ENOENT;
+static void (*halt_hook)(void);
+static int usb_clear_halt(struct usb_device *usb, int pipe) { (void)usb; (void)pipe; if(halt_hook)halt_hook(); return halt_error; }
 static void usb_kill_urb(struct urb *urb);
 static unsigned int urb_frees;
 static void usb_free_urb(struct urb *urb)
@@ -527,6 +533,14 @@ static void test_native_crop(void)
  struct drm_plane_state detached={0};atomic.old_plane=&detached;
  fl2000_plane_atomic_update(&plane,&atomic);
  assert(cpu_access_calls==++accesses && !memcmp(stream.latest->vaddr,expected,16));
+ /* Framebuffer access errors must be reported, not classified as USB status. */
+ const int access_errors[]={-EPERM,-ENOENT,-ENODEV};
+ for(unsigned int i=0;i<ARRAY_SIZE(access_errors);i++) {
+  int previous_logs=log_count;cpu_access_result=access_errors[i];
+  fl2000_plane_atomic_update(&plane,&atomic);
+  assert(log_count==previous_logs+1);
+ }
+ cpu_access_result=0;accesses=cpu_access_calls;
  state.base.fb=NULL;
  fl2000_plane_atomic_update(&plane,&atomic);
  assert(cpu_access_calls==accesses);
@@ -1009,6 +1023,7 @@ static void test_register_io(void)
   }
   ret = fl2000_reg_write(&usb, 0x1234, 0x12345678);
   assert(ret == (control_result < 0 ? control_result : 0));
+  assert(!fl2000_usb_unavailable(&usb)); /* Register I/O does not change adapter lifetime. */
  }
 }
 
@@ -1018,7 +1033,7 @@ static void usb_kill_urb(struct urb *urb)
 {
  if (urb && urb->submitted) {
   urb->submitted = false;
-  urb->status = -ENOENT;
+  urb->status = kill_status;
   urb->actual_length = 0;
   fl2000_data_completion(urb);
  }
@@ -1051,6 +1066,7 @@ static void test_stream_release(void)
   assert(!stream.enabled && urb_frees==freed+allocated && !stream.frames[0].vaddr);
  }
 }
+static void cancel_during_halt(void) { test_stream->running=false; }
 static void test_queue(void)
 {
  struct fl2000_stream stream = { .buf_size = 8 };
@@ -1158,9 +1174,94 @@ static void test_queue(void)
  fl2000_recover_stream(&stream.recovery.work);
  assert(!stream.running && !stream.recovery.work.pending && submit_count==previous_submits);
  assert(!fl2000_streaming_enable(&usb));complete(&urbs[0],-ESHUTDOWN);
- assert(!stream.running && !stream.recovery.work.pending);
+ assert(!stream.running && !stream.recovery.work.pending && !fl2000_usb_unavailable(&usb));
  fl2000_streaming_disable(&usb);
  for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)assert(!stream.frames[i].users);
+ /* Disconnect blocks a successful completion from resubmitting. */
+ assert(!fl2000_streaming_enable(&usb));
+ int removal_logs=log_count,removal_submits=submit_count;
+ usb.state=USB_STATE_NOTATTACHED;complete(&urbs[0],0);
+ assert(!stream.enabled && !stream.running && submit_count==removal_submits);
+ assert(log_count==removal_logs+1 && !stream.recovery.work.pending);
+ fl2000_streaming_disable(&usb);
+ assert(fl2000_streaming_enable(&usb)==-ENODEV);
+ assert(!stream.running && submit_count==removal_submits && log_count==removal_logs+1);
+ usb.state=USB_STATE_CONFIGURED;
+ /* A queued recovery loses its transport before it can run. */
+ assert(!fl2000_streaming_enable(&usb));complete(&urbs[0],-EPIPE);
+ removal_logs=log_count;removal_submits=submit_count;
+ usb.state=USB_STATE_NOTATTACHED;stream.recovery.work.pending=false;
+ fl2000_recover_stream(&stream.recovery.work);
+ assert(!stream.enabled && !stream.running && !stream.recovery.work.pending);
+ assert(log_count==removal_logs+1 && submit_count==removal_submits);
+ fl2000_streaming_disable(&usb);
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)assert(!stream.frames[i].users);
+ usb.state=USB_STATE_CONFIGURED;
+ /* Cancellation stops only this queue; explicit restart needs no new probe. */
+ const int completion_stop[]={-ENOENT,-ECONNRESET,-ESHUTDOWN,-ENODEV};
+ for(unsigned int i=0;i<ARRAY_SIZE(completion_stop);i++) {
+  assert(!fl2000_streaming_enable(&usb));
+  removal_logs=log_count;complete(&urbs[0],completion_stop[i]);
+  assert(!fl2000_usb_unavailable(&usb) && !stream.running && !stream.recovery.work.pending);
+  assert(log_count==removal_logs);
+  removal_submits=submit_count;fl2000_recover_stream(&stream.recovery.work);
+  assert(submit_count==removal_submits); /* No automatic recovery. */
+  assert(!fl2000_streaming_enable(&usb)); /* Same adapter and retained buffers. */
+  fl2000_streaming_disable(&usb);
+ }
+ /* Invalid and rejected submissions also stop without automatic retry. */
+ const int terminal[]={-ENOENT,-ECONNRESET,-ESHUTDOWN,-ENODEV,-EPERM,-EINVAL};
+ for(unsigned int i=0;i<ARRAY_SIZE(terminal);i++) {
+  submit_error=terminal[i];fail_at=submit_count+1;
+  assert(fl2000_streaming_enable(&usb)==terminal[i]);
+  assert(!fl2000_usb_unavailable(&usb) && !stream.running && !stream.recovery.work.pending);
+  fail_at=0;submit_error=-ENOMEM;
+  assert(!fl2000_streaming_enable(&usb));
+  fl2000_streaming_disable(&usb);
+ }
+ /* Failed completion-time resubmissions are logged for every terminal errno. */
+ for(unsigned int i=0;i<ARRAY_SIZE(terminal);i++) {
+  assert(!fl2000_streaming_enable(&usb));
+  submit_error=terminal[i];fail_at=submit_count+1;removal_logs=log_count;
+  complete(&urbs[0],0);
+  assert(log_count==removal_logs+1 && !stream.enabled && !stream.running);
+  assert(!stream.recovery.work.pending);
+  fl2000_streaming_disable(&usb);fail_at=0;submit_error=-ENOMEM;
+ }
+ halt_error=-ENODEV;
+ assert(fl2000_streaming_enable(&usb)==-ENODEV && !fl2000_usb_unavailable(&usb));
+ assert(!stream.running && !stream.recovery.work.pending);
+ halt_error=0;
+ assert(!fl2000_streaming_enable(&usb));fl2000_streaming_disable(&usb);
+ assert(!fl2000_usb_unavailable(&usb)); /* Intentional cancellation leaves the adapter usable. */
+
+ /* Shutdown completions during recovery's drain cancel that restart. */
+ const int shutdowns[]={-ESHUTDOWN,-ENODEV};
+ for(unsigned int i=0;i<ARRAY_SIZE(shutdowns);i++) {
+  assert(!fl2000_streaming_enable(&usb));complete(&urbs[0],-EPROTO);
+  assert(stream.recovery.work.pending);previous_submits=submit_count;
+  kill_status=shutdowns[i];stream.recovery.work.pending=false;
+  fl2000_recover_stream(&stream.recovery.work);kill_status=-ENOENT;
+  assert(!stream.enabled && !stream.running && !stream.recovery.work.pending);
+  assert(submit_count==previous_submits);
+  for(unsigned int j=0;j<FL2000_FRAME_COUNT;j++)assert(!stream.frames[j].users);
+ }
+ /* A stop during the blocking halt-clear must also prevent re-enabling. */
+ halt_hook=cancel_during_halt;previous_submits=submit_count;
+ assert(fl2000_streaming_enable(&usb)==-ECANCELED);halt_hook=NULL;
+ assert(!stream.enabled && !stream.running && submit_count==previous_submits);
+ assert(!stream.recovery.work.pending);
+ /* Ordinary drain cancellations preserve intent and allow a fresh start. */
+ assert(!fl2000_streaming_enable(&usb) && stream.running && stream.enabled);
+ complete(&urbs[0],-EPROTO);stream.recovery.work.pending=false;
+ fl2000_recover_stream(&stream.recovery.work);
+ assert(stream.running && stream.enabled);
+ fl2000_streaming_disable(&usb);
+ /* A genuine I/O error remains diagnosable while disconnect is in progress. */
+ assert(!fl2000_streaming_enable(&usb));
+ removal_logs=log_count;usb.state=USB_STATE_NOTATTACHED;complete(&urbs[0],-EIO);
+ assert(log_count==removal_logs+1 && !stream.running && !stream.recovery.work.pending);
+ fl2000_streaming_disable(&usb);usb.state=USB_STATE_CONFIGURED;
 }
 int main(void)
 {
@@ -1178,6 +1279,7 @@ int main(void)
 """
 parts = [
     prelude,
+    function((ROOT / "fl2000.h").read_text(), "fl2000_usb_unavailable"),
     defines,
     '#include "tests/register_helpers.h"',
     register_header((ROOT / "fl2000_registers.h").read_text()),
@@ -1234,7 +1336,7 @@ parts += [
         "fl2000_frame_layout_valid",
         "fl2000_find_free_frame",
         "fl2000_streaming_update",
-        "fl2000_schedule_recovery",
+        "fl2000_stream_error",
         "fl2000_submit_transfer",
         "fl2000_data_completion",
         "fl2000_drain_stream",
