@@ -90,6 +90,30 @@ of unsupported kernel series. Run USB passthrough tests in QEMU using the module
 built from the installed DKMS package, and exercise actual udev/systemd service
 activation. Building packages on the host does not validate those paths.
 
+## Continuous integration
+
+The Ubuntu packages workflow builds unsigned source and binary packages on
+Ubuntu 26.04. It checks Debian scripts with ShellCheck, treats Lintian warnings
+as failures, checks package contents and rebuilds the source package as an
+unprivileged user. Both builds must produce identical binary packages.
+
+It also builds the extracted DKMS sources against installed Linux 7.0 headers
+using isolated DKMS directories, checks module vermagic and verifies that
+unsupported kernels and architectures are skipped. It does not install packages
+or load modules. Packages and diagnostic logs are retained as workflow artifacts.
+
+To run the same checks, use a disposable Ubuntu 26.04 build environment with
+the workflow's dependencies. Run as root from a committed checkout; package
+builds run as `nobody`, while DKMS uses isolated temporary directories:
+
+```sh
+tests/packaging_ci.sh "$PWD" /tmp/fl2000-packaging-ci
+```
+
+The work directory must not exist. The script exports `HEAD`, so commit package
+changes before testing them this way. Installation, service activation, Secure
+Boot and hardware behavior still require the separate VM tests above.
+
 ## Prepare a PPA upload
 
 The source format is `3.0 (quilt)` and the changelog distribution is `resolute`.
