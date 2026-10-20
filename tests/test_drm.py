@@ -34,7 +34,9 @@ prelude = r"""
 #define ERR_PTR(e) ((void *)(intptr_t)(e))
 #define PTR_ERR_OR_ZERO(p) (IS_ERR(p)?(int)(intptr_t)(p):0)
 struct device { void *data; };
-struct usb_device { struct device dev; };
+enum usb_device_state { USB_STATE_CONFIGURED, USB_STATE_NOTATTACHED };
+struct usb_device { struct device dev; enum usb_device_state state; };
+static bool unbinding;
 struct usb_interface { int unused; };
 struct drm_plane { int unused; };
 struct drm_crtc { int unused; };
@@ -127,7 +129,7 @@ static void drm_atomic_helper_shutdown(struct drm_device *d)
 { assert(d->unplugged && !d->registered);assert(!irq_active);shutdowns++;if(!shutdown_failure)stream_active=false; }
 static void fl2000_streaming_disable(const struct usb_device *u) { (void)u;stream_active=false;stops++; }
 static void drm_kms_helper_poll_fini(struct drm_device *d)
-{ (void)d;assert(polling);polling=false;poll_fini++; }
+{ if(unbinding)assert(d->unplugged);assert(polling);polling=false;poll_fini++; }
 static void drm_encoder_cleanup(struct drm_encoder *e) { (void)e;assert(!irq_active && !stream_active);attached=false;encoder_cleanup++; }
 static void component_unbind_all(struct device *d,struct drm_encoder *b)
 { (void)d;(void)b;assert(bound && !attached && !irq_active && !stream_active);bound=false;unbound++; }
@@ -154,7 +156,7 @@ static int bind_master(struct device *master)
 }
 static void unbind_master(struct device *master)
 {
- fl2000_drm_unbind(master);
+ unbinding=true;fl2000_drm_unbind(master);unbinding=false;
  release_group();
 }
 
@@ -215,6 +217,11 @@ int main(void)
  assert(!fl2000_drm_hotplug(&usb) && hpd_calls==1 && hotplug_events==1);
  connector.status=detected;
  assert(!fl2000_drm_hotplug(&usb) && hpd_calls==2 && hotplug_events==1);
+ usb.state=USB_STATE_NOTATTACHED;
+ assert(fl2000_drm_hotplug(&usb)==-ENODEV && hpd_calls==2);
+ int removal_polls=poll_schedules;
+ fl2000_drm_set_polling(&usb,true);assert(poll_schedules==removal_polls);
+ usb.state=USB_STATE_CONFIGURED;
  detected=connector_status_unknown;
  assert(fl2000_drm_hotplug(&usb)==-EIO && hotplug_events==1);
  output.drm.unplugged=true;
@@ -240,6 +247,8 @@ with tempfile.TemporaryDirectory(prefix="fl2000-drm-") as temp:
         "\n".join(
             [
                 prelude,
+                function((ROOT / "fl2000.h").read_text(), "fl2000_usb_unavailable"),
+                function((ROOT / "fl2000.h").read_text(), "fl2000_usb_error_terminal"),
                 structure(source, "fl2000_drm_if"),
                 mocks,
                 function(source, "fl2000_bridge_module_put"),

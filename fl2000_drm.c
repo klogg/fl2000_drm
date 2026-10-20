@@ -904,7 +904,7 @@ static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomi
 		if (!ret)
 			ret = fl2000_streaming_enable(drm_if->usb_dev);
 		if (ret)
-			dev_err_ratelimited(plane->dev->dev, "Frame conversion failed: %d\n", ret);
+			dev_err_ratelimited(plane->dev->dev, "Frame update failed: %d\n", ret);
 	}
 	drm_dev_exit(idx);
 }
@@ -1010,22 +1010,24 @@ int fl2000_drm_hotplug(const struct usb_device *usb_dev)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct drm_device *drm = READ_ONCE(device->drm);
+	struct fl2000_drm_if *drm_if;
+	enum drm_connector_status status;
+	struct drm_bridge *bridge;
 	int idx;
-	int ret = -ENODEV;
+	int ret;
 
-	if (drm && drm_dev_enter(drm, &idx)) {
-		struct fl2000_drm_if *drm_if = container_of(drm, struct fl2000_drm_if, drm);
-		enum drm_connector_status status;
-		struct drm_bridge *bridge = drm_bridge_chain_get_first_bridge(&drm_if->encoder);
+	if (!drm || fl2000_usb_unavailable(usb_dev) || !drm_dev_enter(drm, &idx))
+		return -ENODEV;
 
-		/* Recovery can follow an acknowledgment that already cleared HPD. */
-		status = drm_bridge_detect(bridge, drm_if->connector);
-		ret = status == connector_status_unknown ? -EIO : 0;
-		if (!ret && status != READ_ONCE(drm_if->connector->status))
-			drm_bridge_hpd_notify(bridge, status);
-		drm_bridge_put(bridge);
-		drm_dev_exit(idx);
-	}
+	drm_if = container_of(drm, struct fl2000_drm_if, drm);
+	bridge = drm_bridge_chain_get_first_bridge(&drm_if->encoder);
+	/* Recovery can follow an acknowledgment that already cleared HPD. */
+	status = drm_bridge_detect(bridge, drm_if->connector);
+	ret = status == connector_status_unknown ? -EIO : 0;
+	if (!ret && status != READ_ONCE(drm_if->connector->status))
+		drm_bridge_hpd_notify(bridge, status);
+	drm_bridge_put(bridge);
+	drm_dev_exit(idx);
 	return ret;
 }
 
@@ -1044,23 +1046,24 @@ void fl2000_drm_set_polling(const struct usb_device *usb_dev, bool polling)
 {
 	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct drm_device *drm = READ_ONCE(device->drm);
+	struct fl2000_drm_if *drm_if;
+	struct drm_connector *connector;
 	int idx;
 
-	if (drm && drm_dev_enter(drm, &idx)) {
-		struct fl2000_drm_if *drm_if = container_of(drm, struct fl2000_drm_if, drm);
-		struct drm_connector *connector;
+	if (!drm || fl2000_usb_unavailable(usb_dev) || !drm_dev_enter(drm, &idx))
+		return;
 
-		mutex_lock(&drm->mode_config.mutex);
-		connector = drm_if->connector;
-		if (connector)
-			connector->polled = polling ? DRM_CONNECTOR_POLL_CONNECT |
-							      DRM_CONNECTOR_POLL_DISCONNECT :
-						      DRM_CONNECTOR_POLL_HPD;
-		mutex_unlock(&drm->mode_config.mutex);
-		if (polling)
-			drm_kms_helper_poll_reschedule(drm);
-		drm_dev_exit(idx);
-	}
+	drm_if = container_of(drm, struct fl2000_drm_if, drm);
+	mutex_lock(&drm->mode_config.mutex);
+	connector = drm_if->connector;
+	if (connector)
+		connector->polled = polling ? DRM_CONNECTOR_POLL_CONNECT |
+						      DRM_CONNECTOR_POLL_DISCONNECT :
+					      DRM_CONNECTOR_POLL_HPD;
+	mutex_unlock(&drm->mode_config.mutex);
+	if (polling)
+		drm_kms_helper_poll_reschedule(drm);
+	drm_dev_exit(idx);
 }
 
 /**
@@ -1189,10 +1192,11 @@ static void fl2000_drm_unbind(struct device *master)
 	if (!drm)
 		return;
 	drm_if = container_of(drm, struct fl2000_drm_if, drm);
+	/* Block hardware callbacks before polling teardown can disable bridge HPD. */
+	drm_dev_unplug(drm);
 	/* Quiesce nested IRQ delivery before detaching the bridge. */
 	fl2000_disable_interrupt(usb_dev);
 	drm_kms_helper_poll_fini(drm);
-	drm_dev_unplug(drm);
 	drm_atomic_helper_shutdown(drm);
 	/* Atomic shutdown can fail; drain transfers before detaching anyway. */
 	fl2000_streaming_disable(usb_dev);

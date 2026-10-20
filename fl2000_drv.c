@@ -104,10 +104,7 @@ static void fl2000_release_interfaces(struct fl2000_device *device,
  */
 static void fl2000_cleanup(struct usb_device *usb_dev, struct fl2000_device *device)
 {
-	if (device->master_registered) {
-		fl2000_drm_cleanup(usb_dev);
-		device->master_registered = false;
-	}
+	fl2000_drm_cleanup(usb_dev);
 	for (unsigned int i = ARRAY_SIZE(device->interfaces); i-- > 0;)
 		if (device->active_interfaces & BIT(i))
 			fl2000_destroy_interface(device->interfaces[i]);
@@ -178,7 +175,6 @@ static int fl2000_probe(struct usb_interface *interface,
 	ret = fl2000_drm_init(usb_dev);
 	if (ret)
 		goto cleanup;
-	device->master_registered = true;
 	goto out;
 
 cleanup:

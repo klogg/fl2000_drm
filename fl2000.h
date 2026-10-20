@@ -8,16 +8,16 @@
 #define __FL2000_DRM_H__
 
 #include <linux/atomic.h>
+#include <linux/errno.h>
 #include <linux/mutex.h>
 #include <linux/types.h>
+#include <linux/usb.h>
 
 struct device;
 struct drm_device;
 struct drm_rect;
 struct i2c_adapter;
 struct module;
-struct usb_device;
-struct usb_interface;
 
 /**
  * enum fl2000_interface - USB interfaces claimed as one adapter
@@ -146,7 +146,6 @@ struct fl2000_interrupt;
  * @interfaces: Claimed interfaces, cleared before sibling disconnect
  *              callbacks.
  * @active_interfaces: Interfaces whose subsystem initialization completed.
- * @master_registered: Component master registration succeeded.
  * @suspended: Adapter PM transition completed under @lock.
  * @drm: Bound DRM device, or NULL; IRQ work reads it with READ_ONCE().
  *
@@ -165,9 +164,45 @@ struct fl2000_device {
 	atomic_t i2c_errors;
 	struct usb_interface *interfaces[FL2000_USBIF_INTERRUPT + 1];
 	unsigned long active_interfaces;
-	bool master_registered;
 	bool suspended;
 	struct drm_device *drm;
 };
+
+/**
+ * fl2000_usb_unavailable() - Check whether USB core has detected device removal
+ * @usb_dev: USB parent whose driver resources remain alive.
+ *
+ * Context: Any context with adapter resource lifetime guaranteed. Does not sleep.
+ * Return: True when USB core has marked the physical device detached.
+ */
+static inline bool fl2000_usb_unavailable(const struct usb_device *usb_dev)
+{
+	return READ_ONCE(usb_dev->state) == USB_STATE_NOTATTACHED;
+}
+
+/**
+ * fl2000_usb_error_terminal() - Check whether USB traffic should stop
+ * @error: USB submission, completion or control-request result.
+ *
+ * Cancellation, rejected submission and endpoint shutdown stop the affected
+ * queue without automatic recovery. They do not establish adapter removal;
+ * an explicit start may retry while the device remains attached.
+ *
+ * Context: Any context. Does not sleep or change device state.
+ * Return: True for cancellation, rejected submission or device-loss errors.
+ */
+static inline bool fl2000_usb_error_terminal(int error)
+{
+	switch (error) {
+	case -ENOENT:
+	case -ECONNRESET:
+	case -ESHUTDOWN:
+	case -ENODEV:
+	case -EPERM:
+		return true;
+	default:
+		return false;
+	}
+}
 
 #endif /* __FL2000_DRM_H__ */

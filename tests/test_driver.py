@@ -22,6 +22,8 @@ pre = r"""
 #define FL2000_USBIF_INTERRUPT 2
 #define USB_SPEED_HIGH 3
 #define GFP_KERNEL 0
+#define READ_ONCE(x) (x)
+#define WRITE_ONCE(x,v) ((x)=(v))
 #define BIT(n) (1UL << (n))
 #define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))
 typedef int pm_message_t;
@@ -35,10 +37,22 @@ struct usb_interface {
  struct usb_host_interface *cur_altsetting;
  void *data;
  int owner;
+ bool enabled;
 };
-struct usb_device { int speed; struct device dev; struct usb_interface *ifs[3]; };
-struct usb_driver { int unused; };
+enum usb_device_state { USB_STATE_CONFIGURED, USB_STATE_NOTATTACHED };
+struct usb_device { int speed; struct device dev; struct usb_interface *ifs[3]; enum usb_device_state state; };
 struct usb_device_id { int unused; };
+struct usb_driver {
+ const char *name;
+ int (*probe)(struct usb_interface *,const struct usb_device_id *);
+ void (*disconnect)(struct usb_interface *);
+ int (*suspend)(struct usb_interface *,pm_message_t);
+ int (*resume)(struct usb_interface *);
+ int (*reset_resume)(struct usb_interface *);
+ const struct usb_device_id *id_table;
+ bool disable_hub_initiated_lpm,soft_unbind;
+};
+static const struct usb_device_id fl2000_id_table[]={{0}};
 static struct usb_driver fl2000_driver;
 struct mutex { int locked; };
 static void mutex_init(struct mutex *lock) { lock->locked=0; }
@@ -56,20 +70,21 @@ static struct usb_interface *usb_ifnum_to_if(struct usb_device *usb,unsigned int
 { return usb->ifs[n]; }
 static int fail_step,step,live,drm,release_count,suspend_count,resume_count;
 static int destroyed[3],destroy_count;
+static bool interrupts_stopped=true,defer_bridge;
 static int operation(void) { return ++step==fail_step ? -EIO : 0; }
 static int usb_driver_claim_interface(struct usb_driver *driver,struct usb_interface *i,void *data)
 {
  (void)driver;if(!i)return -ENODEV;if(i->owner)return -EBUSY;
- i->owner=1;i->data=data;return 0;
+ i->owner=1;i->data=data;i->enabled=true;return 0;
 }
 static void fl2000_disconnect(struct usb_interface *i);
 static void usb_driver_release_interface(struct usb_driver *driver,struct usb_interface *i)
 {
  (void)driver;assert(i->owner==1);assert(!i->data);
- release_count++;fl2000_disconnect(i);i->owner=0;
+ release_count++;fl2000_disconnect(i);i->owner=0;i->enabled=false;
 }
 static int usb_set_interface(struct usb_device *usb,int n,int alt)
-{ assert(n==0 && alt==1);assert(usb->ifs[1]->owner==1 && usb->ifs[2]->owner==1);return operation(); }
+{ assert(n==0 && alt==1);assert(usb->ifs[1]->owner==1 && usb->ifs[2]->owner==1);usb->ifs[0]->enabled=true;return operation(); }
 static int fl2000_regmap_init(struct usb_device *usb)
 { (void)usb;int r=operation();if(!r)live|=1;return r; }
 static int fl2000_reset(struct usb_device *usb) { (void)usb;return operation(); }
@@ -88,14 +103,31 @@ static int fl2000_interrupt_create(struct usb_interface *i)
 static void fl2000_streaming_destroy(struct usb_interface *i)
 { (void)i;assert(live&4);assert(!(live&8));live&=~4;destroyed[destroy_count++]=1; }
 static void fl2000_interrupt_destroy(struct usb_interface *i)
-{ (void)i;assert(live&8);live&=~8;destroyed[destroy_count++]=2; }
+{ (void)i;assert((live&8) && interrupts_stopped);live&=~8;destroyed[destroy_count++]=2; }
+static inline bool fl2000_usb_unavailable(const struct usb_device *usb);
 static int fl2000_drm_init(struct usb_device *usb)
-{ (void)usb;assert(live==15 && !drm);int r=operation();if(!r)drm=1;return r; }
-static void fl2000_drm_cleanup(struct usb_device *usb) { (void)usb;assert(drm);drm=0; }
+{ (void)usb;assert(live==15 && !drm);int r=operation();if(!r){drm=1;interrupts_stopped=defer_bridge;}return r; }
+static void fl2000_drm_cleanup(struct usb_device *usb)
+{
+ (void)usb;
+ /* Component removal is safe before registration and for an unbound master. */
+ if(drm){assert(live==15);interrupts_stopped=true;drm=0;}
+}
 static int fl2000_drm_suspend(struct usb_device *usb) { (void)usb;suspend_count++;return 0; }
 static int fl2000_drm_resume(struct usb_device *usb) { (void)usb;resume_count++;return 0; }
 """
 checks = r"""
+/* Model USB core's endpoint policy around the real disconnect callback. */
+static void unbind_interface(struct usb_interface *interface)
+{
+ if(!fl2000_driver.soft_unbind || fl2000_usb_unavailable(interface->usb))
+  interface->enabled=false;
+ fl2000_driver.disconnect(interface);
+ assert(!drm && !live);
+ interface->enabled=false;
+ interface->owner=0;
+}
+
 int main(void)
 {
  struct usb_device usb={.speed=USB_SPEED_HIGH};
@@ -140,18 +172,33 @@ int main(void)
   for(int i=0;i<3;i++)assert(!interfaces[i].owner && !interfaces[i].data);
  }
  fail_step=0;
+ /* Transfer cancellation classification never changes adapter lifetime. */
+ assert(!fl2000_usb_error_terminal(0));
+ assert(!fl2000_usb_error_terminal(-EIO));
+ const int stopped[]={-ENOENT,-ECONNRESET,-ENODEV,-ESHUTDOWN,-EPERM};
+ for(unsigned int i=0;i<ARRAY_SIZE(stopped);i++) {
+  assert(fl2000_usb_error_terminal(stopped[i]));
+  assert(!fl2000_usb_unavailable(&usb));
+ }
  /* Unbinding any interface tears down once and releases the other two. */
+ int cycle=0;
+ for(int physical=0;physical<2;physical++)
  for(int current=0;current<3;current++) {
+  cycle++;usb.state=USB_STATE_CONFIGURED;
   step=destroy_count=0;
   assert(!fl2000_probe(&interfaces[0],NULL));interfaces[0].owner=1;
-  assert(live==15 && drm);
+  assert(live==15 && drm && !fl2000_usb_unavailable(&usb));
   for(int i=0;i<3;i++)assert(interfaces[i].owner==1 && interfaces[i].data);
   for(int i=0;i<3;i++)assert(!fl2000_suspend(&interfaces[i],0));
-  assert(suspend_count==current+1);
+  assert(suspend_count==cycle);
   for(int i=2;i>=0;i--)assert(!fl2000_resume(&interfaces[i]));
-  assert(resume_count==current+1);
+  assert(resume_count==cycle);
   int before=release_count;
-  fl2000_disconnect(&interfaces[current]);interfaces[current].owner=0;
+  usb.state=physical?USB_STATE_NOTATTACHED:USB_STATE_CONFIGURED;
+  if(physical)for(int i=0;i<3;i++)interfaces[i].enabled=false;
+  assert(fl2000_usb_unavailable(&usb)==(bool)physical);
+  assert(!fl2000_driver.soft_unbind);
+  unbind_interface(&interfaces[current]);
   assert(release_count==before+2 && !live && !drm);
   assert(destroy_count==2 && destroyed[0]==2 && destroyed[1]==1);
   for(int i=0;i<3;i++) {
@@ -159,11 +206,21 @@ int main(void)
    fl2000_disconnect(&interfaces[i]);
   }
  }
+ /* A registered master waiting for its bridge must also be removed. */
+ usb.state=USB_STATE_CONFIGURED;defer_bridge=true;step=destroy_count=0;
+ assert(!fl2000_probe(&interfaces[0],NULL));interfaces[0].owner=1;
+ assert(drm && interrupts_stopped && live==15);
+ unbind_interface(&interfaces[0]);assert(!drm && !live);
  free(usb.dev.data);
- puts("PASS: interface claims, foreign ownership, missing siblings, all setup failures, retry, synchronous release callbacks, every unbind order and PM");
+ puts("PASS: interface claims, foreign ownership, missing siblings, all setup failures, retry, synchronous release callbacks, hard and physical unbind with disabled endpoints, every unbind order and PM");
 }
 """
-parts = [pre, structure((ROOT / "fl2000.h").read_text(), "fl2000_device")]
+parts = [
+    pre,
+    structure((ROOT / "fl2000.h").read_text(), "fl2000_device"),
+    function((ROOT / "fl2000.h").read_text(), "fl2000_usb_unavailable"),
+    function((ROOT / "fl2000.h").read_text(), "fl2000_usb_error_terminal"),
+]
 parts += [
     function(source, name)
     for name in (
@@ -177,6 +234,10 @@ parts += [
         "fl2000_resume",
     )
 ]
+
+start = source.index("static struct usb_driver fl2000_driver = {")
+end = source.index("\n};", start) + len("\n};")
+parts.append(source[start:end])
 with tempfile.TemporaryDirectory(prefix="fl2000-driver-") as directory:
     test = Path(directory) / "driver.c"
     binary = Path(directory) / "driver"
