@@ -191,8 +191,9 @@ static void fl2000_intr_recover_stall(struct fl2000_interrupt *intr)
 	if (ret) {
 		intr->enabled = false;
 		polling = !fl2000_usb_error_terminal(ret);
-	} else if (intr->status_polling)
+	} else if (intr->status_polling) {
 		schedule_delayed_work(&intr->work, msecs_to_jiffies(FL2000_INTR_STATUS_RETRY_MS));
+	}
 unlock:
 	spin_unlock_irqrestore(&intr->lock, flags);
 	if (polling)
