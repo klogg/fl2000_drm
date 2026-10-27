@@ -5,7 +5,7 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=klogg_fl2000_drm&metric=alert_status)](https://sonarcloud.io/dashboard?id=klogg_fl2000_drm)
 
 An out-of-tree DRM/KMS driver for Fresco Logic FL2000 USB display adapters
-(USB ID `1d5c:2000`), targeting **Linux 7.0**. The core connects to an external
+(USB ID `1d5c:2000`), targeting **Linux 7.3**. The core connects to an external
 bridge; the supplied IT6610/21/22 module adapts Linux v7.0's bridge driver for
 firmware-less attachment and the controller's I2C/reset constraints. Native VGA
 is not implemented.
@@ -16,13 +16,13 @@ for tested configurations and remaining limits.
 
 ## Build
 
-Install a C compiler, Make, and headers matching the target Linux 7.0 kernel.
+Install a C compiler, Make, and headers matching the target Linux 7.3 kernel.
 The kernel header build tools also need their runtime libraries (including
 libdw for gendwarfksyms on the tested Ubuntu headers).
 Build against the running kernel, or select an installed header tree.
 For distribution kernels lacking `CONFIG_DRM_BRIDGE_CONNECTOR` or its HDMI
 helpers, first run `scripts/fetch-bridge-connector.sh`. It prepares checksum-pinned,
-unmodified Linux 7.0 sources in the ignored `.qemu-build/upstream/` directory,
+unmodified Linux 7.3 sources in the ignored `.qemu-build/upstream/` directory,
 using vendored files when present or HTTPS with curl otherwise. External builds
 compile only missing helpers.
 Alternatively, set `FL2000_HELPER_SOURCE_DIR` to the matching kernel source
@@ -36,7 +36,7 @@ Build the modules:
 
 ```sh
 make
-make KSRC=/usr/src/linux-headers-7.0.0-38-generic
+make KSRC=/usr/lib/modules/7.3.0/build
 ```
 
 The resulting modules are `fl2000.ko` and `it66121.ko`. Use this repository's
