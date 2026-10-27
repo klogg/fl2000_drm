@@ -1,0 +1,327 @@
+{
+  "date": "2026-10-27",
+  "metadata": {
+    "date": "2026-10-27",
+    "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+    "production_sha256": {
+      "fl2000_registers.h": "1346ab9be1f29ea40ff8fe104d98cc3ca735d1f7849b4391772c9f9924cd95c6",
+      "fl2000_i2c.c": "e98c9822db918e1730dab4346034417e4a98ed5639b30ac6a4ab803164a5502d",
+      "fl2000.h": "7390c9897d1713813c049b5fbcd74c596eab18b9293af5f57d8368449fcd0e4b",
+      "fl2000_streaming.c": "f7953348f9348a19ae9bd2666b70686297fc834e784968a8a54541037dfdbf59",
+      "fl2000_interrupt.c": "405207692d9403ac3e4ba9841d5c0e8f36328d203efbb21e3af4cfd815173db0",
+      "fl2000_registers.c": "d8e66986b936beb4681105b76494b4d6f09749a4986632f02bc2834603c4cf4d",
+      "fl2000_frame.h": "6554bccb082d058e4228b3a2121810ea17c50c61c9c8610589685dbbcb97ce75",
+      "fl2000_drv.c": "c1fcb0c22c9096ea5cf6ce602550e959b83733254aca84c6a2e5092059709069",
+      "fl2000_drm.c": "d2d027b7e5e746236c5c4df44554fb56558573033c2e9d931625bac0d62b5f4f",
+      "frame/ssse3.c": "0144b4fbeca42b08e235a322665b8c1b0f1db93014915c8e4b1e2246ac338afb",
+      "frame/x86.c": "77eee0abc7ec1548e9ba04573a2885479091e580f9f86d862564ae7fb09bed2d",
+      "frame/bmi2.c": "5dfe31b72f6e9ae6e8bc80f5fb91df32b1a8688356044726ffc2a6beaf17aad6",
+      "frame/x86_bmi2.c": "c8a9bf73b5b4e9e7080ed94958476ce90de05392d32d1a30857f3cb251cf7d1c",
+      "frame/ssse3.h": "1c1afb40e1de75ef1413a6da7b9ce4d7975e341d6e02ff09885afd592d8a368a",
+      "frame/bmi2.h": "96be902f7b5c1243a72af5bfe532113bb5810dd39d1959b7c2a97e09fbb43934",
+      "bridge/it66121_drv.c": "6da2ec85648646644cdf856b391967c51650876eb2127221a554ba23708fe4ef",
+      "bridge/it66121_registers.h": "59826406c513789916e885fb1d56784ba5597aa9ef34aa7b07f039e08d530aad",
+      "compat/hdmi_cec.c": "df8786882d7b54ca869d4282a3fd64a12797c7c862c8a6317a56d4d8bff925f2",
+      "compat/hdmi_audio.c": "df8786882d7b54ca869d4282a3fd64a12797c7c862c8a6317a56d4d8bff925f2",
+      "compat/bridge_connector.c": "df8786882d7b54ca869d4282a3fd64a12797c7c862c8a6317a56d4d8bff925f2",
+      "compat/hdmi_state.c": "df8786882d7b54ca869d4282a3fd64a12797c7c862c8a6317a56d4d8bff925f2"
+    },
+    "usbfs_memory_mb": "16",
+    "module_sha256": {
+      ".qemu-build/retest-20261027/7.0.0-38-generic-generic/fl2000.ko": "694b8ca159b94d908e2cb612ae422fe58c912ee8511d6fc3e775d040021b7ccb",
+      ".qemu-build/retest-20261027/7.0.0-38-generic-bmi2/fl2000.ko": "61143dec4f5c6083fbeb01d1a7d135f5adcb1e88ba113248e7d551148abfce76",
+      ".qemu-build/retest-20261027/7.0.0-34-generic-generic/fl2000.ko": "662fbe05ce1bbcf9dcc1f4c989ca7a9569e790af070a82618bad9133841afa45",
+      ".qemu-build/retest-20261027/7.0.0-34-generic-bmi2/fl2000.ko": "b8f176bf1554fd9046acaf31eda13760589de36fa65a5ab6758fb2c10784ef0f",
+      ".qemu-build/retest-20261027/7.0.0-38-generic-ssse3/fl2000.ko": "4169f6e7ea3c2ef2a4627f1e00f7bf0dc48c65e00d3f1d142b63e9a40b6d8c2a",
+      ".qemu-build/retest-20261027/7.0.0-34-generic-ssse3/fl2000.ko": "29612bfb080f7d1453cca794c1ecbbdd6f7121467e235a895cef687160fd2648"
+    },
+    "host_modules_loaded": false,
+    "compiler": "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+    "libdrm_dev": "2.4.131-1 (locally extracted; no host package installation)",
+    "environment": "QEMU 11.1.2 with duplicate-endpoint workaround; physical-device guests also enabled optional bulk OUT pipelining. KVM, host-model CPU, one physical FL2000 at hostbus=2 hostport=2, 800x480 HDMI sink."
+  },
+  "builds": [
+    {
+      "kernel": "7.0.0-34-generic",
+      "backend": "generic",
+      "warnings_as_errors": true,
+      "module_sha256": "662fbe05ce1bbcf9dcc1f4c989ca7a9569e790af070a82618bad9133841afa45",
+      "build_log": ".qemu-build/retest-20261027/7.0.0-34-generic-generic/build.log"
+    },
+    {
+      "kernel": "7.0.0-34-generic",
+      "backend": "ssse3",
+      "warnings_as_errors": true,
+      "module_sha256": "29612bfb080f7d1453cca794c1ecbbdd6f7121467e235a895cef687160fd2648",
+      "build_log": ".qemu-build/retest-20261027/7.0.0-34-generic-ssse3/build.log"
+    },
+    {
+      "kernel": "7.0.0-34-generic",
+      "backend": "bmi2",
+      "warnings_as_errors": true,
+      "module_sha256": "b8f176bf1554fd9046acaf31eda13760589de36fa65a5ab6758fb2c10784ef0f",
+      "build_log": ".qemu-build/retest-20261027/7.0.0-34-generic-bmi2/build.log"
+    },
+    {
+      "kernel": "7.0.0-38-generic",
+      "backend": "generic",
+      "warnings_as_errors": true,
+      "module_sha256": "694b8ca159b94d908e2cb612ae422fe58c912ee8511d6fc3e775d040021b7ccb",
+      "build_log": ".qemu-build/retest-20261027/7.0.0-38-generic-generic/build.log"
+    },
+    {
+      "kernel": "7.0.0-38-generic",
+      "backend": "ssse3",
+      "warnings_as_errors": true,
+      "module_sha256": "4169f6e7ea3c2ef2a4627f1e00f7bf0dc48c65e00d3f1d142b63e9a40b6d8c2a",
+      "build_log": ".qemu-build/retest-20261027/7.0.0-38-generic-ssse3/build.log"
+    },
+    {
+      "kernel": "7.0.0-38-generic",
+      "backend": "bmi2",
+      "warnings_as_errors": true,
+      "module_sha256": "61143dec4f5c6083fbeb01d1a7d135f5adcb1e88ba113248e7d551148abfce76",
+      "build_log": ".qemu-build/retest-20261027/7.0.0-38-generic-bmi2/build.log"
+    }
+  ],
+  "smoke_tests": [
+    {
+      "kernel": "7.0.0-34-generic",
+      "backend": "generic",
+      "cycles": 100,
+      "passed": true,
+      "log": ".qemu-build/retest-20261027/smoke-7.0.0-34-generic-generic/7.0.0-34-generic.log"
+    },
+    {
+      "kernel": "7.0.0-34-generic",
+      "backend": "ssse3",
+      "cycles": 100,
+      "passed": true,
+      "log": ".qemu-build/retest-20261027/smoke-7.0.0-34-generic-ssse3/7.0.0-34-generic.log"
+    },
+    {
+      "kernel": "7.0.0-34-generic",
+      "backend": "bmi2",
+      "cycles": 100,
+      "passed": true,
+      "log": ".qemu-build/retest-20261027/smoke-7.0.0-34-generic-bmi2/7.0.0-34-generic.log"
+    },
+    {
+      "kernel": "7.0.0-38-generic",
+      "backend": "generic",
+      "cycles": 100,
+      "passed": true,
+      "log": ".qemu-build/retest-20261027/smoke-7.0.0-38-generic-generic/7.0.0-38-generic.log"
+    },
+    {
+      "kernel": "7.0.0-38-generic",
+      "backend": "ssse3",
+      "cycles": 100,
+      "passed": true,
+      "log": ".qemu-build/retest-20261027/smoke-7.0.0-38-generic-ssse3/7.0.0-38-generic.log"
+    },
+    {
+      "kernel": "7.0.0-38-generic",
+      "backend": "bmi2",
+      "cycles": 100,
+      "passed": true,
+      "log": ".qemu-build/retest-20261027/smoke-7.0.0-38-generic-bmi2/7.0.0-38-generic.log"
+    }
+  ],
+  "regressions": {
+    "passed": [
+      "logic",
+      "register_locking",
+      "registers",
+      "edid",
+      "bridge",
+      "bridge_probe",
+      "driver",
+      "drm",
+      "interrupt",
+      "tools",
+      "enumerator",
+      "fl2k"
+    ],
+    "inside_qemu": true,
+    "c_harnesses": "ASan/UBSan enabled",
+    "lua": "TShark as UID/GID 65534; real Lua API and headless callbacks",
+    "log": ".qemu-build/retest-20261027/regressions/guest.log"
+  },
+  "hardware": {
+    "lifecycle-and-faults": {
+      "log": ".qemu-build/retest-20261027/hardware-ssse3-full/guest.log",
+      "atomic_passes": 9,
+      "native_format_passes": 6,
+      "fpu_state_passes": [],
+      "kernel_faults": [],
+      "checks": [
+        "IMMEDIATE_REMOVE_PASS 1",
+        "IMMEDIATE_REMOVE_PASS 2",
+        "IMMEDIATE_REMOVE_PASS 3",
+        "INTERFACE_UNBIND_PASS 0",
+        "INTERFACE_UNBIND_PASS 1",
+        "INTERFACE_UNBIND_PASS 2",
+        "BRIDGE_UNBIND_PASS",
+        "BRIDGE_MODULE_PIN_PASS",
+        "BRIDGE_MODULE_UNLOAD_AFTER_CLOSE_PASS",
+        "MODULE_LIFETIME_AND_KMS_PASS",
+        "ACTIVE_UNBIND_PASS interface=0 format=XRGB8888",
+        "ACTIVE_UNBIND_PASS interface=1 format=RGB888",
+        "ACTIVE_UNBIND_PASS interface=2 format=RGB565",
+        "ACTIVE_UPDATE_UNBIND_PASS",
+        "IRQ_FAULT_RESULT mode=status injected=3 polling_on=1 polling_off=2",
+        "IRQ_FAULT_RESULT mode=i2c injected=3 polling_on=1 polling_off=2",
+        "BULK_FAULT_RESULT injected=1 recovery=1 completions=259 updates=0",
+        "HARDWARE_FAULT_AND_STREAM_PASS",
+        "USB_RESET_PASS"
+      ],
+      "scope": "Removal, interface and bridge rebind, lifetime, injected faults, active unbind and USB reset. QMP cases are recorded separately in hardware-ssse3-finish."
+    },
+    "hardware-ssse3-finish": {
+      "log": ".qemu-build/retest-20261027/hardware-ssse3-finish/guest.log",
+      "completed": true,
+      "atomic_passes": 6,
+      "native_format_passes": 6,
+      "fpu_state_passes": [
+        [
+          "XRGB8888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB565",
+          "SSE+AVX"
+        ]
+      ],
+      "kernel_faults": [],
+      "checks": [
+        "QMP_REMOVAL_REATTACH_PASS",
+        "QMP_ACTIVE_REMOVAL_PASS"
+      ]
+    },
+    "hardware-generic-basic": {
+      "log": ".qemu-build/retest-20261027/hardware-generic-basic/guest.log",
+      "completed": true,
+      "atomic_passes": 3,
+      "native_format_passes": 5,
+      "fpu_state_passes": [
+        [
+          "XRGB8888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB565",
+          "SSE+AVX"
+        ]
+      ],
+      "kernel_faults": [],
+      "checks": []
+    },
+    "hardware-bmi2-basic": {
+      "log": ".qemu-build/retest-20261027/hardware-bmi2-basic/guest.log",
+      "completed": true,
+      "atomic_passes": 3,
+      "native_format_passes": 5,
+      "fpu_state_passes": [
+        [
+          "XRGB8888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB565",
+          "SSE+AVX"
+        ]
+      ],
+      "kernel_faults": [],
+      "checks": []
+    },
+    "hardware-ssse3-fallback": {
+      "log": ".qemu-build/retest-20261027/hardware-ssse3-fallback/guest.log",
+      "completed": true,
+      "atomic_passes": 3,
+      "native_format_passes": 2,
+      "fpu_state_passes": [
+        [
+          "XRGB8888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB565",
+          "SSE+AVX"
+        ]
+      ],
+      "kernel_faults": [],
+      "checks": []
+    },
+    "hardware-bmi2-fallback": {
+      "log": ".qemu-build/retest-20261027/hardware-bmi2-fallback/guest.log",
+      "completed": true,
+      "atomic_passes": 3,
+      "native_format_passes": 2,
+      "fpu_state_passes": [
+        [
+          "XRGB8888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB888",
+          "SSE+AVX"
+        ],
+        [
+          "RGB565",
+          "SSE+AVX"
+        ]
+      ],
+      "kernel_faults": [],
+      "checks": []
+    }
+  },
+  "kernel_benchmark": {
+    "passed": true,
+    "log": ".qemu-build/retest-20261027/kernel-bench/guest.log",
+    "fpu_overhead": [
+      "FPU_BENCH calls=1669752 cpu_ns=99509152 ns_per_pair=59"
+    ],
+    "clock_overhead": [
+      "CLOCK_BENCH calls=3000984 cpu_ns=99711493 ns_per_iteration=33"
+    ]
+  },
+  "pm": {
+    "freezer_control": "passed",
+    "device_stage_control": "Timed out after 45 seconds with FL2000 and IT66121 unloaded; guest terminated. Driver suspend/resume remains unvalidated in this environment.",
+    "logs": [
+      ".qemu-build/retest-20261027/pm-control-freezer/guest.log",
+      ".qemu-build/retest-20261027/pm-control-devices/guest.log"
+    ]
+  },
+  "limitations": [
+    "Hardware tests use KVM, emulated xHCI, patched QEMU bulk OUT pipelining and one physical FL2000 on port 2-2.",
+    "Host USBFS allowance was 16 MiB. Synthetic 1080p runs are functional stress, not performance or image-fidelity validation.",
+    "No physical HDMI cable action was requested; hot-removal tests used QMP USB device removal.",
+    "No KASAN/KCSAN/lockdep kernel was built; userspace harness sanitizers do not replace those.",
+    "Native OF bridge users, multiple adapters and physical-controller passthrough were not available."
+  ],
+  "host_modules_loaded": false,
+  "qemu_running": false,
+  "root_module_sha256": {
+    "fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+    "it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+  },
+  "local_artifacts": ".qemu-build/retest-20261027"
+}

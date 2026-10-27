@@ -7,7 +7,7 @@ The Debian source package `fl2000-drm` builds two binary packages:
 - `fl2000-enumerator` installs the discovery program, configuration, udev rule
   and systemd service. It depends on the matching DKMS package.
 
-The initial supported target is Ubuntu 26.04 amd64 with Linux 7.0. DKMS skips
+The supported target is Ubuntu 26.04 amd64 with Linux 7.0. DKMS skips
 other architectures and kernel series. Future kernel support requires explicit
 validation and an update to the build restriction. The ordinary source build
 retains its existing architecture and backend selection.

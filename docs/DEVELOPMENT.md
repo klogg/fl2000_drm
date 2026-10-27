@@ -181,40 +181,41 @@ decoding and listeners. Test visual layout separately in Wireshark.
 
 ## Validation scope
 
-External x86-64 builds have used Ubuntu 7.0.0-34 and 7.0.0-38 headers. Physical
-passthrough testing used patched QEMU 11.1.2, KVM and one HDMI display advertising
-800x480 at 66 Hz, with a 32 MHz pixel clock. Covered paths include all formats
-and backends, physical HDMI unplug/reconnect, open-file lifetime and bridge
-rebind, USB interface cycles/reset, QMP removal/addition and software fault
-injection. These are targeted observations, not a claim that every revision or
-hardware configuration passed. SSE/AVX preservation and runtime CPU fallback
-have also been tested in guests.
+The [QEMU validation](../tests/qemu_validation_results.json) records the
+2026-10-27 run against revision `95a2a7c` with source and module hashes. All
+three backends built against Ubuntu Linux 7.0.0-34 and 7.0.0-38 headers with
+warnings treated as errors. Hardware-free KVM guests completed 600 alternating
+load/unload cycles across those six builds.
 
-Local build/test logs are ignored under `.qemu-build/`. The latest maintainer
-fix run records its revisions and checks in `maintainer-fixes/results.json`;
-its guest logs are under `mf/`. Earlier lifecycle evidence is under
-`lifecycle-validation/`, `lv/` and `pm/`. These artifacts are not distributed.
-Published CPU measurements remain in the tracked JSON files linked from
-[profiling](PROFILING.md).
+A separate KVM guest ran all twelve sanitizer, tooling, enumerator and Lua
+regression suites with a compiler and TShark overlay. Kernel computation tests
+checked prepared bytes with real FPU protection. Physical USB passthrough on
+7.0.0-38 covered portable, SSSE3 and BMI2 operation, accelerated-backend CPU
+fallback, all three framebuffer formats, atomic commits and SSE/AVX state
+preservation.
 
-The [teardown results](../tests/teardown_results.json) record removal with USB
-core disabling endpoints before the driver disconnect callback. Repeated module
-removal, all three USB interface unbind/rebind paths, bridge rebind and QMP
-removal/reattachment passed with open DRM-file checks and fatal kernel warnings.
-Physical removal is detected through USB core's `USB_STATE_NOTATTACHED` state
-and transfer errors. Manual unbind removes the component master, unplugs DRM,
-then stops IRQ delivery and streaming before detaching the bridge and releasing
-interface resources. Cancellation stops the affected queue; explicit queue
-restart does not require another USB probe while the device remains attached.
-Register I/O returns errors without changing lifecycle state. The driver uses
-the default hard-unbind policy. The recorded tests also cover an unbound
-component master, active updates during interface/USB removal, retained bridge
-module ownership, status/I2C recovery, and bulk recovery without a framebuffer
-update.
+Lifecycle tests covered module removal, each USB interface's unbind/rebind,
+bridge rebind, retained DRM files and bridge-module lifetime, active updates
+during unbind, USB reset and QMP removal/reattachment. Status and I2C fault
+injection exercised polling fallback; bulk recovery completed without another
+framebuffer update. The guests ran with fatal kernel warnings, unloaded their
+modules and stopped. Host modules were not loaded.
+
+The hardware runs used one HDMI display advertising 800x480 at 66 Hz and a
+32 MHz pixel clock. Synthetic 1080p tests exercised transport with the host's
+16 MiB USBFS allowance; they do not repeat the 64 MiB throughput measurement
+or establish image fidelity. Physical HDMI hotplug and hard-unbind behavior
+have separate [hardware observations](HARDWARE.md#observed-device-behavior)
+and [teardown results](../tests/teardown_results.json).
+
+Source and module hashes, checks and limits are retained in the result files.
+Local console/build logs are ignored under `.qemu-build/` at the paths recorded
+there; generated boot images can be rebuilt. These artifacts are not distributed.
+CPU and transport datasets are linked from [profiling](PROFILING.md).
 
 ## Validation backlog
 
-- **System PM:** `pm_test=devices` hangs in the emulated xHCI resume path even
+- **System PM:** the QEMU `pm_test=devices` control timed out after 45 seconds
   with both drivers unloaded; the freezer-only control passed. Diagnose that
   environment, then test S3, s2idle, reset-resume, repeated active/idle cycles
   and unplug during suspend on a physical host or dedicated USB controller.

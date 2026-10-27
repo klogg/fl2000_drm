@@ -231,8 +231,8 @@ complete frames. Measurements must include asynchronous and host work before
 being described as total driver CPU.
 
 See [profiling](docs/PROFILING.md) for the Portable / SSSE3 / BMI2 comparison,
-measurement procedures and raw data. The published tables measure revision
-`f9e99ef`, not the current checkout.
+measurement procedures and raw data. CPU tables measure revision `f9e99ef`;
+transport tables measure `95a2a7c`.
 
 ## Tests and CI
 
