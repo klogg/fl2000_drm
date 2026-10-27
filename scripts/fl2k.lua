@@ -1,8 +1,6 @@
 -- SPDX-License-Identifier: GPL-2.0
 -- Copyright 2019 Artem Mygaiev <joculator@gmail.com>
 
--- Here goes Dissector
-
 fl2k_proto = Proto("fl2k", "FL2000 Protocol")
 
 TransferType = {
@@ -26,8 +24,7 @@ f.f_irq = ProtoField.uint8("fl2k.irq", "Interrupt byte", base.HEX)
 -- Bulk related
 f.f_fb = ProtoField.bytes("fl2k.fb", "Framebuffer", base.SPACE)
 
--- Extractors list
--- XXX: urb_type on Linux and control_stage on Windows
+-- Linux usbmon and Windows USBPcap expose different control-stage fields.
 local f_urb_type = Field.new("usb.urb_type")
 local f_control_stage = Field.new("usb.control_stage")
 local f_transfer = Field.new("usb.transfer_type")
@@ -90,7 +87,6 @@ function fl2k_proto.dissector(tvb, pinfo, tree)
         end
     elseif (transfer.value == TransferType.BULK) then
         pinfo.cols["info"]:set("FL2000 Data")
-        -- TODO: is it possible to parse it as image?
         t_fl2k:add_le(f.f_fb, tvb())
     else
         pinfo.cols["info"]:set("Unknown transfer")
@@ -101,22 +97,6 @@ end
 ProductID = 0x1d5c2000
 usb_product_table = DissectorTable.get("usb.product")
 usb_product_table:add(ProductID, fl2k_proto)
-
--- XXX: It seems that 'usb.product' table does not always work. Keep option to register for interface tables
---[[
-InterfaceClass = {
-    UNKNOWN = 0xFFFF,
-    AV = 0x10,
-}
-usb_control_table = DissectorTable.get("usb.control")
-usb_control_table:add(InterfaceClass.UNKNOWN, fl2k_proto)
-usb_interrupt_table = DissectorTable.get("usb.interrupt")
-usb_interrupt_table:add(InterfaceClass.AV, fl2k_proto)
-usb_bulk_table = DissectorTable.get("usb.bulk")
-usb_bulk_table:add(InterfaceClass.AV, fl2k_proto)
---]]
-
--- Here we go with Tap
 
 I2C_STATE = {
     IDLE = 0,
@@ -326,7 +306,7 @@ local function menuable_tap()
 
     local win = TextWindow.new("Operations")
 
-    -- XXX: When was registering Listener for "usb" some packets were not captured
+    -- Filter packets by the FL2000 dissector result.
     local fl2k_tap = Listener.new(nil, "fl2k")
 
     local function remove()
