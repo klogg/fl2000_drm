@@ -13,7 +13,7 @@ trap 'status=$?; echo "Packaging checks failed at line $LINENO (status $status)"
 version=$(cd "$source_dir" && dpkg-parsechangelog -S Version)
 upstream=${version%-*}
 ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
-test -n "$ksrc"
+[[ -n "$ksrc" ]]
 kernel=${ksrc##*/linux-headers-}
 cd "$source_dir"
 shellcheck tests/check_packages.sh tests/packaging_ci.sh debian/tests/dkms debian/tests/enumerator
