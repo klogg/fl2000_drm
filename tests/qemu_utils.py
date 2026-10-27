@@ -25,6 +25,11 @@ def add_qemu_arguments(parser, *, kernel=True):
     )
     parser.add_argument("--cpu", default="host")
     parser.add_argument(
+        "--bulk-out-pipeline",
+        action="store_true",
+        help="Enable bulk-OUT queueing (requires the optional QEMU patch)",
+    )
+    parser.add_argument(
         "--bios-path",
         type=Path,
         help="Firmware directory; inferred for a local source build",
@@ -41,6 +46,8 @@ def qemu_command(args, *, memory="1G"):
     if not binary:
         raise FileNotFoundError(f"QEMU executable not found: {args.qemu}")
     command = [binary, "-enable-kvm", "-cpu", args.cpu, "-m", memory, "-nic", "none"]
+    if getattr(args, "bulk_out_pipeline", False):
+        command += ["-global", "usb-host.bulk-out-pipeline=on"]
     bios = args.bios_path
     if bios is None:
         candidate = Path(binary).resolve().parent.parent / "pc-bios"

@@ -50,11 +50,36 @@ independently rather than assuming this version-specific patch applies.
 
 ## Bulk transfer queueing
 
-A matched synthetic 1080p60 test delivered approximately 30 USB frames/s through
-the tested QEMU build, compared with 60/s after experimentally enabling
-bulk-OUT pipelining. This is a passthrough limitation, not evidence that the
-pixel conversion path cannot sustain 60/s. See the
-[transport investigation](PROFILING.md#follow-up-lbuf-status-and-qemu-queues)
-for the comparison, USBFS memory constraint and remaining emulator work.
-The experimental binary is separate from the restored normal QEMU executable;
-its pipeline change is not included in the descriptor workaround above.
+The tested QEMU serializes bulk OUT, limiting synthetic 1080p60 delivery to
+approximately 30 USB frames/s. The optional
+[bulk-OUT pipeline patch](../patches/qemu-11.1.2-bulk-out-pipeline.patch) allows
+queued transfers and restores approximately 60/s with the normal three-frame
+driver queue. Apply it after the descriptor workaround, then rebuild QEMU.
+It adds an opt-in `bulk-out-pipeline` property; the default remains disabled.
+
+The host USBFS memory allowance must cover queued payloads and transfer
+accounting. Three 1080p RGB888 payloads alone occupy 18,662,400 bytes, exceeding
+the usual 16 MiB allowance. The throughput measurements used 64 MiB. Set this
+on the host before starting QEMU:
+
+```sh
+echo 64 | sudo tee /sys/module/usbcore/parameters/usbfs_memory_mb
+QEMU=/path/to/qemu/build/qemu-system-x86_64 \
+  scripts/emulate.sh --bulk-out-pipeline
+```
+
+The shared Python launchers accept the same flag. For a direct QEMU command,
+add `bulk-out-pipeline=on` to the `usb-host` device, or use
+`-global usb-host.bulk-out-pipeline=on`. Unpatched QEMU rejects this property.
+
+The patch releases requests after failed submissions. A failed pipelined OUT
+submission falls back to serialized processing until endpoint reconfiguration,
+preserving completion order. Retrying also resets the copied-byte count.
+Injected allocation failure and removal during 1080p transfers exercise these
+paths; this remains a locally tested QEMU patch, not an upstream guarantee.
+
+See the [transport results](PROFILING.md#transport-diagnostics)
+for throughput, recovery tests and remaining validation. The attached monitor
+advertises only 800x480, so synthetic 1080p USB throughput does not validate the
+image. LBUF overflow still appears at full transfer rate and requires separate
+investigation; the pipeline patch does not implement controller recovery.

@@ -127,6 +127,8 @@ and their shared libraries in the guest overlay. The minimal guest needs
 POSIX shell, awk, base utilities, and built-in or preloaded `i2c-dev` support.
 The tested QEMU 11.1.2 needs the included
 [duplicate-endpoint workaround](docs/HARDWARE.md#qemu-1112-workaround).
+High-resolution tests can also use the optional
+[bulk-OUT pipeline patch](docs/HARDWARE.md#bulk-transfer-queueing).
 
 Supply your own `base-initramfs.cpio.gz`; it is **not included**. Its init must
 provide a root shell, mounted `/proc`, `/sys`, and `/dev`, and module tools.
