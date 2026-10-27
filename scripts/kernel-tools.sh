@@ -17,11 +17,20 @@ kernel_tool() {
     mkdir -p "$cache_dir/$(dirname -- "$resource")" || return
     if [[ ! -s "$cache_dir/$resource" ]]; then
         temporary=$(mktemp "$cache_dir/$resource.XXXXXX") || return
-        if ! curl --fail --location --proto '=https' --proto-redir '=https' \
-            --silent --show-error \
+        local -a curl_options=(
+            --fail --location --proto '=https' --proto-redir '=https'
+            --silent --show-error --retry 3 --retry-delay 2 --retry-max-time 30
+            --connect-timeout 10 --max-time 20
+        )
+        if ! curl "${curl_options[@]}" \
             "https://raw.githubusercontent.com/torvalds/linux/$tag/$resource" -o "$temporary"; then
-            rm -f -- "$temporary"
-            return 1
+            if ! curl "${curl_options[@]}" \
+                "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/$tag/$resource?format=TEXT" \
+                -o "$temporary.b64" || ! base64 --decode "$temporary.b64" > "$temporary"; then
+                rm -f -- "$temporary" "$temporary.b64"
+                return 1
+            fi
+            rm -f -- "$temporary.b64"
         fi
         mv -- "$temporary" "$cache_dir/$resource" || return
     fi

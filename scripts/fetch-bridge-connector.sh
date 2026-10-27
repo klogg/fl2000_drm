@@ -3,7 +3,7 @@
 set -eu
 if [[ ${1:-} == --help ]]; then
     printf '%s\n' 'Usage: fetch-bridge-connector.sh' \
-        'Downloads the unmodified Linux 7.0 connector and HDMI helpers for external builds.'
+        'Prepares checksum-pinned Linux 7.0 DRM helpers from vendored sources or HTTPS.'
     exit 0
 fi
 repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -12,10 +12,18 @@ mkdir -p "$output"
 temporary=$(mktemp "$output/connector.XXXXXX")
 trap 'rm -f "$temporary" "$temporary.b64"' EXIT
 while read -r name checksum; do
-    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
-        "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/v7.0/drivers/gpu/drm/display/$name.c?format=TEXT" \
-        --output "$temporary.b64"
-    base64 --decode "$temporary.b64" > "$temporary"
+    vendor_source="$repo_dir/debian/vendor/linux-7.0/$name.c"
+    if [[ -f "$vendor_source" ]]; then
+        cp "$vendor_source" "$temporary"
+    else
+        curl --fail --silent --show-error --location \
+            --retry 3 --retry-delay 2 --retry-max-time 60 \
+            --connect-timeout 10 --max-time 30 \
+            --proto '=https' --proto-redir '=https' \
+            "https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux/+/v7.0/drivers/gpu/drm/display/$name.c?format=TEXT" \
+            --output "$temporary.b64"
+        base64 --decode "$temporary.b64" > "$temporary"
+    fi
     printf '%s  %s\n' "$checksum" "$temporary" | sha256sum --check --status
     mv "$temporary" "$output/$name.c"
 done <<'SOURCES'

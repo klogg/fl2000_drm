@@ -21,9 +21,10 @@ The kernel header build tools also need their runtime libraries (including
 libdw for gendwarfksyms on the tested Ubuntu headers).
 Build against the running kernel, or select an installed header tree.
 For distribution kernels lacking `CONFIG_DRM_BRIDGE_CONNECTOR` or its HDMI
-helpers, first run `scripts/fetch-bridge-connector.sh` (requires curl). It
-fetches checksum-pinned, unmodified Linux 7.0 helper sources into the ignored
-`.qemu-build/upstream/` directory. External builds compile only missing helpers.
+helpers, first run `scripts/fetch-bridge-connector.sh`. It prepares checksum-pinned,
+unmodified Linux 7.0 sources in the ignored `.qemu-build/upstream/` directory,
+using vendored files when present or HTTPS with curl otherwise. External builds
+compile only missing helpers.
 Alternatively, set `FL2000_HELPER_SOURCE_DIR` to the matching kernel source
 `drivers/gpu/drm/display/` directory. In-tree builds use Kconfig-selected helpers.
 
