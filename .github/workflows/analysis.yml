@@ -1,0 +1,82 @@
+name: Linux 7.0 static analysis
+
+on:
+  schedule:
+    - cron: '37 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  analysis:
+    name: ${{ matrix.tool }}
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: [sparse, smatch, coccinelle]
+    steps:
+      - name: Install packaged dependencies
+        env:
+          ANALYZER: ${{ matrix.tool }}
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            git build-essential ca-certificates curl pkg-config \
+            linux-headers-generic libdw1t64 ripgrep
+          case "$ANALYZER" in
+            smatch) apt-get install -y --no-install-recommends libsqlite3-dev libssl-dev ;;
+            coccinelle) apt-get install -y --no-install-recommends coccinelle libpython3-dev ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build upstream analyzer
+        if: matrix.tool != 'coccinelle'
+        env:
+          ANALYZER: ${{ matrix.tool }}
+        run: scripts/build-static-tools.sh "$ANALYZER"
+      - name: Record analyzer revision
+        if: always() && matrix.tool != 'coccinelle'
+        env:
+          ANALYZER: ${{ matrix.tool }}
+        run: |
+          source_log=".qemu-build/static-analysis/source-$ANALYZER.log"
+          if [[ -s "$source_log" ]]; then
+            {
+              printf '### %s source\n\n```text\n' "$ANALYZER"
+              cat "$source_log"
+              printf '```\n'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Prepare DRM helpers
+        run: |
+          scripts/fetch-bridge-connector.sh
+          dpkg-query -W linux-headers-generic
+      - name: Analyze production sources
+        env:
+          ANALYZER: ${{ matrix.tool }}
+        run: |
+          ksrc=$(find /usr/src -maxdepth 1 -type d -name 'linux-headers-7.0.*-generic' | sort -V | tail -n 1)
+          test -n "$ksrc"
+          KSRC="$ksrc" scripts/static-analysis.sh "$ANALYZER"
+      - name: Save diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: static-analysis-${{ matrix.tool }}
+          path: .qemu-build/static-analysis/*.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 30

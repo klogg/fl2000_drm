@@ -34,6 +34,61 @@ file-scoped `c:S995` exceptions also affect ordinary functions, so review their
 const correctness manually. `tests/compile_commands.py` merges default and BMI2
 build databases; it does not analyze every shared-source configuration.
 
+### Sparse, Smatch and Coccinelle
+
+The static-analysis workflow runs weekly on Monday at 03:37 UTC and supports
+manual runs through `workflow_dispatch`. It uses Ubuntu 26.04 amd64 and builds
+Sparse and Smatch from upstream Git HEAD. Coccinelle comes from the
+Ubuntu package repository. Each job prepares only its selected analyzer.
+
+Install `git`, `build-essential`, matching Linux 7.0 headers, `libdw1t64`, `curl`,
+`ca-certificates`, `pkg-config`, `libsqlite3-dev`, `libssl-dev`, `coccinelle`,
+`libpython3-dev` and `ripgrep`. Then prepare the tools and helpers:
+
+```sh
+scripts/build-static-tools.sh
+scripts/fetch-bridge-connector.sh
+KSRC=/usr/src/linux-headers-7.0.0-38-generic scripts/static-analysis.sh sparse
+KSRC=/usr/src/linux-headers-7.0.0-38-generic scripts/static-analysis.sh smatch
+KSRC=/usr/src/linux-headers-7.0.0-38-generic scripts/static-analysis.sh coccinelle
+```
+
+The build script fetches each upstream repository's HEAD on every invocation
+into `.cache/analyzers/sparse/` and `.cache/analyzers/smatch/`. It resolves HEAD
+to an exact commit before building and runs the checkers without installation.
+Pass `sparse` or `smatch` to build one tool; `JOBS` controls build parallelism
+(default two). Tool builds use `-O2 -g` unless `CFLAGS` is supplied.
+The repository, requested ref and full commit SHA are recorded in each tool's
+`source-<tool>.log`, the build log and the GitHub run summary, including when
+compilation fails. Tool versions are also printed after successful builds.
+Set `SPARSE_REF` or `SMATCH_REF` to a recorded SHA to reproduce a previous
+checker build; both default to HEAD. A fetch failure stops the build instead
+of using a cached revision.
+Ubuntu's packaged Sparse 0.6.4 fails the Linux 7.0 checker probe.
+
+Sparse and Smatch use Kbuild `C=2` on generic, SSSE3 and BMI2 configurations,
+including the bridge and missing-helper objects. The two instruction leaf
+files, `frame/ssse3.c` and `frame/bmi2.c`, are explicitly skipped because the
+checkers do not implement their vector/instruction builtins. Their dispatch,
+buffer handling and portable fallback remain analyzed. Compiler builds and
+the existing byte-comparison regressions cover the leaf implementations.
+Smatch uses its source-tree kernel models without a whole-kernel cross-function
+database; this is not interprocedural analysis of a complete kernel.
+
+Coccinelle runs ten selected kernel rules in report mode over production C
+files: null/error-pointer dereferences, invalid managed/address frees, repeated
+locks, IRQ flags, repeated tests/bit tests and uninitialized variables. It is
+not a run of every kernel semantic patch. Rules come from the selected header
+tree; Coccinelle's version is printed in the log.
+
+Each analyzer first checks an intentional defect. Incompatible tools, skipped
+Kbuild checking, analyzer failures and reported findings fail the job. Report
+mode's zero exit status alone is insufficient. Logs, including the intentional
+failure controls, are retained under `.qemu-build/static-analysis/` and uploaded
+by CI with a 30-day retention period. `STATIC_TOOLS_DIR`, `SPARSE`, `SMATCH`,
+`SPATCH` and `ANALYSIS_LOG_DIR` override the tool or log locations; the default
+kernel path follows `KVER`.
+
 ## Source API documentation
 
 Use Linux kernel-doc syntax for all production functions and important types,
