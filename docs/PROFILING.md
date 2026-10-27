@@ -2,9 +2,9 @@
 
 ## Recorded measurements
 
-The latest published comparison measures revision `f9e99ef`; it is not a
-measurement of the current checkout. Rerun the procedure below after changing
-frame preparation or transport.
+The CPU comparisons below measure revision `f9e99ef`. Transport measurements
+use `95a2a7c`. Keep revision and workload fixed when comparing results, and
+repeat measurements after changing frame preparation or transport.
 
 ### Matched backend comparison
 
@@ -39,11 +39,9 @@ and synchronous DRM/ioctl work, excluding independent asynchronous work and
 QEMU host CPU. The JSON preserves both trials and their observed ranges. All
 six format suites, driver/dependency unloads, and guest shutdown completed
 without kernel faults. This comparison is saved under
-`matched_backend_comparison` in the [current raw
-results](../tests/cpu_profile_current_results.json); detailed logs are in
-`.qemu-build/performance-current/backend-comparison/`.
+`matched_backend_comparison` in the [CPU results](../tests/cpu_profile_current_results.json).
 
-### Separate default-backend diagnostics
+### Default-backend profile
 
 Measured on the Intel Core i3-6100T using Linux 7.0.0-38, patched QEMU 11.1.2,
 one KVM vCPU, physical USB port passthrough, and the default SSSE3 backend.
@@ -87,102 +85,66 @@ and application drawing costs, and does not predict higher-resolution results.
 
 SSE/AVX preservation checks passed for all three formats. All workloads,
 module/dependency unloads, and guest shutdown completed without kernel faults.
-The [current raw results](../tests/cpu_profile_current_results.json) include
-trial ranges, QEMU thread accounting, function profiles, sample counts, and
-module hashes. Detailed console logs remain under
-`.qemu-build/performance-current/run/`.
+The [CPU results](../tests/cpu_profile_current_results.json) include trial
+ranges, QEMU thread accounting, function profiles, sample counts and module
+hashes.
 
 ## Transport diagnostics
 
-On 2026-10-19, the ordered format-programming change on top of `98c7b18`
-was tested with Linux 7.0.0-38, patched QEMU 11.1.2, one KVM vCPU and physical
-USB port passthrough. The attached display advertises only 800x480 at 66 Hz.
-The 1080p60 mode was synthetic and establishes no monitor image-fidelity result.
+Revision `95a2a7c` was measured with Linux 7.0.0-38, QEMU 11.1.2, one KVM
+vCPU, physical USB port passthrough and a 64 MiB host USBFS allowance. The
+production driver used its three-frame queue. The attached monitor advertises
+800x480 at 66 Hz; synthetic 1080p60 timings measure transport throughput without
+establishing visible image quality.
 
-Each format ran 20 seconds of full-frame DIRTYFB updates requested at 60/s.
-USB tracing measured successful whole-frame completions, excluding two seconds
-at each end of the longest run with the expected frame size. These traced
-results are transport diagnostics, not clean CPU benchmarks.
+QEMU serialization limits whole-frame payloads followed by zero-length frame
+delimiters to about 30 USB frames/s. Enabling the optional bulk OUT pipeline
+raises delivery to about 60/s with the same driver and workload. See the
+[QEMU setup](HARDWARE.md#bulk-transfer-queueing).
 
-| Mode | Wire format | USB frames/s | Payload MB/s |
-| --- | --- | ---: | ---: |
-| 800x480 | RGB888 | 65.49 | 75.45 |
-| 800x480 | RGB565 | 65.68 | 50.44 |
-| Synthetic 1080p60 | RGB888 | 29.99 | 186.59 |
-| Synthetic 1080p60 | RGB565 | 30.02 | 124.51 |
-
-Two separate experimental builds sampled status through the existing interrupt
-worker once per second. One additionally cleared detection bit 30 on every
-outgoing I2C-control register write, including initialization; USB traces
-confirmed the difference. Both retained approximately 30 USB frames/s at
-1080p, while the controller frame counter advanced at approximately 60/s.
-A busy loop on the sole guest vCPU did not materially change that result.
-Neither experimental change is part of the production driver.
-
-All steady-state samples retained the LBUF overflow bit; none had underflow
-set. These initial tests could not distinguish stale flags from new events or
-establish full-rate 1080p throughput. The follow-up below resolves the clear
-control and identifies a QEMU queueing limitation.
-
-The [transport results](../tests/transport_profile_results.json) record source
-and module hashes, intervals, status observations, experiment conditions and
-remaining tests. Raw USB traces, guest logs and temporary experiment patches
-are retained locally under `.qemu-build/adcds-tests/`.
-
-### Follow-up: LBUF status and QEMU queues
-
-A controlled comparison found that the dedicated `0x8004` bit-12 strobe clears
-LBUF flags. Writing status bit 31, as the status table suggests, does not clear
-the observed overflow flag on this adapter. With scanout blanked, the bit-12
-variant clears overflow and subsequently records underflow; both comparison
-variants retain stale overflow. The production driver now uses the dedicated
-strobe without writing the read-to-clear event register.
-
-Overflow reappears during active streaming at both native resolution and
-1080p, including runs that deliver 60 USB frames/s. It is not sufficient to
-explain the 30-frame result, and clearing flags is not LBUF fault recovery.
-
-Host transfer traces showed that normal QEMU submits one bulk request at a
-time, alternating a whole-frame payload and its zero-length packet. An
-experimental QEMU enabled bulk-OUT pipelining specifically for this adapter.
-The matched comparison used the same two-frame test driver in both emulators:
-
-| Synthetic 1080p60 workload | Normal QEMU frames/s | Pipelined QEMU frames/s |
+| Synthetic 1080p60 workload | Serialized QEMU frames/s | Pipelined frames/s |
 | --- | ---: | ---: |
-| RGB888 | 29.99 | 59.99 |
-| RGB565 | 30.00 | 59.99 |
-| RGB888 with guest CPU load | 30.00 | 59.99 |
+| RGB888 | 30.00 | 59.99 |
+| RGB565 | 29.99 | 59.99 |
 
-Pipelined payload throughput reached 373.20 MB/s for RGB888 and 248.80 MB/s
-for RGB565. The controller counter remained near 60/s in both configurations.
-This identifies emulator serialization as the cause of the measured rate
-halving in this setup; no driver pacing or pixel-processing change was needed.
-Image fidelity, bandwidth margin with competing USB traffic and other hardware
-remain unvalidated.
+Each matched trial requested 60 full-frame DIRTYFB updates/s for 12 seconds.
+Rates count successful whole-frame USB completions after trimming two seconds
+from each end of the frame-size-matched interval. Function profiling and USB
+tracing were enabled; these figures are transport diagnostics, not clean CPU
+measurements.
 
-The experimental QEMU is not a deployable fix: its three-frame RGB888 run hit
-an assertion after a host submission failure. Three payloads need 17.8 MiB,
-exceeding the host's 16 MiB USBFS allowance; the precise libusb failure code
-was not recorded. The matched experiment used two frames to stay below that
-limit. Production retains three frames. The normal QEMU executable, source
-and build object were restored; robust pipelining and error handling require
-separate QEMU work.
+A 30-second pipelined trial per format measured:
 
-The investigation also exposed an allocation warning when a 1080p RGB888
-buffer required a contiguous order beyond the direct-DMA allocator's limit.
-The optional DMA attempt now uses `__GFP_NOWARN` and retains its existing page
-fallback, allowing IOMMU-backed allocations to keep using the DMA path.
+| Framebuffer format | USB frames/s | Payload MB/s |
+| --- | ---: | ---: |
+| XRGB8888 | 59.99 | 373.18 |
+| RGB888 | 59.99 | 373.18 |
+| RGB565 | 59.99 | 248.79 |
 
-The [follow-up results](../tests/transport_investigation_results.json) contain
-the status matrix, matched trials, hashes and validation outcomes. Detailed
-logs, traces and temporary experiment patches remain under
-`.qemu-build/transport-investigation/`.
+XRGB8888 includes conversion to RGB888 wire data. Removing the USB device during
+active 1080p updates returned `ENODEV` to the client; reattachment restored both
+wire formats and native-mode atomic checks. The successful guests completed
+module unload and shutdown without kernel warnings, oopses or panics.
 
-The removal-time `Frame conversion failed: -2` recorded in these measurements
-was subsequently traced to USB endpoint disable preceding DRM quiescence.
-The [teardown follow-up](../tests/teardown_results.json) verifies ordered DRM
-and USB cleanup with default hard unbind, including removal during active
-framebuffer updates.
+Injecting `LIBUSB_ERROR_NO_MEM` on the third RGB888 payload exercised the QEMU
+submission-error fallback. The endpoint continued in serialized mode at about
+30 USB frames/s and completed subsequent format changes and module unload.
+The patch frees failed requests and resets the copied-byte count before retry;
+endpoint reconfiguration permits pipelining again.
+
+LBUF overflow recurs with either QEMU queueing mode, including at 60 USB
+frames/s. Status sampling through the interrupt worker recorded the same 66
+samples in each mode: 59 with overflow, one with overflow and VGA error, and
+six with underflow. None reported LBUF halt. The driver clears LBUF flags with
+`0x8004[12]`; clearing them is not fault recovery. These sticky flags do not
+count lost frames or establish visible corruption, and do not explain the
+measured throughput difference.
+
+The [transport results](../tests/highres_transport_results.json) preserve
+module/emulator hashes, completion intervals, status samples, sustained runs
+and injected failures, including unsuccessful emulator prototypes. Repeat with
+a native host or dedicated USB controller and competing traffic before drawing
+conclusions about physical presentation or device-wide limits.
 
 ## Measuring the driver
 
@@ -253,16 +215,19 @@ end-to-end measurements. Framebuffer objects themselves use standard DRM shmem
 GEM helpers; the five driver-owned wire buffers are USB transport allocations,
 not a custom GEM type.
 
-## Raw data
+## Measurement records
 
-The [published comparison](../tests/cpu_profile_current_results.json) contains
-trial ranges, sampling/function profiles, module hashes and QEMU accounting.
-Earlier records remain available for reproducibility:
+Use matched trials within each dataset; different revisions and VM/host
+conditions do not provide comparable absolute CPU percentages.
 
-- [Backend experiments](../tests/cpu_profile_backend_results.json)
-- [Partial damage comparison](../tests/cpu_profile_partial_results.json)
-- [Initial baseline](../tests/cpu_profile_results.json)
+- [CPU backend and damage measurements](../tests/cpu_profile_current_results.json)
+- [High-resolution transport](../tests/highres_transport_results.json)
+- [USB teardown and recovery](../tests/teardown_results.json)
 
-These records describe different revisions and VM/host conditions. Compare
-only matched trials; older absolute percentages are not current performance
-claims.
+Additional datasets retain source hashes and experimental conditions:
+
+- [Backend computation](../tests/cpu_profile_backend_results.json)
+- [Partial damage](../tests/cpu_profile_partial_results.json)
+- [CPU baseline](../tests/cpu_profile_results.json)
+- [Transport profiling](../tests/transport_profile_results.json)
+- [Status clearing and QEMU queues](../tests/transport_investigation_results.json)

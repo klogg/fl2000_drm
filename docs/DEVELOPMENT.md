@@ -230,14 +230,12 @@ update.
 - **Modes and fidelity:** additional resolutions, clocks and displays; verify
   channel order, quantization, pitch, crops, damage edges and modeset transitions
   with visible output or capture. Flip events and byte tests are insufficient.
-- **High-resolution transport:** the matched QEMU experiment isolated a
-  serialization limit: bulk-OUT pipelining raised synthetic 1080p60 delivery
-  from 30 to 60 USB frames/s in both formats. A deployable QEMU change still
-  needs submission-error handling and adequate USBFS memory. Verify images with
-  a suitable display/capture and repeat on a dedicated controller or physical
-  host, including competing USB traffic. LBUF clearing is verified; the cause
-  and consequences of overflow reappearing during active streaming still need
-  investigation. See the [transport measurements](PROFILING.md#transport-diagnostics).
+- **High-resolution transport:** the optional QEMU pipeline patch permits
+  synthetic 1080p60 delivery with the production three-frame queue and adequate
+  USBFS memory. Verify images with a suitable display/capture and repeat on a
+  dedicated controller or physical host, including competing USB traffic.
+  LBUF overflow during active streaming still needs investigation. See the
+  [transport measurements](PROFILING.md#transport-diagnostics).
 - **Kernel integration:** full built-in/modular kernel builds, helper selection,
   non-x86 architectures, endian/alignment and DMA constraints. External x86
   header builds do not cover this.

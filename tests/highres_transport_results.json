@@ -1,0 +1,537 @@
+{
+  "date": "2026-10-20",
+  "base_revision": "95a2a7c",
+  "kernel": "7.0.0-38-generic",
+  "environment": "Patched QEMU 11.1.2, KVM, one host-model vCPU, 1 GiB RAM; physical FL2000 USB port hostbus=2 hostport=2; 64 MiB host USBFS allowance. Modules loaded only in guests.",
+  "production_source_changed": false,
+  "queue_depth": 3,
+  "display_limit": "Attached sink advertises only 800x480 at 66 Hz; 1080p60 timings are synthetic and establish no visible-image result.",
+  "method": [
+    "Request 60 full-frame DIRTYFB updates/s; record successful whole-frame USB completions with usbmon and trim two seconds at each end of the longest matching-frame-size run.",
+    "RGB888 and XRGB8888 use 6,220,800-byte RGB888 wire frames; RGB565 uses 4,147,200-byte frames. Rates use decimal MB/s.",
+    "Function profiling and USB tracing enabled; results are transport diagnostics, not clean CPU benchmarks.",
+    "Status sampling uses a separate current-source test module with periodic work through the existing interrupt worker; no competing destructive status reader. The sampling patch is not a production change.",
+    "A host-only libusb interposer rejects the third 6,220,800-byte OUT submission once with LIBUSB_ERROR_NO_MEM; its subsequent submissions call real libusb.",
+    "Expected ENOENT/ESHUTDOWN during modeset/unload and ENODEV after QMP removal are not classified as kernel faults.",
+    "The earliest prototype and pre-format builds are recorded explicitly; final builds narrow retry fallback to OUT and differ only in formatting thereafter."
+  ],
+  "patch_sha256": "5d5f0c1104833932d9492cb04750c9ad0a147f7c69aaa0f1fb2c8a229aed9909",
+  "test_artifacts": ".qemu-build/highres-current",
+  "sampling_patch_sha256": "b8b3a4646f4c2d351f1930187da7daeff96cd852005f8310a4db88d9896fa279",
+  "failure_interposer_sha256": "99f69da56f34e661315fe09e1504e7f11b4d1e7893ea84554e8fb5df1eca92c4",
+  "runs": [
+    {
+      "name": "active-replug-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          "/run/host/home/klogg/workspace/fl2000/.qemu-build/highres-current/qemu-system-x86_64": "333ad5690714d1ed6a3cfb74e537d205a61bd78fc7f32d708282e826205b1119",
+          "/run/host/home/klogg/workspace/fl2000/fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/active-replug-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": false,
+      "measurements": [],
+      "active_replug_passed": true,
+      "updates": [
+        "RGB888 300 updates wall=5.000s process_cpu=0.531s",
+        "RGB565 300 updates wall=5.000s process_cpu=1.646s",
+        "XRGB8888 120 updates wall=2.000s process_cpu=0.104s",
+        "RGB888 120 updates wall=2.000s process_cpu=0.078s",
+        "RGB565 120 updates wall=2.000s process_cpu=0.059s"
+      ]
+    },
+    {
+      "name": "final-injected-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          "/run/host/home/klogg/workspace/fl2000/.qemu-build/highres-current/qemu-system-x86_64": "6a35a2df9a63996ffc2623161bab2268d7afd9ae3e128a15cdda1be19f573633",
+          "/run/host/home/klogg/workspace/fl2000/fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/final-injected-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": true,
+      "measurements": [
+        {
+          "format": "1080p-RGB888",
+          "frame_bytes": 6220800,
+          "completions": 323,
+          "seconds": 10.735254,
+          "frames_per_second": 29.994633,
+          "payload_MB_per_second": 186.590611,
+          "median_completion_gap_ms": 33.33,
+          "p99_completion_gap_ms": 35.096,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/final-injected-64/1080p-RGB888.mon"
+        },
+        {
+          "format": "1080p-RGB565",
+          "frame_bytes": 4147200,
+          "completions": 325,
+          "seconds": 10.785169,
+          "frames_per_second": 30.041254,
+          "payload_MB_per_second": 124.587088,
+          "median_completion_gap_ms": 33.3395,
+          "p99_completion_gap_ms": 35.016,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/final-injected-64/1080p-RGB565.mon"
+        }
+      ],
+      "active_replug_passed": false,
+      "updates": [
+        "RGB888 720 updates wall=12.000s process_cpu=1.695s",
+        "RGB565 720 updates wall=12.000s process_cpu=1.180s",
+        "XRGB8888 120 updates wall=2.000s process_cpu=0.106s",
+        "RGB888 120 updates wall=2.001s process_cpu=0.078s",
+        "RGB565 120 updates wall=2.000s process_cpu=0.057s"
+      ]
+    },
+    {
+      "name": "final-replug-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          "/run/host/home/klogg/workspace/fl2000/.qemu-build/highres-current/qemu-system-x86_64": "aa4a22be1cdd3fa0f30acc591d248e2c364e988c6341956cd63763aa79bda3c2",
+          "/run/host/home/klogg/workspace/fl2000/fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/final-replug-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": false,
+      "measurements": [],
+      "active_replug_passed": true,
+      "updates": [
+        "RGB888 300 updates wall=5.000s process_cpu=0.540s",
+        "RGB565 300 updates wall=5.000s process_cpu=0.423s",
+        "XRGB8888 120 updates wall=2.000s process_cpu=0.106s",
+        "RGB888 120 updates wall=2.000s process_cpu=0.083s",
+        "RGB565 120 updates wall=2.000s process_cpu=0.059s"
+      ]
+    },
+    {
+      "name": "final-sustained-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          "/run/host/home/klogg/workspace/fl2000/.qemu-build/highres-current/qemu-system-x86_64": "6a35a2df9a63996ffc2623161bab2268d7afd9ae3e128a15cdda1be19f573633",
+          "/run/host/home/klogg/workspace/fl2000/fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/final-sustained-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": false,
+      "measurements": [
+        {
+          "format": "1080p-XRGB8888",
+          "frame_bytes": 6220800,
+          "completions": 1729,
+          "seconds": 28.80513,
+          "frames_per_second": 59.989314,
+          "payload_MB_per_second": 373.181527,
+          "median_completion_gap_ms": 16.667,
+          "p99_completion_gap_ms": 17.024,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/final-sustained-64/1080p-XRGB8888.mon"
+        },
+        {
+          "format": "1080p-RGB888",
+          "frame_bytes": 6220800,
+          "completions": 1727,
+          "seconds": 28.772029,
+          "frames_per_second": 59.988818,
+          "payload_MB_per_second": 373.178437,
+          "median_completion_gap_ms": 16.67,
+          "p99_completion_gap_ms": 17.032,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/final-sustained-64/1080p-RGB888.mon"
+        },
+        {
+          "format": "1080p-RGB565",
+          "frame_bytes": 4147200,
+          "completions": 1724,
+          "seconds": 28.721517,
+          "frames_per_second": 59.989868,
+          "payload_MB_per_second": 248.789979,
+          "median_completion_gap_ms": 16.673,
+          "p99_completion_gap_ms": 16.976,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 3
+          },
+          "trace": ".qemu-build/highres-current/final-sustained-64/1080p-RGB565.mon"
+        }
+      ],
+      "active_replug_passed": false,
+      "updates": [
+        "XRGB8888 1800 updates wall=30.000s process_cpu=4.388s",
+        "RGB888 1800 updates wall=30.000s process_cpu=3.019s",
+        "RGB565 1800 updates wall=30.000s process_cpu=3.602s"
+      ]
+    },
+    {
+      "name": "injected-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          ".qemu-build/highres-current/qemu-system-x86_64": "c22afbf65181814354493221e44fe65554852174dd738b839b5a9537026e9281",
+          "fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/injected-64/guest.log",
+      "workload_completed": false,
+      "qemu_assertion": true,
+      "kernel_fault_found": false,
+      "injected_nomem": true,
+      "measurements": [],
+      "active_replug_passed": false,
+      "updates": []
+    },
+    {
+      "name": "injected-fixed-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          ".qemu-build/highres-current/qemu-system-x86_64": "333ad5690714d1ed6a3cfb74e537d205a61bd78fc7f32d708282e826205b1119",
+          "fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/injected-fixed-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": true,
+      "measurements": [
+        {
+          "format": "1080p-RGB888",
+          "frame_bytes": 6220800,
+          "completions": 325,
+          "seconds": 10.800948,
+          "frames_per_second": 29.997367,
+          "payload_MB_per_second": 186.60762,
+          "median_completion_gap_ms": 33.32,
+          "p99_completion_gap_ms": 35.096,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/injected-fixed-64/1080p-RGB888.mon"
+        },
+        {
+          "format": "1080p-RGB565",
+          "frame_bytes": 4147200,
+          "completions": 325,
+          "seconds": 10.784925,
+          "frames_per_second": 30.041934,
+          "payload_MB_per_second": 124.589907,
+          "median_completion_gap_ms": 33.344,
+          "p99_completion_gap_ms": 35.184,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/injected-fixed-64/1080p-RGB565.mon"
+        }
+      ],
+      "active_replug_passed": false,
+      "updates": [
+        "RGB888 720 updates wall=12.000s process_cpu=1.692s",
+        "RGB565 720 updates wall=12.000s process_cpu=1.153s",
+        "XRGB8888 120 updates wall=2.000s process_cpu=0.106s",
+        "RGB888 120 updates wall=2.000s process_cpu=0.080s",
+        "RGB565 120 updates wall=2.000s process_cpu=0.059s"
+      ]
+    },
+    {
+      "name": "pipeline-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          ".qemu-build/highres-current/qemu-system-x86_64": "c22afbf65181814354493221e44fe65554852174dd738b839b5a9537026e9281",
+          "fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/pipeline-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": false,
+      "measurements": [
+        {
+          "format": "1080p-RGB888",
+          "frame_bytes": 6220800,
+          "completions": 647,
+          "seconds": 10.768505,
+          "frames_per_second": 59.989757,
+          "payload_MB_per_second": 373.184281,
+          "median_completion_gap_ms": 16.671,
+          "p99_completion_gap_ms": 16.981,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 3
+          },
+          "trace": ".qemu-build/highres-current/pipeline-64/1080p-RGB888.mon"
+        },
+        {
+          "format": "1080p-RGB565",
+          "frame_bytes": 4147200,
+          "completions": 647,
+          "seconds": 10.768377,
+          "frames_per_second": 59.99047,
+          "payload_MB_per_second": 248.792478,
+          "median_completion_gap_ms": 16.6725,
+          "p99_completion_gap_ms": 17.003,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 3
+          },
+          "trace": ".qemu-build/highres-current/pipeline-64/1080p-RGB565.mon"
+        }
+      ],
+      "active_replug_passed": false,
+      "updates": [
+        "RGB888 720 updates wall=12.001s process_cpu=1.306s",
+        "RGB565 720 updates wall=12.003s process_cpu=1.116s",
+        "XRGB8888 120 updates wall=2.000s process_cpu=0.106s",
+        "RGB888 120 updates wall=2.000s process_cpu=0.080s",
+        "RGB565 120 updates wall=2.000s process_cpu=0.058s"
+      ]
+    },
+    {
+      "name": "retained-injected-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          "/run/host/home/klogg/workspace/fl2000/.qemu-build/highres-current/build/qemu-system-x86_64": "e28df8d4ce6385a92831c53ae99693bdb52ca7e1ef47aec68e31214f8ef85765",
+          "/run/host/home/klogg/workspace/fl2000/fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/retained-injected-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": true,
+      "measurements": [
+        {
+          "format": "1080p-RGB888",
+          "frame_bytes": 6220800,
+          "completions": 54,
+          "seconds": 1.766766,
+          "frames_per_second": 29.998313,
+          "payload_MB_per_second": 186.613507,
+          "median_completion_gap_ms": 33.296,
+          "p99_completion_gap_ms": 34.109,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/retained-injected-64/1080p-RGB888.mon"
+        },
+        {
+          "format": "1080p-RGB565",
+          "frame_bytes": 4147200,
+          "completions": 54,
+          "seconds": 1.76691,
+          "frames_per_second": 29.995868,
+          "payload_MB_per_second": 124.398866,
+          "median_completion_gap_ms": 33.32,
+          "p99_completion_gap_ms": 36.027,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/retained-injected-64/1080p-RGB565.mon"
+        }
+      ],
+      "active_replug_passed": false,
+      "updates": [
+        "RGB888 180 updates wall=3.000s process_cpu=0.516s",
+        "RGB565 180 updates wall=3.000s process_cpu=0.292s"
+      ]
+    },
+    {
+      "name": "serial-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          ".qemu-build/qemu-11.1.2/build/qemu-system-x86_64": "c38683bb57b8dcb0119950f7172974930ab946109723db81002a96e0fe1eadbf",
+          "fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+          "it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/serial-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": false,
+      "measurements": [
+        {
+          "format": "1080p-RGB888",
+          "frame_bytes": 6220800,
+          "completions": 325,
+          "seconds": 10.801246,
+          "frames_per_second": 29.996539,
+          "payload_MB_per_second": 186.602472,
+          "median_completion_gap_ms": 33.3525,
+          "p99_completion_gap_ms": 36.228,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 4
+          },
+          "trace": ".qemu-build/highres-current/serial-64/1080p-RGB888.mon"
+        },
+        {
+          "format": "1080p-RGB565",
+          "frame_bytes": 4147200,
+          "completions": 325,
+          "seconds": 10.80213,
+          "frames_per_second": 29.994085,
+          "payload_MB_per_second": 124.391467,
+          "median_completion_gap_ms": 33.328,
+          "p99_completion_gap_ms": 35.117,
+          "bulk_completion_errors_including_modeset_cancellation": {
+            "-2": 6
+          },
+          "trace": ".qemu-build/highres-current/serial-64/1080p-RGB565.mon"
+        }
+      ],
+      "active_replug_passed": false,
+      "updates": [
+        "RGB888 720 updates wall=12.000s process_cpu=1.657s",
+        "RGB565 720 updates wall=12.000s process_cpu=1.156s",
+        "XRGB8888 120 updates wall=2.000s process_cpu=0.104s",
+        "RGB888 120 updates wall=2.000s process_cpu=0.076s",
+        "RGB565 120 updates wall=2.000s process_cpu=0.060s"
+      ]
+    },
+    {
+      "name": "status-pipeline-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          "/run/host/home/klogg/workspace/fl2000/.qemu-build/highres-current/qemu-system-x86_64": "333ad5690714d1ed6a3cfb74e537d205a61bd78fc7f32d708282e826205b1119",
+          "/tmp/fl2000-highres-sampler/fl2000.ko": "17291913f58d1f1333c976aa21c6f673cd3937125774489d43b82cf8eb0468df",
+          "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/status-pipeline-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": false,
+      "measurements": [],
+      "status_samples": {
+        "count": 66,
+        "low_status_counts": {
+          "0x2c1": 59,
+          "0x2e3": 1,
+          "0x1c1": 6
+        },
+        "lbuf_halt": 0,
+        "overflow": 60,
+        "underflow": 6,
+        "vga_error": 1
+      },
+      "active_replug_passed": false,
+      "updates": [
+        "RGB888 480 updates wall=8.000s process_cpu=0.327s",
+        "RGB565 480 updates wall=8.000s process_cpu=0.230s",
+        "RGB888 480 updates wall=8.000s process_cpu=0.868s",
+        "RGB565 480 updates wall=8.000s process_cpu=1.600s"
+      ]
+    },
+    {
+      "name": "status-serial-64",
+      "metadata": {
+        "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+        "usbfs_memory_mb": "64",
+        "hashes": {
+          "/run/host/home/klogg/workspace/fl2000/.qemu-build/qemu-11.1.2/build/qemu-system-x86_64": "c38683bb57b8dcb0119950f7172974930ab946109723db81002a96e0fe1eadbf",
+          "/tmp/fl2000-highres-sampler/fl2000.ko": "17291913f58d1f1333c976aa21c6f673cd3937125774489d43b82cf8eb0468df",
+          "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+        }
+      },
+      "guest_log": ".qemu-build/highres-current/status-serial-64/guest.log",
+      "workload_completed": true,
+      "qemu_assertion": false,
+      "kernel_fault_found": false,
+      "injected_nomem": false,
+      "measurements": [],
+      "status_samples": {
+        "count": 66,
+        "low_status_counts": {
+          "0x2c1": 59,
+          "0x2e3": 1,
+          "0x1c1": 6
+        },
+        "lbuf_halt": 0,
+        "overflow": 60,
+        "underflow": 6,
+        "vga_error": 1
+      },
+      "active_replug_passed": false,
+      "updates": [
+        "RGB888 480 updates wall=8.000s process_cpu=0.319s",
+        "RGB565 480 updates wall=8.000s process_cpu=0.235s",
+        "RGB888 480 updates wall=8.000s process_cpu=1.085s",
+        "RGB565 480 updates wall=8.000s process_cpu=0.756s"
+      ]
+    }
+  ],
+  "remaining": [
+    "1080p-capable sink or capture for visible image fidelity and detection of tearing, repeated/lost frames or corruption.",
+    "Repeat on native host/dedicated controller and with competing USB traffic.",
+    "Explain active-stream LBUF overflow and determine whether recovery is necessary; no speculative resets added.",
+    "Broader QEMU USB backend and platform coverage before proposing the emulator change upstream."
+  ],
+  "retained_qemu": {
+    "path": ".qemu-build/highres-current/build/qemu-system-x86_64",
+    "sha256": "e28df8d4ce6385a92831c53ae99693bdb52ca7e1ef47aec68e31214f8ef85765",
+    "note": "Debug symbols stripped from the final build; retained executable passed the short injected-allocation-failure workload. Firmware is inferred through the adjacent pc-bios symlink."
+  },
+  "production_source_sha256": {
+    "fl2000_interrupt.c": "405207692d9403ac3e4ba9841d5c0e8f36328d203efbb21e3af4cfd815173db0",
+    "fl2000_streaming.c": "f7953348f9348a19ae9bd2666b70686297fc834e784968a8a54541037dfdbf59",
+    "fl2000_registers.c": "d8e66986b936beb4681105b76494b4d6f09749a4986632f02bc2834603c4cf4d",
+    "fl2000_drv.c": "c1fcb0c22c9096ea5cf6ce602550e959b83733254aca84c6a2e5092059709069",
+    "fl2000_i2c.c": "e98c9822db918e1730dab4346034417e4a98ed5639b30ac6a4ab803164a5502d",
+    "fl2000_drm.c": "d2d027b7e5e746236c5c4df44554fb56558573033c2e9d931625bac0d62b5f4f",
+    "fl2000_frame.h": "6554bccb082d058e4228b3a2121810ea17c50c61c9c8610589685dbbcb97ce75",
+    "fl2000_registers.h": "1346ab9be1f29ea40ff8fe104d98cc3ca735d1f7849b4391772c9f9924cd95c6",
+    "fl2000.h": "7390c9897d1713813c049b5fbcd74c596eab18b9293af5f57d8368449fcd0e4b",
+    "frame/x86.c": "77eee0abc7ec1548e9ba04573a2885479091e580f9f86d862564ae7fb09bed2d",
+    "frame/bmi2.c": "5dfe31b72f6e9ae6e8bc80f5fb91df32b1a8688356044726ffc2a6beaf17aad6",
+    "frame/ssse3.c": "0144b4fbeca42b08e235a322665b8c1b0f1db93014915c8e4b1e2246ac338afb",
+    "frame/x86_bmi2.c": "c8a9bf73b5b4e9e7080ed94958476ce90de05392d32d1a30857f3cb251cf7d1c",
+    "frame/ssse3.h": "1c1afb40e1de75ef1413a6da7b9ce4d7975e341d6e02ff09885afd592d8a368a",
+    "frame/bmi2.h": "96be902f7b5c1243a72af5bfe532113bb5810dd39d1959b7c2a97e09fbb43934"
+  }
+}
