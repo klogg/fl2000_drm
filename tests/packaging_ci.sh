@@ -21,8 +21,8 @@ bash -n debian/fl2000-dkms.dkms
 shellcheck --shell bash --exclude SC2034,SC2154 debian/fl2000-dkms.dkms
 # Export tracked files, excluding ignored build products and local test artifacts.
 mkdir "$work/source"
-git archive HEAD | tar -x -C "$work/source"
-git archive --format=tar --prefix="fl2000-drm-$upstream/" HEAD -- . ':!debian' |
+git -c safe.directory="$source_dir" archive HEAD | tar -x -C "$work/source"
+git -c safe.directory="$source_dir" archive --format=tar --prefix="fl2000-drm-$upstream/" HEAD -- . ':!debian' |
     xz > "$work/fl2000-drm_$upstream.orig.tar.xz"
 # Builders run without root even when invoked in a root-owned CI container.
 builder=()
