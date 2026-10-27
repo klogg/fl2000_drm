@@ -1,0 +1,2001 @@
+{
+  "date": "2026-10-20",
+  "metadata": {
+    "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+    "usbfs_memory_mb": "64",
+    "hashes": {
+      "/run/host/home/klogg/workspace/fl2000/.qemu-build/highres-current/build/qemu-system-x86_64": "e28df8d4ce6385a92831c53ae99693bdb52ca7e1ef47aec68e31214f8ef85765",
+      "/run/host/home/klogg/workspace/fl2000/fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+      "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+    }
+  },
+  "environment": "KVM, QEMU 11.1.2 with optional bulk OUT pipeline; physical USB port 2-2; 800x480 RGB888. All module and raw USB operations inside the guest.",
+  "production_source_changed": false,
+  "method": [
+    "Snapshot controller registers with the normal driver active, unload it inside the guest, then claim both USB interfaces through usbfs.",
+    "Before each trial, issue application reset, restore captured mode and control registers, clear watermark, apply the selected configuration, wait 50 ms, then clear line-buffer status.",
+    "Submit one synchronous 128 or 129 KiB bulk OUT burst and sample status before sending the terminating zero-length packet. Repeat every configuration three times.",
+    "Restore original accumulation, PPE and ready settings; write zero to the high/low registers without verified readback; reload normal modules and run KMS checks."
+  ],
+  "initial_registers": {
+    "802c": "0020410a",
+    "8004": "00100390",
+    "8008": "032003a0",
+    "800c": "00300059",
+    "8010": "01e0020d",
+    "8014": "02130021",
+    "801c": "00000000",
+    "8030": "23300001",
+    "803c": "d521084d",
+    "8048": "7ffe0004",
+    "8044": "28009f41"
+  },
+  "summary": [
+    {
+      "phase": "baseline-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "baseline-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "accum1-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "accum1-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "accum10240-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "accum10240-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "accum16384-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "accum16384-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "accum32767-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "accum32767-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "accum65535-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "accum65535-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "ppe0-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "ppe0-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "ppe0-hilo-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "ppe0-hilo-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "ppe1-hilo-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "ppe1-hilo-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    },
+    {
+      "phase": "ppe0-ready32767-128k",
+      "trials": 3,
+      "overflow_trials": 0
+    },
+    {
+      "phase": "ppe0-ready32767-129k",
+      "trials": 3,
+      "overflow_trials": 3
+    }
+  ],
+  "samples": [
+    {
+      "phase": "baseline-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "baseline-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum1-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "00019f41",
+        "accum_read": "00011f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum1-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "00019f41",
+        "accum_read": "00011f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum10240-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum10240-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum16384-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "40009f41",
+        "accum_read": "40001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum16384-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "40009f41",
+        "accum_read": "40001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum32767-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "7fff9f41",
+        "accum_read": "7fff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum32767-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "7fff9f41",
+        "accum_read": "7fff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum65535-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "ffff9f41",
+        "accum_read": "ffff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum65535-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "ffff9f41",
+        "accum_read": "ffff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe0-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-hilo-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe0-hilo-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe1-hilo-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe1-hilo-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-ready32767-128k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 32767,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280000c1",
+      "peak_register": "00000000",
+      "overflow": false,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-ready32767-129k",
+      "repeat": 0,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 32767,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280002c1",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "baseline-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "baseline-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum1-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "00019f41",
+        "accum_read": "00011f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum1-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "00019f41",
+        "accum_read": "00011f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum10240-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum10240-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum16384-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "40009f41",
+        "accum_read": "40001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum16384-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "40009f41",
+        "accum_read": "40001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum32767-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "7fff9f41",
+        "accum_read": "7fff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum32767-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "7fff9f41",
+        "accum_read": "7fff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum65535-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "ffff9f41",
+        "accum_read": "ffff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum65535-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "ffff9f41",
+        "accum_read": "ffff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe0-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-hilo-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe0-hilo-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe1-hilo-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe1-hilo-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-ready32767-128k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 32767,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280000c1",
+      "peak_register": "00000000",
+      "overflow": false,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-ready32767-129k",
+      "repeat": 1,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 32767,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280002c1",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "baseline-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "baseline-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum1-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "00019f41",
+        "accum_read": "00011f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum1-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "00019f41",
+        "accum_read": "00011f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum10240-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum10240-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum16384-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "40009f41",
+        "accum_read": "40001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum16384-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "40009f41",
+        "accum_read": "40001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum32767-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "7fff9f41",
+        "accum_read": "7fff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum32767-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "7fff9f41",
+        "accum_read": "7fff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "accum65535-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "ffff9f41",
+        "accum_read": "ffff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "accum65535-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "ffff9f41",
+        "accum_read": "ffff1f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe0-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 0,
+        "low": 0
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-hilo-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe0-hilo-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280006e3",
+      "peak_register": "007ffe00",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe1-hilo-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280005e3",
+      "peak_register": "007ffe00",
+      "overflow": false,
+      "underflow": true
+    },
+    {
+      "phase": "ppe1-hilo-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521084d",
+        "aclk_read": "d521084d",
+        "ready": 1,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280006e3",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-ready32767-128k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 32767,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280000c1",
+      "peak_register": "00000000",
+      "overflow": false,
+      "underflow": false
+    },
+    {
+      "phase": "ppe0-ready32767-129k",
+      "repeat": 2,
+      "configuration": {
+        "accum_write": "28009f41",
+        "accum_read": "28001f41",
+        "aclk_write": "d521004d",
+        "aclk_read": "d521004d",
+        "ready": 32767,
+        "high": 24576,
+        "low": 16384
+      },
+      "status": "280002c1",
+      "peak_register": "00000000",
+      "overflow": true,
+      "underflow": false
+    }
+  ],
+  "restored": {
+    "aclk": "d521084d",
+    "accum": "28001f41",
+    "note": "Initial accumulation register was 28009f41. Bit 15 is read-only ACLK-counter-max-hit status; writable bits match after restoration."
+  },
+  "checks": {
+    "raw_completed": true,
+    "bulk_failures": 0,
+    "atomic_passes": 3,
+    "native_formats_passed": true,
+    "guest_powered_off": true
+  },
+  "conclusions": [
+    "All tested accumulation values were accepted in bits 31:16; both PPE values were accepted in bit 11.",
+    "No tested configuration moved the observed overflow boundary between 128 and 129 KiB.",
+    "This does not establish undocumented register dependencies, PPE polarity/function, high/low implementation, physical FIFO capacity, or whether overflow means pixel loss."
+  ],
+  "artifacts": ".qemu-build/overflow-investigation/raw-gates",
+  "artifact_sha256": {
+    ".qemu-build/overflow-investigation/raw-gates.c": "0d8281beee9323463bc5c8277e5d7da00cbb0f86a6410cdbf1e45f1624bce796",
+    ".qemu-build/overflow-investigation/build-gate-probe.py": "ce08a69f8ee48148e0febc5150f324dfb6d61ddf13f9f1c817a425a22604654b",
+    ".qemu-build/overflow-investigation/run-gates.py": "c8f61bcd8f5c7f32725a0cd5d7d4179147fa873801f6fe7566a920fba93e9de6",
+    ".qemu-build/overflow-investigation/raw-workload.sh": "4d2befd540f2291019e3e7a869faef530d20a1cb4151362978d52d2d034020f4",
+    ".qemu-build/overflow-investigation/raw-gates/guest.log": "575868a12df561b86b215500da6a49d181469d03590e0685720aba39326ce928"
+  },
+  "accumulation_2400_comparison": {
+    "metadata": {
+      "revision": "95a2a7ca336d30246a5231a20cec62ec4b9c7ada",
+      "usbfs_memory_mb": "64",
+      "hashes": {
+        "/run/host/home/klogg/workspace/fl2000/.qemu-build/highres-current/build/qemu-system-x86_64": "e28df8d4ce6385a92831c53ae99693bdb52ca7e1ef47aec68e31214f8ef85765",
+        "/run/host/home/klogg/workspace/fl2000/fl2000.ko": "b612d33f8a256efc500527054b62c89f8639dde9c764bab45631b40ba4cff8b4",
+        "/run/host/home/klogg/workspace/fl2000/it66121.ko": "f73c28699be683dc9668c0f051f6dd382436857f7d35a3fc11f9f43c362e4bfb"
+      }
+    },
+    "method": "Alternate accumulation 0x2800 and 0x2400 for each burst size; three repetitions, application reset and mode restore before each burst. Sample status, last-frame peak and first-ITP level before terminating ZLP. No writes to high/low registers.",
+    "configurations": [
+      {
+        "phase": "accum2800-36k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-36k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-40k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-40k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-96k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-96k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-112k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-112k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-115k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-115k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-116k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-116k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-127k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-127k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-128k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-128k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-129k-r0",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-129k-r0",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-36k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-36k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-40k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-40k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-96k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-96k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-112k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-112k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-115k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-115k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-116k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-116k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-127k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-127k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-128k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-128k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-129k-r1",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-129k-r1",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-36k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-36k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-40k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-40k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-96k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-96k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-112k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-112k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-115k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-115k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-116k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-116k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-127k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-127k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-128k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-128k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      },
+      {
+        "phase": "accum2800-129k-r2",
+        "write": "28009f41",
+        "read": "28001f41"
+      },
+      {
+        "phase": "accum2400-129k-r2",
+        "write": "24009f41",
+        "read": "24001f41"
+      }
+    ],
+    "samples": [
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 36,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 9214,
+        "first_itp_level": 8653
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 36,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 9214,
+        "first_itp_level": 7277
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 40,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 10238,
+        "first_itp_level": 9021
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 40,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 10238,
+        "first_itp_level": 9709
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 96,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 24574,
+        "first_itp_level": 22774
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 96,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 24574,
+        "first_itp_level": 24051
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 112,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 28670,
+        "first_itp_level": 27846
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 112,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 28670,
+        "first_itp_level": 26890
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 115,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29438,
+        "first_itp_level": 28357
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 115,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29438,
+        "first_itp_level": 28077
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 116,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29694,
+        "first_itp_level": 27894
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 116,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29694,
+        "first_itp_level": 29432
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 127,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32510,
+        "first_itp_level": 31175
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 127,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32510,
+        "first_itp_level": 30097
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 128,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32766,
+        "first_itp_level": 32766
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 128,
+        "repeat": 0,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32766,
+        "first_itp_level": 30345
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 129,
+        "repeat": 0,
+        "status": "280006e3",
+        "overflow": true,
+        "peak": 0,
+        "first_itp_level": 31851
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 129,
+        "repeat": 0,
+        "status": "280006e3",
+        "overflow": true,
+        "peak": 0,
+        "first_itp_level": 32422
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 36,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 9214,
+        "first_itp_level": 7392
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 36,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 9214,
+        "first_itp_level": 7705
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 40,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 10238,
+        "first_itp_level": 7706
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 40,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 10238,
+        "first_itp_level": 9294
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 96,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 24574,
+        "first_itp_level": 22363
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 96,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 24574,
+        "first_itp_level": 23974
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 112,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 28670,
+        "first_itp_level": 27362
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 112,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 28670,
+        "first_itp_level": 26971
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 115,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29438,
+        "first_itp_level": 27926
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 115,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29438,
+        "first_itp_level": 27679
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 116,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29694,
+        "first_itp_level": 29046
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 116,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29694,
+        "first_itp_level": 27192
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 127,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32510,
+        "first_itp_level": 31808
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 127,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32510,
+        "first_itp_level": 32393
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 128,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32766,
+        "first_itp_level": 31173
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 128,
+        "repeat": 1,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32766,
+        "first_itp_level": 32554
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 129,
+        "repeat": 1,
+        "status": "280006e3",
+        "overflow": true,
+        "peak": 32766,
+        "first_itp_level": 31981
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 129,
+        "repeat": 1,
+        "status": "280006e3",
+        "overflow": true,
+        "peak": 32766,
+        "first_itp_level": 32766
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 36,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 9214,
+        "first_itp_level": 7327
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 36,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 9214,
+        "first_itp_level": 7741
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 40,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 10238,
+        "first_itp_level": 9973
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 40,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 10238,
+        "first_itp_level": 8723
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 96,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 24574,
+        "first_itp_level": 22744
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 96,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 24574,
+        "first_itp_level": 22964
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 112,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 28670,
+        "first_itp_level": 27983
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 112,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 28670,
+        "first_itp_level": 27596
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 115,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29438,
+        "first_itp_level": 27578
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 115,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29438,
+        "first_itp_level": 28563
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 116,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29694,
+        "first_itp_level": 28559
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 116,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 29694,
+        "first_itp_level": 27861
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 127,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32510,
+        "first_itp_level": 30044
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 127,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32510,
+        "first_itp_level": 30677
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 128,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32766,
+        "first_itp_level": 30522
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 128,
+        "repeat": 2,
+        "status": "280005e3",
+        "overflow": false,
+        "peak": 32766,
+        "first_itp_level": 30892
+      },
+      {
+        "accumulation_setting": "2800",
+        "burst_kib": 129,
+        "repeat": 2,
+        "status": "280006e3",
+        "overflow": true,
+        "peak": 32766,
+        "first_itp_level": 32766
+      },
+      {
+        "accumulation_setting": "2400",
+        "burst_kib": 129,
+        "repeat": 2,
+        "status": "280006e3",
+        "overflow": true,
+        "peak": 0,
+        "first_itp_level": 31822
+      }
+    ],
+    "result": "Both settings have identical peak-versus-burst scaling through 128 KiB, with overflow at 129 KiB in all three repetitions. No observed reduction in the burst-size boundary. First-ITP values varied and exceeded the programmed accumulation field.",
+    "restored_registers": {
+      "aclk": "d521084d",
+      "accum": "28001f41"
+    },
+    "checks": {
+      "bulk_failures": 0,
+      "atomic_passes": 3,
+      "native_formats_passed": true,
+      "guest_powered_off": true
+    },
+    "artifacts": ".qemu-build/overflow-investigation/raw-accum2400",
+    "source_sha256": "cc12f8ea8524ac7aa8a04609cfb627f0009c100c73763ebfd4ae46b5dad1d578",
+    "guest_log_sha256": "1c19e7a6fde43873476fe284c85e3b164290c936d5eb009d0c2a321730cd5876"
+  },
+  "register_semantics": {
+    "high_low_registers": "The manual describes water levels without specifying programmable thresholds. They may be indicators; RW access alone does not establish control semantics.",
+    "readback_evidence": "Reads of 0x8034 and 0x8038 repeated the preceding valid register read on the tested adapter. Neither measurement values nor successful writes are established.",
+    "prior_readback_log": ".qemu-build/overflow-investigation/raw-registers/guest.log",
+    "verified_peak_indicator": "0x8060[23:8], documented as last frame highest line buffer waterlevel; this was used for peak observations.",
+    "scope": "Unchanged overflow after writes to 0x8034/0x8038 does not establish whether those registers are indicators, controls, inaccessible or unimplemented.",
+    "read_order_observations": [
+      {
+        "previous_register": "802c",
+        "previous_value": "0020410a",
+        "high_read": "0020410a",
+        "low_read": "0020410a"
+      },
+      {
+        "previous_register": "8008",
+        "previous_value": "032003a0",
+        "high_read": "032003a0",
+        "low_read": "032003a0"
+      },
+      {
+        "previous_register": "8014",
+        "previous_value": "02130021",
+        "high_read": "02130021",
+        "low_read": "02130021"
+      },
+      {
+        "previous_register": "8030",
+        "previous_value": "23300001",
+        "high_read": "23300001",
+        "low_read": "23300001"
+      }
+    ]
+  }
+}

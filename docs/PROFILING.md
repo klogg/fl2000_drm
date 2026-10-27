@@ -146,6 +146,54 @@ and injected failures, including unsuccessful emulator prototypes. Repeat with
 a native host or dedicated USB controller and competing traffic before drawing
 conclusions about physical presentation or device-wide limits.
 
+## FIFO water-level observations
+
+The [register experiment](../tests/fifo_watermark_results.json) used revision
+`95a2a7c`, 800x480 RGB888 and the physical adapter through QEMU/KVM. Each trial
+reset application logic, restored the mode and cleared status before sending
+an isolated burst. Status and water levels were sampled before its terminating
+zero-length packet.
+
+| Burst | Peak at `0x8060[23:8]` | Overflow |
+| --- | --- | --- |
+| 96 KiB | `0x5ffe` | No |
+| 128 KiB | `0x7ffe` | No |
+| 129 KiB | `0x7ffe` or zero | Yes |
+
+Below overflow, peak values follow bytes divided by four minus two. This is
+consistent with DWORD units, but neither the units nor the two-word offset is
+explained by the register map. The result is a burst-size boundary under the
+tested reset and passthrough conditions, not proof of physical FIFO capacity,
+pixel loss or a required USB transfer-size limit.
+
+Changing `0x8044[31:16]` to 1, 10240, 16384, 32767 or 65535 and testing both
+settings of `0x803c[11]` did not move the boundary. Writes of 24576/16384 to
+`0x8034/0x8038` were also tested with each bit-11 setting; with bit 11 clear,
+the ready threshold was additionally raised to 32767. These 60 trials had
+three repetitions per configuration and burst size. Accumulation and bit-11
+writes read back correctly; no bulk transfer failed.
+
+Another 54 trials alternated accumulation values `0x2800` and `0x2400` across
+nine burst sizes from 36 to 129 KiB. Peaks below overflow were identical, and
+both settings asserted overflow at 129 KiB in every repetition. First-ITP
+levels from `0x8048[31:16]` varied and exceeded `0x2400`. The accumulation
+field did not directly cap either observation under these conditions.
+
+The manual describes `0x8034/0x8038` as high/low water levels without defining
+them as thresholds or flow controls. RW access alone does not establish their
+purpose. Reads of either address returned the preceding valid register value
+on this adapter, preventing trustworthy measurements or write verification.
+Zero was written after testing; restoration of these registers is unverified.
+Original accumulation, PPE and ready settings were restored, and driver reload,
+atomic display and native-format checks passed.
+
+The manual explicitly defines `0x8030[14:0]` as a watermark for asserting
+ready and `0x8060[23:8]` as the last frame's highest water level. Bit 11 is
+ambiguous: its description says PPE block enable while its signal name is
+`cfg_ppe_block_dis`. No watermark enable sequence or backpressure relationship
+is documented. QEMU timing effects and undocumented dependencies remain
+unresolved; no production register programming was changed.
+
 ## Measuring the driver
 
 Measure backends in the same guest and alternate their order across trials.
@@ -222,6 +270,7 @@ conditions do not provide comparable absolute CPU percentages.
 
 - [CPU backend and damage measurements](../tests/cpu_profile_current_results.json)
 - [High-resolution transport](../tests/highres_transport_results.json)
+- [FIFO water levels](../tests/fifo_watermark_results.json)
 - [USB teardown and recovery](../tests/teardown_results.json)
 
 Additional datasets retain source hashes and experimental conditions:
