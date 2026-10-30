@@ -127,7 +127,7 @@ static void drm_gem_fb_vunmap(struct drm_framebuffer *fb,struct iosys_map *map)
 { (void)fb; assert(map[0].vaddr && map_refs>0); map[0].vaddr=NULL; if(!--map_refs)map_removals++; }
 enum usb_device_speed { USB_SPEED_HIGH, USB_SPEED_SUPER, USB_SPEED_SUPER_PLUS };
 struct device { int unused; };
-struct usb_bus { unsigned int sg_tablesize; };
+struct usb_bus { unsigned int sg_tablesize; struct device *sysdev; };
 enum usb_device_state { USB_STATE_CONFIGURED, USB_STATE_NOTATTACHED };
 struct usb_device { struct usb_bus *bus; struct device dev; enum usb_device_speed speed; enum usb_device_state state; };
 typedef int atomic_t;
@@ -236,13 +236,30 @@ struct urb {
 };
 #define for_each_sg(list, sg, count, i) \
  for ((i) = 0, (sg) = (list); (i) < (count); (i)++, (sg)++)
-static unsigned int sg_sets, sg_allocs, sg_frees, fail_sg_at;
-static int sg_alloc_table(struct sg_table *t,unsigned int n,int flags)
-{ (void)flags;if(++sg_allocs==fail_sg_at)return -ENOMEM;t->sgl=calloc(n,sizeof(*t->sgl));t->orig_nents=n;return t->sgl?0:-ENOMEM; }
+static unsigned int sg_allocs, sg_frees, fail_sg_at;
+/* Mock physical layout: vmalloc pages are adjacent unless split every N pages. */
+static unsigned int max_seg_size=65536, fragment_pages;
+static unsigned int dma_get_max_seg_size(struct device *dev) { (void)dev;return max_seg_size; }
+static int sg_alloc_table_from_pages_segment(struct sg_table *t,struct page **pages,unsigned int n,
+                                             unsigned int offset,unsigned long size,
+                                             unsigned int max_segment,int flags)
+{
+ (void)flags;assert(!offset && n==(size+4095)/4096 && max_segment>=4096);
+ if(++sg_allocs==fail_sg_at)return -ENOMEM;
+ t->sgl=calloc(n,sizeof(*t->sgl));assert(t->sgl);t->orig_nents=0;
+ for(unsigned int i=0;i<n;i++) {
+  unsigned int length=size-(unsigned long)i*4096<4096 ? size-(unsigned long)i*4096 : 4096;
+  struct scatterlist *last=t->orig_nents ? &t->sgl[t->orig_nents-1] : NULL;
+  if(last && (u8 *)pages[i]==(u8 *)pages[i-1]+4096 && (!fragment_pages || i%fragment_pages) &&
+     last->length+length<=max_segment)
+   last->length+=length;
+  else
+   t->sgl[t->orig_nents++]=(struct scatterlist){pages[i],length};
+ }
+ return 0;
+}
 static void sg_free_table(struct sg_table *t)
 { if(t->sgl){free(t->sgl);sg_frees++;}memset(t,0,sizeof(*t)); }
-static void sg_set_page(struct scatterlist *sg, struct page *page, unsigned int length, int offset)
-{ assert(!offset); sg_sets++; sg->page = page; sg->length = length; }
 static int submit_count, fail_at, log_count;
 static int submit_error=-ENOMEM;
 static int usb_submit_urb(struct urb *urb, int flags)
@@ -295,6 +312,7 @@ typedef u32 __le32;
 #define GFP_DMA 0
 #define kmalloc(size, flags) malloc(size)
 #define kfree(ptr) free(ptr)
+#define kmalloc_array(n,size,flags) calloc(n,size)
 #define le32_to_cpu(value) (value)
 #define cpu_to_le32(value) (value)
 #define USB_DIR_IN 0x80
@@ -338,30 +356,50 @@ static int usb_control_msg_send(struct usb_device *usb, int ep, int request, int
 #define DMA_TO_DEVICE 1
 #define __GFP_ZERO 2
 #define __GFP_NOWARN 4
-#define VM_MAP 0
-#define PAGE_KERNEL 0
 #define DIV_ROUND_UP(n,d) (((n)+(d)-1)/(d))
 #define kcalloc(n,size,flags) calloc(n,size)
+static unsigned int vmalloc_allocs,vmalloc_frees,fail_vmalloc_at;
+static int vmalloc_live;
+static unsigned int vmalloc32_calls;
+static void *vmalloc(unsigned long size)
+{
+ /* Fill with garbage: vmalloc does not zero. */
+ if(++vmalloc_allocs==fail_vmalloc_at)return NULL;
+ void *buffer=malloc(size);assert(buffer);memset(buffer,0x5a,size);vmalloc_live++;
+ return buffer;
+}
+static void *vmalloc_32(unsigned long size) { vmalloc32_calls++;return vmalloc(size); }
+static bool addressing_limited;
+static bool dma_addressing_limited(struct device *dev) { (void)dev;return addressing_limited; }
+#define IOMMU_DOMAIN_IDENTITY 1
+#define IOMMU_DOMAIN_DMA 2
+#define IOMMU_DOMAIN_DMA_FQ 3
+struct iommu_domain { unsigned int type; };
+static struct iommu_domain *test_domain;
+static struct iommu_domain *iommu_get_domain_for_dev(struct device *dev) { (void)dev;return test_domain; }
 static bool fail_dma_alloc;
-static unsigned int dma_allocs,dma_frees,page_allocs,page_frees,fail_page_at;
+static unsigned int dma_attempts,dma_allocs,dma_frees;
 static void *usb_alloc_noncoherent(struct usb_device *usb,unsigned int size,int flags,
                                   dma_addr_t *dma,int dir,struct sg_table **sgt)
 {
  (void)usb;assert((flags & __GFP_NOWARN) && dir==DMA_TO_DEVICE);
+ dma_attempts++;
  if(fail_dma_alloc)return NULL;
- void *buffer=malloc(size);
+ void *buffer=malloc(size);assert(buffer);memset(buffer,0x5a,size);
  *sgt=calloc(1,sizeof(**sgt)); *dma=0x12340000;dma_allocs++;
  return buffer;
 }
 static void usb_free_noncoherent(struct usb_device *usb,unsigned int size,void *buffer,
                                  int dir,struct sg_table *sgt)
 { (void)usb;assert(size && dir==DMA_TO_DEVICE && buffer && sgt);free(buffer);free(sgt);dma_frees++; }
-static struct page *alloc_page(int flags)
-{ (void)flags;if(++page_allocs==fail_page_at)return NULL;return calloc(1,sizeof(struct page)); }
-static void __free_page(struct page *page) { assert(page);free(page);page_frees++; }
-static void *vmap(struct page **pages,unsigned int count,int flags,int prot)
-{ (void)flags;(void)prot;for(unsigned int i=0;i<count;i++)assert(pages[i]);return calloc(count,PAGE_SIZE); }
-static void vunmap(void *buffer) { free(buffer); }
+static const void *flushed_addr;
+static int flushed_size;
+static void flush_kernel_vmap_range(void *address,int size) { flushed_addr=address;flushed_size=size; }
+static void vfree(const void *buffer)
+{ if(!buffer)return;free((void *)buffer);vmalloc_frees++;vmalloc_live--; }
+/* Each page of a mock vmalloc area has a distinct, address-derived descriptor. */
+static struct page *vmalloc_to_page(const void *address)
+{ assert(address);return (struct page *)address; }
 
 """
 checks = r"""
@@ -576,6 +614,8 @@ static void test_partial_damage(void)
    }
    assert(stream.latest==&stream.frames[target]);
    assert(!memcmp(expected,buffers[target],stream.buf_size));
+   /* Prepared vmalloc bytes reach the pages USB core maps, not just the alias. */
+   assert(flushed_addr==buffers[target] && flushed_size==(int)stream.buf_size);
    for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)if(i!=target)assert(!memcmp(before[i],buffers[i],SIZE));
   }
   /* Failed publication must not lose damage needed by a later reuse. */
@@ -820,21 +860,70 @@ static void test_frame_allocation(void)
 {
  struct usb_bus bus={.sg_tablesize=1024};
  struct usb_device usb={.bus=&bus};struct fl2000_frame frame={0};
+ int live=vmalloc_live;
  assert(!fl2000_alloc_frame(&usb,&frame,8192));
- assert(frame.dma_sgt && !frame.pages && frame.size==8192 && dma_allocs==1);
+ assert(frame.size==8192 && vmalloc_live==live+1);
  for(unsigned int i=0;i<8192;i++)assert(!frame.vaddr[i]);
+ /* Each URB gets its own merged table, split at the DMA segment limit. */
+ struct sg_table tables[FL2000_QUEUE_DEPTH]={0};
+ assert(!fl2000_map_frame(&usb,&frame,tables));
+ for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
+  assert(tables[i].orig_nents==1 && tables[i].sgl[0].length==8192);
+  assert(tables[i].sgl[0].page==vmalloc_to_page(frame.vaddr));
+  assert(!i || tables[i].sgl!=tables[i-1].sgl);
+  sg_free_table(&tables[i]);
+ }
+ max_seg_size=4096;
+ assert(!fl2000_map_frame(&usb,&frame,tables));
+ for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
+  assert(tables[i].orig_nents==2 && tables[i].sgl[1].page==vmalloc_to_page(frame.vaddr+4096));
+  sg_free_table(&tables[i]);
+ }
+ max_seg_size=65536;
  fl2000_free_frame(&usb,&frame);
- assert(dma_frees==1 && !frame.vaddr && !frame.dma_sgt);
- fail_dma_alloc=true;
- assert(!fl2000_alloc_frame(&usb,&frame,8192));
- assert(!frame.dma_sgt && frame.nr_pages==2 && page_allocs==2);
- fl2000_free_frame(&usb,&frame);
- assert(page_frees==2);
- fail_page_at=page_allocs+2;
+ assert(vmalloc_live==live && !frame.vaddr);
+ fail_vmalloc_at=vmalloc_allocs+1;
  assert(fl2000_alloc_frame(&usb,&frame,12288)==-ENOMEM);
  fl2000_free_frame(&usb,&frame);
- assert(page_frees==3 && !frame.pages);
- fail_dma_alloc=false;fail_page_at=0;
+ assert(vmalloc_live==live && !frame.vaddr);
+ fail_vmalloc_at=0;
+ /* Without translation, scatter-gather controllers never need contiguous memory. */
+ unsigned int contiguous=dma_attempts,narrow=vmalloc32_calls;
+ struct iommu_domain identity={IOMMU_DOMAIN_IDENTITY};
+ test_domain=&identity;
+ assert(!fl2000_alloc_frame(&usb,&frame,8192) && !frame.dma_sgt && dma_attempts==contiguous);
+ assert(vmalloc32_calls==narrow);
+ fl2000_free_frame(&usb,&frame);
+ /* Stay addressable rather than bouncing every submission. */
+ addressing_limited=true;
+ assert(!fl2000_alloc_frame(&usb,&frame,8192) && vmalloc32_calls==narrow+1);
+ fl2000_free_frame(&usb,&frame);
+ addressing_limited=false;
+ /* A translating IOMMU maps a persistent noncoherent image from any pages. */
+ for(unsigned int type=IOMMU_DOMAIN_DMA;type<=IOMMU_DOMAIN_DMA_FQ;type++) {
+  struct iommu_domain translated={type};
+  test_domain=&translated;
+  assert(!fl2000_alloc_frame(&usb,&frame,8192));
+  assert(frame.dma_sgt && frame.dma==0x12340000 && vmalloc_live==live);
+  for(unsigned int i=0;i<8192;i++)assert(!frame.vaddr[i]);
+  fl2000_free_frame(&usb,&frame);
+  assert(dma_frees==dma_allocs && !frame.vaddr && !frame.dma_sgt);
+  /* Failure falls back to scatter-gather pages. */
+  fail_dma_alloc=true;
+  assert(!fl2000_alloc_frame(&usb,&frame,8192) && !frame.dma_sgt && vmalloc_live==live+1);
+  fl2000_free_frame(&usb,&frame);
+  fail_dma_alloc=false;
+ }
+ test_domain=NULL;
+ /* Controllers without scatter-gather keep the contiguous allocation. */
+ bus.sg_tablesize=0;
+ assert(!fl2000_alloc_frame(&usb,&frame,8192) && frame.dma_sgt);
+ fl2000_free_frame(&usb,&frame);
+ fail_dma_alloc=true;
+ assert(fl2000_alloc_frame(&usb,&frame,8192)==-EOPNOTSUPP && vmalloc_live==live);
+ fl2000_free_frame(&usb,&frame);
+ fail_dma_alloc=false;
+ assert(dma_frees==dma_allocs);
 }
 
 static void test_stream_preparation(void)
@@ -844,7 +933,7 @@ static void test_stream_preparation(void)
  struct fl2000_stream stream={.usb_dev=&usb};
  struct urb urbs[FL2000_QUEUE_DEPTH]={0};
  struct fl2000_stream_buffers *prepared;
- unsigned int dma_live=dma_allocs-dma_frees, pages_live=page_allocs-page_frees;
+ int live=vmalloc_live;
  test_stream=&stream;fail_at=0;
  assert(PTR_ERR(fl2000_streaming_prepare(&usb,0,3))==-EINVAL);
  assert(PTR_ERR(fl2000_streaming_prepare(&usb,-1,3))==-EINVAL);
@@ -860,55 +949,75 @@ static void test_stream_preparation(void)
  assert(!fl2000_streaming_enable(&usb));
  u8 *active=stream.frames[0].vaddr;
  active[0]=0xa5;
- /* Fail every frame position through the page fallback. */
- fail_dma_alloc=true;
+ /* Fail every frame position. */
+ int active_live=vmalloc_live;
  for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++) {
-  unsigned int freed=page_frees,allocated=page_allocs;
-  fail_page_at=page_allocs+i+1;
+  fail_vmalloc_at=vmalloc_allocs+i+1;
   prepared=fl2000_streaming_prepare(&usb,16,2);
-  assert(PTR_ERR(prepared)==-ENOMEM);
-  assert(page_frees-freed==page_allocs-allocated-1);
+  assert(PTR_ERR(prepared)==-ENOMEM && vmalloc_live==active_live);
   assert(stream.enabled && stream.buf_size==48 && stream.bytes_pix==3);
   assert(stream.latest==&stream.frames[0] && active==stream.frames[0].vaddr && active[0]==0xa5);
   for(unsigned int j=0;j<FL2000_QUEUE_DEPTH;j++)assert(urbs[j].submitted);
  }
- fail_page_at=0;
+ fail_vmalloc_at=0;
  /* SG allocation errors must unwind complete frames and partial tables. */
- for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT*FL2000_QUEUE_DEPTH;i++) {
   unsigned int freed=sg_frees;
   fail_sg_at=sg_allocs+i+1;
   prepared=fl2000_streaming_prepare(&usb,16,2);
-  assert(PTR_ERR(prepared)==-ENOMEM && sg_frees-freed==i);
+  assert(PTR_ERR(prepared)==-ENOMEM && sg_frees-freed==i && vmalloc_live==active_live);
   assert(stream.enabled && stream.frames[0].vaddr==active);
  }
- fail_sg_at=0;bus.sg_tablesize=0;
- prepared=fl2000_streaming_prepare(&usb,16,2);
- assert(PTR_ERR(prepared)==-EOPNOTSUPP && stream.enabled);
- fail_dma_alloc=false;
- prepared=fl2000_streaming_prepare(&usb,16,2);assert(!IS_ERR(prepared));
- for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)assert(prepared->frames[i].dma_sgt);
- for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++)assert(!prepared->tables[i].sgl);
- fl2000_streaming_free_buffers(&usb,prepared);
+ fail_sg_at=0;
+ /* Controllers without scatter-gather fail before allocating. */
+ unsigned int attempts=vmalloc_allocs;
+ bus.sg_tablesize=0;
  fail_dma_alloc=true;
- bus.sg_tablesize=1024;
+ prepared=fl2000_streaming_prepare(&usb,16,2);
+ assert(PTR_ERR(prepared)==-EOPNOTSUPP && stream.enabled && vmalloc_allocs==attempts);
+ fail_dma_alloc=false;
+ /* Noncoherent frames are submitted without per-URB tables. */
+ prepared=fl2000_streaming_prepare(&usb,16,2);assert(!IS_ERR(prepared));
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++) {
+  assert(prepared->frames[i].dma_sgt);
+  for(unsigned int j=0;j<FL2000_QUEUE_DEPTH;j++)assert(!prepared->tables[i][j].sgl);
+ }
+ fl2000_streaming_free_buffers(&usb,prepared);
+ assert(dma_frees==dma_allocs && vmalloc_allocs==attempts);
+ /* Merged pages fit a controller limit that individual pages would exceed. */
+ bus.sg_tablesize=2;
+ prepared=fl2000_streaming_prepare(&usb,4096,3);assert(!IS_ERR(prepared));
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)for(unsigned int j=0;j<FL2000_QUEUE_DEPTH;j++)
+  assert(prepared->tables[i][j].orig_nents==1 && prepared->tables[i][j].sgl[0].length==12288);
+ fl2000_streaming_free_buffers(&usb,prepared);
+ fragment_pages=1;
+ prepared=fl2000_streaming_prepare(&usb,4096,3);
+ assert(PTR_ERR(prepared)==-E2BIG && vmalloc_live==active_live);
+ bus.sg_tablesize=3;
+ prepared=fl2000_streaming_prepare(&usb,4096,3);assert(!IS_ERR(prepared));
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)for(unsigned int j=0;j<FL2000_QUEUE_DEPTH;j++)
+  assert(prepared->tables[i][j].orig_nents==3);
+ fl2000_streaming_free_buffers(&usb,prepared);
+ fragment_pages=0;bus.sg_tablesize=1024;
  prepared=fl2000_streaming_prepare(&usb,16,2);assert(!IS_ERR(prepared));
  fl2000_streaming_free_buffers(&usb,prepared); /* Cancelled pending commit. */
  assert(stream.enabled && stream.frames[0].vaddr==active);
  prepared=fl2000_streaming_prepare(&usb,16,2);assert(!IS_ERR(prepared));
- unsigned int allocations=page_allocs+dma_allocs+sg_allocs;
+ unsigned int allocations=vmalloc_allocs+sg_allocs;
  assert(!fl2000_streaming_mode_set(&usb,&prepared) && !prepared);
- assert(allocations==page_allocs+dma_allocs+sg_allocs);
+ assert(allocations==vmalloc_allocs+sg_allocs);
  assert(!stream.enabled && !stream.latest && !stream.source);
  assert(stream.buf_size==32 && stream.bytes_pix==2 && !stream.frames[0].valid);
  for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
-  assert(!urbs[i].submitted && !stream.transfers[i].sg_frame);
-  sg_free_table(&stream.transfers[i].sgt);
+  assert(!urbs[i].submitted);
+  for(unsigned int j=0;j<FL2000_FRAME_COUNT;j++) {
+   assert(stream.transfers[i].sgt[j].orig_nents==1);
+   sg_free_table(&stream.transfers[i].sgt[j]);
+  }
  }
  for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)fl2000_free_frame(&usb,&stream.frames[i]);
- assert(dma_allocs-dma_frees==dma_live);
- /* Five intentionally failed alloc_page calls increment the mock counter. */
- assert(page_allocs-page_frees==pages_live+FL2000_FRAME_COUNT);
- fail_dma_alloc=false;test_stream=NULL;
+ assert(vmalloc_live==live);
+ test_stream=NULL;
 
  /* prepare_fb must return allocation errors and unwind its mapping itself. */
  const struct drm_format_info rgb={DRM_FORMAT_RGB888,{3}};
@@ -920,17 +1029,17 @@ static void test_stream_preparation(void)
  struct drm_atomic_state atomic={.crtc=&crtc};
  state.shadow.base=(struct drm_plane_state){.fb=&fb,.crtc=&test_drm_if.crtc,.state=&atomic};
  test_drm_if.usb_dev=&usb;
- fail_dma_alloc=true;fail_page_at=page_allocs+1;
+ fail_vmalloc_at=vmalloc_allocs+1;
  assert(fl2000_prepare_fb(&plane,&state.shadow.base)==-ENOMEM);
  assert(!state.prepared && !map_refs);
- fail_dma_alloc=false;fail_page_at=0;
+ fail_vmalloc_at=0;
  assert(!fl2000_prepare_fb(&plane,&state.shadow.base) && state.prepared && map_refs==1);
  fl2000_cleanup_fb(&plane,&state.shadow.base);
- assert(!state.prepared && !map_refs && dma_allocs-dma_frees==dma_live);
+ assert(!state.prepared && !map_refs && vmalloc_live==live);
  crtc.mode_changed=false;
- unsigned int allocated=dma_allocs;
+ unsigned int allocated=vmalloc_allocs;
  assert(!fl2000_prepare_fb(&plane,&state.shadow.base) && !state.prepared);
- assert(dma_allocs==allocated); /* Ordinary page flips allocate no wire buffers. */
+ assert(vmalloc_allocs==allocated); /* Ordinary page flips allocate no wire buffers. */
  fl2000_cleanup_fb(&plane,&state.shadow.base);
  test_drm_if.drm.unplugged=true;crtc.mode_changed=true;
  assert(fl2000_prepare_fb(&plane,&state.shadow.base)==-ENODEV && !map_refs);
@@ -1052,18 +1161,21 @@ static void test_stream_release(void)
  struct usb_device usb={.bus=&bus};
  for(unsigned int allocated=0;allocated<=FL2000_QUEUE_DEPTH;allocated++) {
   struct fl2000_stream stream={.usb_dev=&usb,.buf_size=8,.enabled=true};
-  unsigned int freed=urb_frees;
+  unsigned int freed=urb_frees,tables=sg_frees;
   assert(!fl2000_alloc_frame(&usb,&stream.frames[0],8));
   stream.latest=&stream.frames[0];
+  struct page *page=vmalloc_to_page(stream.frames[0].vaddr);
   for(unsigned int i=0;i<allocated;i++) {
    struct fl2000_transfer *t=&stream.transfers[i];
    t->stream=&stream;t->urb=calloc(1,sizeof(*t->urb));assert(t->urb);
-   t->urb->context=t;assert(!sg_alloc_table(&t->sgt,1,GFP_KERNEL));
+   t->urb->context=t;
+   assert(!sg_alloc_table_from_pages_segment(&t->sgt[0],&page,1,0,8,4096,GFP_KERNEL));
    assert(!fl2000_submit_transfer(t));
   }
   assert(stream.frames[0].users==allocated);
   fl2000_streaming_release(NULL,&stream);
   assert(!stream.enabled && urb_frees==freed+allocated && !stream.frames[0].vaddr);
+  assert(sg_frees==tables+allocated);
  }
 }
 static void cancel_during_halt(void) { test_stream->running=false; }
@@ -1072,20 +1184,16 @@ static void test_queue(void)
  struct fl2000_stream stream = { .buf_size = 8 };
  struct usb_device usb = {0};
  struct urb urbs[FL2000_QUEUE_DEPTH] = {0};
- struct scatterlist lists[FL2000_QUEUE_DEPTH] = {0};
- struct page pages[FL2000_FRAME_COUNT] = {0};
- struct page *pointers[FL2000_FRAME_COUNT];
+ struct scatterlist lists[FL2000_QUEUE_DEPTH][FL2000_FRAME_COUNT] = {0};
  test_stream = &stream;
  stream.usb_dev = &usb;
- for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) {
-  pointers[i] = &pages[i];
-  stream.frames[i].pages = &pointers[i];
- }
  for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
   stream.transfers[i].stream = &stream;
   stream.transfers[i].urb = &urbs[i];
-  stream.transfers[i].sgt.sgl = &lists[i];
-  stream.transfers[i].sgt.orig_nents = 1;
+  for (unsigned int j = 0; j < FL2000_FRAME_COUNT; j++) {
+   stream.transfers[i].sgt[j].sgl = &lists[i][j];
+   stream.transfers[i].sgt[j].orig_nents = 1;
+  }
   urbs[i].context = &stream.transfers[i];
  }
  stream.latest = &stream.frames[0];
@@ -1093,33 +1201,42 @@ static void test_queue(void)
  assert(!fl2000_streaming_enable(&usb));
  assert(submit_count == FL2000_QUEUE_DEPTH);
  assert(stream.frames[0].users == FL2000_QUEUE_DEPTH);
- assert(urbs[0].sg != urbs[1].sg && urbs[1].sg != urbs[2].sg);
- unsigned int sets=sg_sets;
+ /* Each URB submits its own table for the frame; tables are never shared. */
+ for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) assert(urbs[i].sg == &lists[i][0]);
  complete(&urbs[0],0);
- assert(sg_sets==sets); /* Identical frame does not rebuild SG entries. */
+ assert(urbs[0].sg == &lists[0][0]);
  stream.latest = &stream.frames[1];
  complete(&urbs[0], 0);
- assert(sg_sets==sets+1);
+ assert(urbs[0].sg == &lists[0][1]);
  assert(stream.frames[0].users == 2 && stream.frames[1].users == 1);
  assert(!log_count); /* Resubmission changes urb->status to EINPROGRESS. */
  fl2000_stop_stream(&stream);
  assert(!stream.enabled);
  for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) assert(!stream.frames[i].users);
+ /* Every submission lets USB core map the frame's pages itself. */
+ stream.frames[1].vaddr=(u8 *)1;
+ assert(!fl2000_streaming_enable(&usb));
+ for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
+  assert(urbs[i].sg==&lists[i][1] && urbs[i].num_sgs==1 && !urbs[i].sgt);
+  assert(!(urbs[i].transfer_flags & URB_NO_TRANSFER_DMA_MAP));
+  assert(urbs[i].transfer_buffer==(u8 *)1);
+ }
+ complete(&urbs[0],0);
+ fl2000_stop_stream(&stream);
+ for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)assert(!stream.frames[i].users);
+ /* Noncoherent frames reuse their persistent mapping. */
  struct sg_table dma_sgt={0};
  stream.frames[1].dma_sgt=&dma_sgt;stream.frames[1].dma=0x12340000;
- stream.frames[1].vaddr=(u8 *)1;
- sets=sg_sets;
  assert(!fl2000_streaming_enable(&usb));
  for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
   assert(urbs[i].sgt==&dma_sgt && !urbs[i].sg && !urbs[i].num_sgs);
   assert(urbs[i].transfer_flags & URB_NO_TRANSFER_DMA_MAP);
   assert(urbs[i].transfer_dma==0x12340000 && urbs[i].transfer_buffer==(u8 *)1);
  }
- assert(sg_sets==sets);
  complete(&urbs[0],0);
  fl2000_stop_stream(&stream);
  for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)assert(!stream.frames[i].users);
- stream.frames[1].dma_sgt=NULL;
+ stream.frames[1].dma_sgt=NULL;stream.frames[1].vaddr=NULL;
  submit_count = 0; fail_at = 2;
  assert(fl2000_streaming_enable(&usb) == -ENOMEM);
  assert(!stream.enabled);
@@ -1273,7 +1390,7 @@ int main(void)
  simd_cpu_available=true; simd_context_available=false;
  test_damage_simd_boundaries(); test_conversion(); test_native_reordering();
 #endif
- puts("PASS: modesets preserve I2C state and propagate every write failure, conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, persistent DMA, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers, atomic buffer preparation/failure/unwind, active and partial stream release");
+ puts("PASS: modesets preserve I2C state and propagate every write failure, conversion, PLL/modes, masks, I2C validation, short USB replies, queue failure/recovery, scatter-gather frames, mapping lifetime, unchanged-mode checks, native formats/padding/crops/switches, partial damage/busy buffers, atomic buffer preparation/failure/unwind, active and partial stream release");
  return 0;
 }
 """
@@ -1323,7 +1440,9 @@ parts += [
     function(stream, name)
     for name in (
         "fl2000_free_frame",
+        "fl2000_translated",
         "fl2000_alloc_frame",
+        "fl2000_map_frame",
         "fl2000_rgb565",
         "fl2000_rgb565_pair",
         "fl2000_convert_line",
