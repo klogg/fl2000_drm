@@ -129,7 +129,11 @@ direct conversion. The standard shmem helper supplies CPU-only PRIME imports
 on Linux 7.3; older helpers retain the USB-controller DMA device for imports.
 
 Damage handling reduces host preparation work while the transport continues
-sending complete frames. Native framebuffer formats avoid color conversion,
+sending complete frames. Each commit converts only its own damage into a cached
+wire-format shadow image. A free transport buffer then copies from the shadow
+the region it missed while in flight, so damage accumulated over several
+frames costs a memory copy rather than a source reread and conversion. This
+keeps dirty-framebuffer commits short while windows move. Native framebuffer formats avoid color conversion,
 which makes userspace format choice relevant to CPU cost. Flip completion
 provides software synchronization; it is not evidence of physical presentation.
 See [profiling](PROFILING.md) for measurement scope and results.

@@ -222,7 +222,8 @@ EDID reads through FL2000's four-byte DDC commands, including segment selection
 for extended EDID. A missing HDMI bridge or unreadable EDID never selects VGA.
 
 - Linear XRGB8888, RGB888, and RGB565 framebuffers, including pitch and crops.
-- Per-buffer damage tracking, persistent USB transport buffers, and standard
+- Exact-damage conversion into a cached wire image, per-buffer repair by
+  copying, persistent USB transport buffers, and standard
   DRM shmem GEM objects. There is no custom GEM buffer type.
 - Imported GPU buffers and I/O-memory mappings use bounded, WC-aware reads
   before conversion. Native system-memory buffers retain direct conversion.

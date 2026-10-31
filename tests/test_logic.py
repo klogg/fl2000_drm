@@ -311,6 +311,8 @@ typedef u32 __le32;
 #define GFP_DMA 0
 #define kmalloc(size, flags) malloc(size)
 #define kfree(ptr) free(ptr)
+#define kvzalloc(size, flags) calloc(1, size)
+#define kvfree(ptr) free(ptr)
 #define le32_to_cpu(value) (value)
 #define cpu_to_le32(value) (value)
 #define USB_DIR_IN 0x80
@@ -503,7 +505,8 @@ static void test_native_crop(void)
 {
  struct usb_device usb={.speed=USB_SPEED_SUPER};
  struct fl2000_stream stream={.usb_dev=&usb,.bytes_pix=3,.buf_size=16};
- u8 storage[100],expected[16]={0},destination[16],second[16];
+ u8 storage[100],expected[16]={0},destination[16],second[16],shadow[16];
+ stream.shadow=shadow;
  for(unsigned int i=0;i<sizeof(storage);i++)storage[i]=i*17+5;
  stream.frames[0].vaddr=destination;test_stream=&stream;
  test_drm_if.usb_dev=&usb;
@@ -578,6 +581,7 @@ static void test_partial_damage(void)
   enum { W=7,H=5,PITCH=37,SIZE=112 };
   struct usb_device usb={0};struct fl2000_stream stream={.usb_dev=&usb,.bytes_pix=outputs[f],.buf_size=ALIGN(W*H*outputs[f],8)};
   stream.read_buf=malloc(FL2000_READ_SIZE);assert(stream.read_buf);
+  u8 shadow[SIZE];stream.shadow=shadow;
   u8 src[PITCH*H],buffers[FL2000_FRAME_COUNT][SIZE],before[FL2000_FRAME_COUNT][SIZE],expected[SIZE];
   memset(buffers,0xa5,sizeof(buffers));for(unsigned int i=0;i<sizeof(src);i++)src[i]=i*17;
   for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)stream.frames[i].vaddr=buffers[i];
@@ -642,7 +646,7 @@ static void test_gpu_reads(void)
   u8 *allocation=malloc(source_size+1),*src=allocation+1,*expected=malloc(size);
   struct usb_device usb={0};
   struct fl2000_stream stream={.usb_dev=&usb,.bytes_pix=outputs[f],.buf_size=size,
-   .read_buf=malloc(FL2000_READ_SIZE)};
+   .read_buf=malloc(FL2000_READ_SIZE),.shadow=malloc(size)};
   for(size_t i=0;i<source_size;i++)src[i]=i*13+7;
   for(unsigned int i=0;i<2;i++)stream.frames[i].vaddr=malloc(size);
   struct iosys_map map={.vaddr=src,.is_iomem=iomem};
@@ -657,8 +661,21 @@ static void test_gpu_reads(void)
    else fl2000_reorder_frame(expected,src,H,W,pitch,outputs[f],size);
    assert(!memcmp(expected,stream.latest->vaddr,size));
   }
+  /* Repairing damage accumulated while busy must not reread the source. */
+  struct drm_rect wide={0,0,W,H},dot={0,1,4,2};
+  for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)stream.frames[i].users=1;
+  for(size_t i=0;i<source_size;i++)src[i]^=0x3c;
+  assert(fl2000_streaming_update(&usb,&map,true,H,W,pitch,formats[f],&wide)==-EBUSY);
+  for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)stream.frames[i].users=0;
+  src[pitch]^=0x5a;
+  unsigned int reads=wc_reads;
+  assert(!fl2000_streaming_update(&usb,&map,true,H,W,pitch,formats[f],&dot));
+  assert(wc_reads-reads<2);
+  if(inputs[f]==4)fl2000_convert_frame(expected,src,H,W,pitch,outputs[f],size);
+  else fl2000_reorder_frame(expected,src,H,W,pitch,outputs[f],size);
+  assert(!memcmp(expected,stream.latest->vaddr,size));
   for(unsigned int i=0;i<2;i++)free(stream.frames[i].vaddr);
-  free(stream.read_buf);free(expected);free(allocation);
+  free(stream.read_buf);free(stream.shadow);free(expected);free(allocation);
  }
  test_stream=NULL;
 }
@@ -963,7 +980,7 @@ static void test_stream_preparation(void)
   sg_free_table(&stream.transfers[i].sgt);
  }
  for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)fl2000_free_frame(&usb,&stream.frames[i]);
- free(stream.read_buf);
+ free(stream.read_buf);free(stream.shadow);
  assert(dma_allocs-dma_frees==dma_live);
  /* Five intentionally failed alloc_page calls increment the mock counter. */
  assert(page_allocs-page_frees==pages_live+FL2000_FRAME_COUNT);
@@ -1431,6 +1448,7 @@ parts += [
         "fl2000_damage_add",
         "fl2000_convert_damage",
         "fl2000_read_damage",
+        "fl2000_copy_damage",
         "fl2000_frame_layout_valid",
         "fl2000_find_free_frame",
         "fl2000_streaming_update",
