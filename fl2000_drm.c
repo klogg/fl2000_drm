@@ -1080,14 +1080,14 @@ static void fl2000_bridge_module_put(struct drm_device *drm __always_unused, voi
 
 /**
  * fl2000_drm_bind() - Bind a bridge and publish a DRM display
- * @master: USB parent registered as the component master.
+ * @master: USB parent owning the display's bind resources.
  *
- * The component bind devres group owns the initial DRM reference. Pin the
- * selected provider before calling its callbacks, and retain that module
- * reference until final DRM release, including after open-file unbind. The
- * bridge connector holds callbacks beyond component attachment.
+ * The component or native-VGA bind devres group owns the initial DRM reference.
+ * For HDMI, pin the selected provider before calling its callbacks and retain
+ * that module reference until final DRM release, including after open-file
+ * unbind. The connector holds callbacks beyond component attachment.
  *
- * Context: Process context under component framework serialization.
+ * Context: Process context under component or adapter lifecycle serialization.
  * Return: 0 on success or a negative error code.
  */
 static int fl2000_drm_bind(struct device *master)
@@ -1122,18 +1122,17 @@ static int fl2000_drm_bind(struct device *master)
 	ret = fl2000_pipeline_init(drm_if);
 	if (ret)
 		return ret;
-	/* Component matching and binding run under the same framework lock.
-	 * Pin the selected provider before invoking its callbacks; the connector
-	 * retains those callbacks until the last DRM file is closed.
-	 */
-	if (!try_module_get(device->bridge_owner)) {
-		ret = -ENODEV;
-		return ret;
+	if (device->native_vga) {
+		ret = fl2000_vga_attach(master, drm, &drm_if->encoder);
+	} else {
+		/* The connector retains provider callbacks until the final DRM release. */
+		if (!try_module_get(device->bridge_owner))
+			return -ENODEV;
+		ret = drmm_add_action_or_reset(drm, fl2000_bridge_module_put, device->bridge_owner);
+		if (ret)
+			return ret;
+		ret = component_bind_all(master, &drm_if->encoder);
 	}
-	ret = drmm_add_action_or_reset(drm, fl2000_bridge_module_put, device->bridge_owner);
-	if (ret)
-		return ret;
-	ret = component_bind_all(master, &drm_if->encoder);
 	if (ret)
 		return ret;
 	connector = drm_bridge_connector_init(drm, &drm_if->encoder);
@@ -1169,16 +1168,17 @@ detach:
 	WRITE_ONCE(device->drm, NULL);
 detach_encoder:
 	drm_encoder_cleanup(&drm_if->encoder);
-	component_unbind_all(master, &drm_if->encoder);
+	if (!device->native_vga)
+		component_unbind_all(master, &drm_if->encoder);
 	return ret;
 }
 
 /**
- * fl2000_drm_unbind() - Quiesce display callbacks before provider unbind
- * @master: USB component master device.
+ * fl2000_drm_unbind() - Quiesce display callbacks before bridge detachment
+ * @master: USB parent owning the display's bind resources.
  *
- * Component core releases the bind devres group after this callback. Open
- * files may retain the unplugged DRM allocation and provider module.
+ * The caller releases the bind devres group after this callback. Open files
+ * may retain the unplugged DRM allocation and, for HDMI, the provider module.
  *
  * Context: Process context. May sleep.
  */
@@ -1202,7 +1202,8 @@ static void fl2000_drm_unbind(struct device *master)
 	fl2000_streaming_disable(usb_dev);
 	/* Encoder cleanup owns bridge detachment; do it before its I2C driver can go away. */
 	drm_encoder_cleanup(&drm_if->encoder);
-	component_unbind_all(master, &drm_if->encoder);
+	if (!device->native_vga)
+		component_unbind_all(master, &drm_if->encoder);
 	WRITE_ONCE(device->drm, NULL);
 }
 
@@ -1234,10 +1235,11 @@ static int fl2000_component_compare(struct device *client_dev, void *data)
 }
 
 /**
- * fl2000_drm_init() - Register a component master for this adapter
+ * fl2000_drm_init() - Initialize the selected output's display owner
  * @usb_dev: USB parent whose interface resources remain alive.
  *
- * Matches a component by its owning I2C adapter. Registration can succeed
+ * Native VGA binds immediately in an explicit devres group. HDMI
+ * matches a component by its owning I2C adapter. Registration can succeed
  * without a bridge; DRM registration waits for component binding. The provider
  * receives the encoder and must attach its bridge without creating a connector.
  *
@@ -1246,8 +1248,19 @@ static int fl2000_component_compare(struct device *client_dev, void *data)
  */
 int fl2000_drm_init(struct usb_device *usb_dev)
 {
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct component_match *match = NULL;
+	int ret;
 
+	if (device->native_vga) {
+		if (!devres_open_group(&usb_dev->dev, &device->native_vga, GFP_KERNEL))
+			return -ENOMEM;
+		ret = fl2000_drm_bind(&usb_dev->dev);
+		devres_close_group(&usb_dev->dev, &device->native_vga);
+		if (ret)
+			devres_release_group(&usb_dev->dev, &device->native_vga);
+		return ret;
+	}
 	component_match_add(&usb_dev->dev, &match, fl2000_component_compare, usb_dev);
 	if (IS_ERR(match))
 		return PTR_ERR_OR_ZERO(match);
@@ -1255,7 +1268,7 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 }
 
 /**
- * fl2000_drm_cleanup() - Remove the component master and bound display
+ * fl2000_drm_cleanup() - Unbind the display and release its bind resources
  * @usb_dev: USB parent whose interface resources remain alive.
  *
  * Unbind drains IRQ work and polling, unplugs DRM, shuts down scanout and
@@ -1266,7 +1279,16 @@ int fl2000_drm_init(struct usb_device *usb_dev)
  */
 void fl2000_drm_cleanup(struct usb_device *usb_dev)
 {
-	component_master_del(&usb_dev->dev, &fl2000_master_ops);
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
+	if (device->native_vga) {
+		if (device->drm) {
+			fl2000_drm_unbind(&usb_dev->dev);
+			devres_release_group(&usb_dev->dev, &device->native_vga);
+		}
+	} else {
+		component_master_del(&usb_dev->dev, &fl2000_master_ops);
+	}
 }
 
 /**

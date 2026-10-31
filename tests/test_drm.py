@@ -45,7 +45,7 @@ enum drm_connector_status { connector_status_disconnected, connector_status_conn
 struct drm_connector { enum drm_connector_status status; int polled; };
 struct drm_mode_config { const void *funcs; int min_width,max_width,min_height,max_height; int mutex; bool poll_running; };
 struct drm_device { struct drm_mode_config mode_config; bool registered,unplugged; int refs; };
-struct fl2000_device { struct drm_device *drm; struct module *bridge_owner; };
+struct fl2000_device { struct drm_device *drm; struct module *bridge_owner; bool native_vga; };
 struct module { int refs; };
 
 #define to_usb_device(d) ((struct usb_device *)(d))
@@ -55,6 +55,7 @@ static int fl2000_drm_driver,fl2000_mode_config_funcs;
 mocks = r"""
 static int failure,step,unregistered,unplugged,shutdowns,stops,poll_fini,encoder_cleanup,unbound,released;
 static bool bound,attached,polling;
+static bool native_bridge,native_group;
 static bool irq_active,stream_active,shutdown_failure;
 static unsigned int irq_stops,master_deletes;
 static const int fl2000_master_ops;
@@ -99,6 +100,24 @@ static struct device *usb_intf_get_dma_device(struct usb_interface *i) { (void)i
 static void drm_dev_set_dma_dev(struct drm_device *d,struct device *dma) { (void)d;(void)dma; }
 static void put_device(struct device *d) { (void)d; }
 static int fl2000_pipeline_init(struct fl2000_drm_if *d) { (void)d;return operation(); }
+static int fl2000_vga_attach(struct device *d,struct drm_device *drm,struct drm_encoder *e)
+{ (void)d;(void)drm;int ret=operation();if(!ret){native_bridge=true;attached=true;e->bridge=e;}return ret; }
+static void *devres_open_group(struct device *d,void *id,int flags)
+{ (void)d;(void)flags;assert(!native_group);if(operation())return NULL;native_group=true;return id; }
+static void devres_close_group(struct device *d,void *id)
+{ (void)d;assert(id && native_group); }
+#define GFP_KERNEL 0
+struct component_match { int unused; };
+static struct component_match match_entry;
+static int component_registrations,component_result;
+static int fl2000_component_compare(struct device *d,void *data)
+{ (void)d;(void)data;return 0; }
+static void component_match_add(struct device *d,struct component_match **m,
+ int (*compare)(struct device *,void *),void *data)
+{ (void)d;(void)data;assert(compare==fl2000_component_compare);*m=&match_entry; }
+static int component_master_add_with_match(struct device *d,const void *ops,struct component_match *m)
+{ (void)d;assert(ops==&fl2000_master_ops && m==&match_entry);component_registrations++;return component_result; }
+static int devres_release_group(struct device *d,void *id);
 static int component_bind_all(struct device *d,struct drm_encoder *e)
 { (void)d;int ret=operation();if(!ret){ret=operation();if(!ret){bound=true;attached=true;e->bridge=e;}}return ret; }
 static struct drm_bridge *drm_bridge_chain_get_first_bridge(struct drm_encoder *e) { return e->bridge; }
@@ -138,16 +157,18 @@ static void drm_dev_put(struct drm_device *d)
  if(--d->refs)return;
  struct fl2000_drm_if *output=(void *)d;
  assert(!d->registered && !bound && !attached && !polling);
- if(output->connector){assert(provider.refs);free(output->connector);}
+ if(output->connector){assert(provider.refs || native_bridge);free(output->connector);}
  if(release_owner){release_owner(d,owner_data);release_owner=NULL;}
  assert(!provider.refs);
- free(output);released++;
+ native_bridge=false;free(output);released++;
 }
 /* Component core releases the bind devres group after callback return. */
 static void release_group(void)
 {
  if(managed_drm) { struct drm_device *d=managed_drm;managed_drm=NULL;drm_dev_put(d); }
 }
+static int devres_release_group(struct device *d,void *id)
+{ (void)d;assert(id && native_group);native_group=false;release_group();return 0; }
 static int bind_master(struct device *master)
 {
  int ret=fl2000_drm_bind(master);
@@ -203,6 +224,34 @@ int main(void)
   drm_dev_put(held);assert(!provider.refs);
  }
  shutdown_failure=false;
+ /* Native VGA initializes without a component or external module reference. */
+ for(failure=1;failure<=10;failure++) {
+  struct fl2000_device vga_device={.native_vga=true};
+  struct usb_device vga_usb={.dev={.data=&vga_device}};
+  step=0;
+  assert(fl2000_drm_init(&vga_usb)==(failure==1?-ENOMEM:-EIO));
+  assert(step==failure && !vga_device.drm && !native_group && !managed_drm && !provider.refs);
+  fl2000_drm_cleanup(&vga_usb);
+ }
+ failure=0;
+ {
+  struct fl2000_device vga_device={.native_vga=true};
+  struct usb_device vga_usb={.dev={.data=&vga_device}};
+  assert(!fl2000_drm_init(&vga_usb));
+  struct drm_device *held=vga_device.drm;held->refs++;
+  assert(native_group && native_bridge && !provider.refs && !bound);
+  fl2000_drm_cleanup(&vga_usb);
+  assert(!native_group && !vga_device.drm && !irq_active && !stream_active && held->refs==1);
+  fl2000_drm_cleanup(&vga_usb);
+  drm_dev_put(held);
+ }
+ {
+  struct fl2000_device hdmi_device={0};
+  struct usb_device hdmi_usb={.dev={.data=&hdmi_device}};
+  assert(!fl2000_drm_init(&hdmi_usb) && component_registrations==1 && !hdmi_device.drm);
+  component_result=-EIO;
+  assert(fl2000_drm_init(&hdmi_usb)==-EIO && component_registrations==2);
+ }
  /* An unmatched master never started I/O; resource release owns its drain. */
  struct fl2000_device idle_device={.bridge_owner=&provider};
  struct usb_device idle_usb={.dev={.data=&idle_device}};
@@ -256,6 +305,7 @@ with tempfile.TemporaryDirectory(prefix="fl2000-drm-") as temp:
                 function(source, "fl2000_drm_hotplug"),
                 function(source, "fl2000_drm_set_polling"),
                 function(source, "fl2000_drm_unbind"),
+                function(source, "fl2000_drm_init"),
                 function(source, "fl2000_drm_cleanup"),
                 checks,
             ]

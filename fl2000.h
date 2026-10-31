@@ -15,6 +15,7 @@
 
 struct device;
 struct drm_device;
+struct drm_encoder;
 struct drm_rect;
 struct i2c_adapter;
 struct module;
@@ -125,6 +126,8 @@ int fl2000_set_pll(struct usb_device *usb_dev, const struct fl2000_pll *pll);
 int fl2000_enable_interrupts(struct usb_device *usb_dev);
 int fl2000_check_interrupt(struct usb_device *usb_dev);
 int fl2000_i2c_dword(struct usb_device *usb_dev, bool read, u16 addr, u8 offset, u32 *data);
+int fl2000_detect_output(struct usb_device *usb_dev, bool *native_vga);
+int fl2000_vga_attach(struct device *master, struct drm_device *drm, struct drm_encoder *encoder);
 
 /* Component master and DRM lifecycle. */
 int fl2000_drm_init(struct usb_device *usb_dev);
@@ -148,6 +151,7 @@ struct fl2000_interrupt;
  *              callbacks.
  * @active_interfaces: Interfaces whose subsystem initialization completed.
  * @suspended: Adapter PM transition completed under @lock.
+ * @native_vga: Hardware HDMI-enable pin is low; use the integrated DAC.
  * @drm: Bound DRM device, or NULL; IRQ work reads it with READ_ONCE().
  *
  * Allocated on the USB parent device. USB core parent locking serializes its
@@ -166,6 +170,7 @@ struct fl2000_device {
 	struct usb_interface *interfaces[FL2000_USBIF_INTERRUPT + 1];
 	unsigned long active_interfaces;
 	bool suspended;
+	bool native_vga;
 	struct drm_device *drm;
 };
 

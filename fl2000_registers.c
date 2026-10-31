@@ -116,6 +116,29 @@ static const struct regmap_config fl2000_regmap_config = {
 };
 
 /**
+ * fl2000_detect_output() - Select the output from the hardware HDMI-enable pin
+ * @usb_dev: Initialized controller with no active interrupt receiver.
+ * @native_vga: Output selection, unchanged on read failure.
+ *
+ * Status bit 27 describes adapter wiring, not monitor connection or bridge
+ * enumeration. Do not infer VGA from a failed bridge probe or absent EDID.
+ *
+ * Context: Process context. Caller serializes initial adapter setup.
+ * Return: 0 on success or a negative register-access error.
+ */
+int fl2000_detect_output(struct usb_device *usb_dev, bool *native_vga)
+{
+	struct regmap *regmap = dev_get_regmap(&usb_dev->dev, NULL);
+	unsigned int status;
+	int ret;
+
+	ret = regmap_read(regmap, FL2000_VGA_STATUS_REG, &status);
+	if (!ret)
+		*native_vga = !(status & FL2000_VGA_STATUS_HDMI_STATUS);
+	return ret;
+}
+
+/**
  * fl2000_set_pll() - Program the PLL and clear forced connection
  * @usb_dev: USB parent whose interface resources remain alive.
  * @pll: Validated register field encodings from the PLL search.

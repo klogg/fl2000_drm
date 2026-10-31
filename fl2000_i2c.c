@@ -308,7 +308,8 @@ int fl2000_i2c_init(struct usb_device *usb_dev)
 	adapter->quirks = &fl2000_i2c_quirks;
 	adapter->algo_data = usb_dev;
 	adapter->dev.parent = &usb_dev->dev;
-	strscpy(adapter->name, "FL2000 bridge I2C bus", sizeof(adapter->name));
+	strscpy(adapter->name, device->native_vga ? "FL2000 VGA DDC" : "FL2000 bridge I2C bus",
+		sizeof(adapter->name));
 
 	fwnode = fwnode_create_software_node(fl2000_i2c_properties, NULL);
 	if (IS_ERR(fwnode)) {
