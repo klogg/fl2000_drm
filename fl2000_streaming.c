@@ -6,11 +6,13 @@
 /* FL2000 bulk streaming. Interface 0 altsetting 1 avoids shared endpoint 1. */
 #include "fl2000.h"
 #include <linux/dma-mapping.h>
+#include <linux/iosys-map.h>
 #include <linux/scatterlist.h>
 #include <linux/usb.h>
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_cache.h>
 #include <drm/drm_rect.h>
 #include <linux/overflow.h>
 #include <linux/unaligned.h>
@@ -36,6 +38,7 @@
 #define FL2000_RECOVERY_DELAY_MS 100
 /* Three in-flight frames, a latest frame, and a free conversion target. */
 #define FL2000_FRAME_COUNT (FL2000_QUEUE_DEPTH + 2)
+#define FL2000_READ_SIZE   16384
 
 /**
  * struct fl2000_frame - Immutable wire image while submitted
@@ -91,6 +94,7 @@ struct fl2000_transfer {
  * @tables: Separate page fallback tables for the three URBs.
  * @size: Wire frame size, rounded up to eight bytes.
  * @bytes_pix: Wire bytes per pixel, 2 or 3.
+ * @read_buf: Cached staging buffer for imported or I/O-memory source spans.
  *
  * Owned by pending plane state until fl2000_streaming_mode_set() consumes it.
  * Preparation can fail before atomic state swap; installation allocates nothing.
@@ -100,6 +104,7 @@ struct fl2000_stream_buffers {
 	struct sg_table tables[FL2000_QUEUE_DEPTH];
 	unsigned int size;
 	u32 bytes_pix;
+	u8 *read_buf;
 };
 
 /**
@@ -111,6 +116,7 @@ struct fl2000_stream_buffers {
  * @buf_size: Rounded wire frame size.
  * @bytes_pix: Wire pixel size, 2 or 3.
  * @source: Source address used to validate conversion history; not owned.
+ * @read_buf: Cached staging buffer, protected by @mutex.
  * @width: Source crop width in pixels.
  * @height: Source crop height in rows.
  * @pitch: Source row stride in bytes.
@@ -137,7 +143,8 @@ struct fl2000_stream {
 	struct fl2000_frame *latest;
 	unsigned int buf_size;
 	u32 bytes_pix;
-	const void *source;
+	struct iosys_map source;
+	u8 *read_buf;
 	unsigned int width;
 	unsigned int height;
 	unsigned int pitch;
@@ -438,6 +445,7 @@ static void fl2000_streaming_release(struct device *dev __always_unused, void *r
 	}
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		fl2000_free_frame(stream->usb_dev, &stream->frames[i]);
+	kfree(stream->read_buf);
 	mutex_unlock(&stream->mutex);
 }
 
@@ -724,6 +732,60 @@ static void fl2000_convert_damage(u8 *dst, const void *src, unsigned int width, 
 }
 
 /**
+ * fl2000_read_damage() - Stage source spans before conversion and wire reordering
+ * @stream: Stream with an allocated cached staging buffer.
+ * @dst: Writable wire image.
+ * @src: Mapping at the crop origin.
+ * @source_bytes: Source bytes per pixel.
+ * @damage: Crop-relative rectangle to repair.
+ *
+ * Read only the requested pixels. Split unaligned prefixes and tails from
+ * sixteen-byte-aligned WC reads without rounding beyond the source rectangle.
+ * Wire ordering remains global across spans and rows.
+ *
+ * Context: Process context. Caller holds the stream mutex.
+ */
+static void fl2000_read_damage(struct fl2000_stream *stream, u8 *dst, const struct iosys_map *src,
+			       unsigned int source_bytes, const struct drm_rect *damage)
+{
+	for (int y = damage->y1; y < damage->y2; y++) {
+		for (int x = damage->x1; x < damage->x2;) {
+			unsigned int count = min_t(unsigned int, damage->x2 - x,
+						   (FL2000_READ_SIZE - 16) / source_bytes);
+			unsigned int len = count * source_bytes;
+			unsigned int offset = (y * stream->width + x) * stream->bytes_pix;
+			struct iosys_map read = *src;
+			struct iosys_map cached = IOSYS_MAP_INIT_VADDR(stream->read_buf);
+			unsigned long address;
+			unsigned int prefix, aligned;
+
+			iosys_map_incr(&read, (size_t)y * stream->pitch + x * source_bytes);
+			address = read.is_iomem ? (unsigned long)read.vaddr_iomem :
+						  (unsigned long)read.vaddr;
+			prefix = min_t(unsigned int, -address & 15, len);
+			if (prefix)
+				iosys_map_incr(&cached, 16);
+			iosys_map_memcpy_from(stream->read_buf, &read, 0, prefix);
+			iosys_map_incr(&read, prefix);
+			aligned = round_down(len - prefix, 16);
+			if (aligned)
+				drm_memcpy_from_wc(&cached, &read, aligned);
+			iosys_map_memcpy_from((u8 *)cached.vaddr + aligned, &read, aligned,
+					      len - prefix - aligned);
+			if (prefix)
+				memmove(stream->read_buf + prefix, cached.vaddr, len - prefix);
+			if (source_bytes == 4)
+				fl2000_convert_line(dst, stream->read_buf, count, offset,
+						    stream->bytes_pix);
+			else
+				fl2000_reorder_line(dst, stream->read_buf, len, offset);
+			x += count;
+			cond_resched();
+		}
+	}
+}
+
+/**
  * fl2000_frame_layout_valid() - Check crop geometry and installed wire size
  * @stream: Owning bulk stream.
  * @src: Readable source mapping.
@@ -735,14 +797,15 @@ static void fl2000_convert_damage(u8 *dst, const void *src, unsigned int width, 
  * Context: Any context. Does not sleep.
  * Return: True if the mapping and geometry fit the installed stream layout.
  */
-static bool fl2000_frame_layout_valid(const struct fl2000_stream *stream, const void *src,
-				      unsigned int height, unsigned int width, unsigned int pitch,
+static bool fl2000_frame_layout_valid(const struct fl2000_stream *stream,
+				      const struct iosys_map *src, unsigned int height,
+				      unsigned int width, unsigned int pitch,
 				      unsigned int source_bytes)
 {
 	unsigned int size;
 
-	return src && width && height && width <= INT_MAX && height <= INT_MAX && source_bytes &&
-	       width <= pitch / source_bytes &&
+	return src && !iosys_map_is_null(src) && width && height && width <= INT_MAX &&
+	       height <= INT_MAX && source_bytes && width <= pitch / source_bytes &&
 	       (source_bytes == 4 || source_bytes == stream->bytes_pix) &&
 	       !check_mul_overflow(width, height, &size) &&
 	       !check_mul_overflow(size, stream->bytes_pix, &size) && stream->bytes_pix &&
@@ -777,6 +840,7 @@ static struct fl2000_frame *fl2000_find_free_frame(struct fl2000_stream *stream)
  * fl2000_streaming_update() - Prepare a retained image from source damage
  * @usb_dev: Adapter whose streaming resources remain alive for the call.
  * @src: CPU mapping of the crop origin; valid for this call only.
+ * @read_wc: Stage potentially write-combined imported memory before conversion.
  * @height: Crop height in rows.
  * @width: Crop width in pixels.
  * @pitch: Source row stride in bytes, including padding.
@@ -793,9 +857,9 @@ static struct fl2000_frame *fl2000_find_free_frame(struct fl2000_stream *stream)
  * Return: 0 on success or empty damage, -EBUSY without a free frame, or an
  *         error.
  */
-int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch, u32 format,
-			    const struct drm_rect *damage)
+int fl2000_streaming_update(const struct usb_device *usb_dev, const struct iosys_map *src,
+			    bool read_wc, unsigned int height, unsigned int width,
+			    unsigned int pitch, u32 format, const struct drm_rect *damage)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
 	struct fl2000_frame *frame;
@@ -821,11 +885,11 @@ int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigne
 	if (damage->x1 == damage->x2 || damage->y1 == damage->y2)
 		goto out;
 	/* A different crop, mapping, layout or format invalidates every cached image. */
-	if (stream->source != src || stream->width != width || stream->height != height ||
-	    stream->pitch != pitch || stream->format != format) {
+	if (!iosys_map_is_equal(&stream->source, src) || stream->width != width ||
+	    stream->height != height || stream->pitch != pitch || stream->format != format) {
 		for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 			stream->frames[i].valid = false;
-		stream->source = src;
+		stream->source = *src;
 		stream->width = width;
 		stream->height = height;
 		stream->pitch = pitch;
@@ -842,15 +906,23 @@ int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigne
 
 	if (!frame->valid || (frame->dirty.x1 == 0 && frame->dirty.y1 == 0 &&
 			      frame->dirty.x2 == (int)width && frame->dirty.y2 == (int)height)) {
-		if (source_bytes == 4)
-			fl2000_convert_frame(frame->vaddr, src, height, width, pitch,
+		if (read_wc || src->is_iomem) {
+			unsigned int size = width * height * stream->bytes_pix;
+
+			memset(frame->vaddr + (size & ~7U), 0, stream->buf_size - (size & ~7U));
+			fl2000_read_damage(stream, frame->vaddr, src, source_bytes, &full);
+		} else if (source_bytes == 4)
+			fl2000_convert_frame(frame->vaddr, src->vaddr, height, width, pitch,
 					     stream->bytes_pix, stream->buf_size);
 		else
-			fl2000_reorder_frame(frame->vaddr, src, height, width, pitch,
+			fl2000_reorder_frame(frame->vaddr, src->vaddr, height, width, pitch,
 					     stream->bytes_pix, stream->buf_size);
 	} else {
-		fl2000_convert_damage(frame->vaddr, src, width, pitch, source_bytes,
-				      stream->bytes_pix, &frame->dirty);
+		if (read_wc || src->is_iomem)
+			fl2000_read_damage(stream, frame->vaddr, src, source_bytes, &frame->dirty);
+		else
+			fl2000_convert_damage(frame->vaddr, src->vaddr, width, pitch, source_bytes,
+					      stream->bytes_pix, &frame->dirty);
 	}
 	frame->valid = true;
 	frame->dirty = (struct drm_rect){ 0 };
@@ -880,6 +952,7 @@ void fl2000_streaming_free_buffers(struct usb_device *usb_dev,
 		fl2000_free_frame(usb_dev, &buffers->frames[i]);
 	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++)
 		sg_free_table(&buffers->tables[i]);
+	kfree(buffers->read_buf);
 	kfree(buffers);
 }
 
@@ -913,6 +986,11 @@ struct fl2000_stream_buffers *fl2000_streaming_prepare(struct usb_device *usb_de
 		return ERR_PTR(-ENOMEM);
 	buffers->size = ALIGN(size, 8);
 	buffers->bytes_pix = bytes_pix;
+	buffers->read_buf = kmalloc(FL2000_READ_SIZE, GFP_KERNEL);
+	if (!buffers->read_buf) {
+		ret = -ENOMEM;
+		goto fail;
+	}
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) {
 		ret = fl2000_alloc_frame(usb_dev, &buffers->frames[i], buffers->size);
 		if (ret)
@@ -961,7 +1039,8 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, struct fl2000_stream_b
 	mutex_lock(&stream->mutex);
 	fl2000_stop_stream(stream);
 	stream->latest = NULL;
-	stream->source = NULL;
+	iosys_map_clear(&stream->source);
+	swap(stream->read_buf, buffers->read_buf);
 	/* No allocations after atomic state swap. Retire the old set below. */
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		swap(stream->frames[i], buffers->frames[i]);

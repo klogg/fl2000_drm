@@ -114,7 +114,23 @@ struct drm_plane { struct drm_device *dev; struct drm_plane_state *state; };
 struct drm_crtc;
 struct drm_plane_state { struct drm_atomic_commit *state; u32 src_x,src_y,src_w,src_h; struct drm_framebuffer *fb; struct drm_crtc *crtc; bool visible; };
 struct drm_crtc_state { struct drm_display_mode mode,adjusted_mode; bool no_vblank,mode_changed,active; };
-struct iosys_map { bool is_iomem; void *vaddr; };
+struct iosys_map { bool is_iomem; union { void *vaddr; void *vaddr_iomem; }; };
+#define IOSYS_MAP_INIT_VADDR(p) { .vaddr=(p) }
+static bool iosys_map_is_null(const struct iosys_map *map) { return !map->vaddr; }
+static bool iosys_map_is_equal(const struct iosys_map *a,const struct iosys_map *b)
+{ return a->is_iomem==b->is_iomem && a->vaddr==b->vaddr; }
+static void iosys_map_clear(struct iosys_map *map) { memset(map,0,sizeof(*map)); }
+static void iosys_map_incr(struct iosys_map *map,size_t n) { map->vaddr=(u8 *)map->vaddr+n; }
+static unsigned int wc_reads;
+static void drm_memcpy_from_wc(struct iosys_map *dst,const struct iosys_map *src,size_t len)
+{ assert(!((uintptr_t)dst->vaddr&15) && !((uintptr_t)src->vaddr&15) && !(len&15));if(len)wc_reads++;memcpy(dst->vaddr,src->vaddr,len); }
+static void iosys_map_memcpy_from(void *dst,const struct iosys_map *src,size_t offset,size_t len)
+{ memcpy(dst,(u8 *)src->vaddr+offset,len); }
+#define round_down(n,a) ((n)&~((a)-1))
+struct drm_gem_object { void *import_attach; };
+static struct drm_gem_object fb_object;
+static struct drm_gem_object *drm_gem_fb_get_obj(struct drm_framebuffer *fb,int n)
+{ (void)fb;assert(!n);return &fb_object; }
 struct drm_shadow_plane_state { struct drm_plane_state base; struct iosys_map map[1],data[1]; };
 #define to_drm_shadow_plane_state(state) ((struct drm_shadow_plane_state *)(state))
 static int prepare_result,map_result,map_refs,map_creations,map_removals,mode_calls;
@@ -499,13 +515,18 @@ static void test_native_crop(void)
  assert(!memcmp(destination,expected,16) && !cpu_access_count);
  stream.frames[1].vaddr=second;
  assert(!fl2000_copy_frame(&test_drm_if,&state.base,NULL));
+ stream.read_buf=malloc(FL2000_READ_SIZE);assert(stream.read_buf);
+ fb_object.import_attach=&usb;
  storage[5+19+6]^=0x7f;expected[4]=storage[5+19+6];
  struct drm_rect crop_damage={2,1,3,2};
  assert(!fl2000_copy_frame(&test_drm_if,&state.base,&crop_damage));
  assert(!memcmp(destination,expected,16));
- assert(fl2000_streaming_update(&usb,storage,2,2,19,DRM_FORMAT_RGB565,NULL)==-EINVAL);
- assert(fl2000_streaming_update(&usb,storage,2,2,5,DRM_FORMAT_RGB888,NULL)==-EINVAL);
- assert(fl2000_streaming_update(&usb,storage,2,2,19,0,NULL)==-EINVAL);
+ state.data[0].is_iomem=true;
+ assert(!fl2000_copy_frame(&test_drm_if,&state.base,NULL));
+ assert(!memcmp(stream.latest->vaddr,expected,16) && !cpu_access_count);
+ assert(fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=storage},false,2,2,19,DRM_FORMAT_RGB565,NULL)==-EINVAL);
+ assert(fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=storage},false,2,2,5,DRM_FORMAT_RGB888,NULL)==-EINVAL);
+ assert(fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=storage},false,2,2,19,0,NULL)==-EINVAL);
  cpu_access_result=-EIO;
  assert(fl2000_copy_frame(&test_drm_if,&state.base,NULL)==-EIO && !cpu_access_count);
  cpu_access_result=0;test_drm_if.drm.unplugged=true;
@@ -545,15 +566,18 @@ static void test_native_crop(void)
  fl2000_plane_atomic_update(&plane,&atomic);
  assert(cpu_access_calls==accesses);
  test_drm_if.crtc.state=NULL;
+ free(stream.read_buf);fb_object.import_attach=NULL;
 }
 
 static void test_partial_damage(void)
 {
  const u32 formats[]={DRM_FORMAT_XRGB8888,DRM_FORMAT_XRGB8888,DRM_FORMAT_RGB888,DRM_FORMAT_RGB565};
  const unsigned int outputs[]={3,2,3,2},inputs[]={4,4,3,2};
+ for(unsigned int access=0;access<3;access++)
  for(unsigned int f=0;f<4;f++) {
   enum { W=7,H=5,PITCH=37,SIZE=112 };
   struct usb_device usb={0};struct fl2000_stream stream={.usb_dev=&usb,.bytes_pix=outputs[f],.buf_size=ALIGN(W*H*outputs[f],8)};
+  stream.read_buf=malloc(FL2000_READ_SIZE);assert(stream.read_buf);
   u8 src[PITCH*H],buffers[FL2000_FRAME_COUNT][SIZE],before[FL2000_FRAME_COUNT][SIZE],expected[SIZE];
   memset(buffers,0xa5,sizeof(buffers));for(unsigned int i=0;i<sizeof(src);i++)src[i]=i*17;
   for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)stream.frames[i].vaddr=buffers[i];
@@ -565,7 +589,7 @@ static void test_partial_damage(void)
    if(&stream.frames[target]==stream.latest)target=(target+1)%FL2000_FRAME_COUNT;
    for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)stream.frames[i].users=i!=target && &stream.frames[i]!=stream.latest;
    memcpy(before,buffers,sizeof(before));
-   assert(!fl2000_streaming_update(&usb,src,H,W,PITCH,formats[f],&damage));
+   assert(!fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=src,.is_iomem=access==2},access==1,H,W,PITCH,formats[f],&damage));
    memset(expected,0,sizeof(expected));
    for(unsigned int y=0;y<H;y++)for(unsigned int x=0;x<W;x++) {
     const u8 *pixel=src+y*PITCH+x*inputs[f];unsigned int offset=(y*W+x)*outputs[f];
@@ -581,16 +605,16 @@ static void test_partial_damage(void)
   /* Failed publication must not lose damage needed by a later reuse. */
   struct drm_rect damage={0,0,1,1};src[0]^=123;
   for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)stream.frames[i].users=1;
-  assert(fl2000_streaming_update(&usb,src,H,W,PITCH,formats[f],&damage)==-EBUSY);
+  assert(fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=src,.is_iomem=access==2},access==1,H,W,PITCH,formats[f],&damage)==-EBUSY);
   damage=(struct drm_rect){W-1,H-1,W,H};src[(H-1)*PITCH+(W-1)*inputs[f]]^=91;
   unsigned int target=stream.latest==&stream.frames[0]?1:0;stream.frames[target].users=0;
-  assert(!fl2000_streaming_update(&usb,src,H,W,PITCH,formats[f],&damage));
+  assert(!fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=src,.is_iomem=access==2},access==1,H,W,PITCH,formats[f],&damage));
   assert(buffers[target][4]==(outputs[f]==2 && inputs[f]==4 ? (((src[2]>>3)<<11)|((src[1]>>2)<<5)|(src[0]>>3))&255 : src[0]));
   /* Reusing a mapping or geometry must not retain another image's pixels. */
   u8 replacement[PITCH*7];memset(replacement,0x73,sizeof(replacement));
   for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)stream.frames[i].users=0;
   damage=(struct drm_rect){0,0,1,1};
-  assert(!fl2000_streaming_update(&usb,replacement,7,5,PITCH,formats[f],&damage));
+  assert(!fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=replacement,.is_iomem=access==2},access==1,7,5,PITCH,formats[f],&damage));
   memset(expected,0,sizeof(expected));
   for(unsigned int y=0;y<7;y++)for(unsigned int x=0;x<5;x++) {
    unsigned int offset=(y*5+x)*outputs[f];
@@ -600,8 +624,41 @@ static void test_partial_damage(void)
    } else for(unsigned int b=0;b<outputs[f];b++)expected[(offset+b)^4]=0x73;
   }
   assert(!memcmp(stream.latest->vaddr,expected,stream.buf_size));
-  damage=(struct drm_rect){-1,0,1,1};assert(fl2000_streaming_update(&usb,src,H,W,PITCH,formats[f],&damage)==-EINVAL);
-  damage=(struct drm_rect){0,0,W+1,H};assert(fl2000_streaming_update(&usb,src,H,W,PITCH,formats[f],&damage)==-EINVAL);
+  damage=(struct drm_rect){-1,0,1,1};assert(fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=src},false,H,W,PITCH,formats[f],&damage)==-EINVAL);
+  damage=(struct drm_rect){0,0,W+1,H};assert(fl2000_streaming_update(&usb,&(struct iosys_map){.vaddr=src},false,H,W,PITCH,formats[f],&damage)==-EINVAL);
+  free(stream.read_buf);
+ }
+ test_stream=NULL;
+}
+
+static void test_gpu_reads(void)
+{
+ const u32 formats[]={DRM_FORMAT_XRGB8888,DRM_FORMAT_XRGB8888,DRM_FORMAT_RGB888,DRM_FORMAT_RGB565};
+ const unsigned int inputs[]={4,4,3,2},outputs[]={3,2,3,2};
+ for(unsigned int iomem=0;iomem<2;iomem++)for(unsigned int f=0;f<4;f++) {
+  enum { W=6001,H=2 };
+  unsigned int pitch=W*inputs[f]+7,size=ALIGN(W*H*outputs[f],8);
+  size_t source_size=pitch*(H-1)+W*inputs[f];
+  u8 *allocation=malloc(source_size+1),*src=allocation+1,*expected=malloc(size);
+  struct usb_device usb={0};
+  struct fl2000_stream stream={.usb_dev=&usb,.bytes_pix=outputs[f],.buf_size=size,
+   .read_buf=malloc(FL2000_READ_SIZE)};
+  for(size_t i=0;i<source_size;i++)src[i]=i*13+7;
+  for(unsigned int i=0;i<2;i++)stream.frames[i].vaddr=malloc(size);
+  struct iosys_map map={.vaddr=src,.is_iomem=iomem};
+  test_stream=&stream;
+  for(unsigned int step=0;step<3;step++) {
+   struct drm_rect damage={4093,1,W,H};
+   if(step)src[pitch+damage.x1*inputs[f]]^=0x73;
+   unsigned int reads=wc_reads;
+   assert(!fl2000_streaming_update(&usb,&map,true,H,W,pitch,formats[f],step?&damage:NULL));
+   assert(wc_reads>reads);
+   if(inputs[f]==4)fl2000_convert_frame(expected,src,H,W,pitch,outputs[f],size);
+   else fl2000_reorder_frame(expected,src,H,W,pitch,outputs[f],size);
+   assert(!memcmp(expected,stream.latest->vaddr,size));
+  }
+  for(unsigned int i=0;i<2;i++)free(stream.frames[i].vaddr);
+  free(stream.read_buf);free(expected);free(allocation);
  }
  test_stream=NULL;
 }
@@ -898,13 +955,14 @@ static void test_stream_preparation(void)
  unsigned int allocations=page_allocs+dma_allocs+sg_allocs;
  assert(!fl2000_streaming_mode_set(&usb,&prepared) && !prepared);
  assert(allocations==page_allocs+dma_allocs+sg_allocs);
- assert(!stream.enabled && !stream.latest && !stream.source);
+ assert(!stream.enabled && !stream.latest && iosys_map_is_null(&stream.source));
  assert(stream.buf_size==32 && stream.bytes_pix==2 && !stream.frames[0].valid);
  for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
   assert(!urbs[i].submitted && !stream.transfers[i].sg_frame);
   sg_free_table(&stream.transfers[i].sgt);
  }
  for(unsigned int i=0;i<FL2000_FRAME_COUNT;i++)fl2000_free_frame(&usb,&stream.frames[i]);
+ free(stream.read_buf);
  assert(dma_allocs-dma_frees==dma_live);
  /* Five intentionally failed alloc_page calls increment the mock counter. */
  assert(page_allocs-page_frees==pages_live+FL2000_FRAME_COUNT);
@@ -1002,7 +1060,8 @@ static void test_atomic_state(void)
  prepare_result=0;map_result=-ENOMEM;
  assert(fl2000_prepare_fb(&plane,&new.shadow.base)==-ENOMEM && !map_refs);
  map_result=0;map_iomem=true;
- assert(fl2000_prepare_fb(&plane,&new.shadow.base)==-EOPNOTSUPP && !map_refs);
+ assert(!fl2000_prepare_fb(&plane,&new.shadow.base) && map_refs==1);
+ fl2000_cleanup_fb(&plane,&new.shadow.base);
  map_iomem=false;new.shadow.base.fb=NULL;
  assert(!fl2000_prepare_fb(&plane,&new.shadow.base));
  fl2000_cleanup_fb(&plane,&new.shadow.base);
@@ -1265,7 +1324,7 @@ static void test_queue(void)
 }
 int main(void)
 {
- test_damage_simd_boundaries(); test_partial_damage(); test_conversion(); test_native_reordering(); test_native_formats(); test_native_crop(); test_modes(); test_modeset_preserves_i2c(); test_i2c(); test_register_io(); test_queue(); test_atomic_state(); test_frame_allocation(); test_stream_preparation(); test_stream_release();
+ test_damage_simd_boundaries(); test_partial_damage(); test_gpu_reads(); test_conversion(); test_native_reordering(); test_native_formats(); test_native_crop(); test_modes(); test_modeset_preserves_i2c(); test_i2c(); test_register_io(); test_queue(); test_atomic_state(); test_frame_allocation(); test_stream_preparation(); test_stream_release();
 #ifdef TEST_SIMD
  assert(!fpu_depth);
  simd_cpu_available=false;
@@ -1333,6 +1392,7 @@ parts += [
         "fl2000_source_bytes_pix",
         "fl2000_damage_add",
         "fl2000_convert_damage",
+        "fl2000_read_damage",
         "fl2000_frame_layout_valid",
         "fl2000_find_free_frame",
         "fl2000_streaming_update",

@@ -92,9 +92,10 @@ struct fl2000_stream_buffers *fl2000_streaming_prepare(struct usb_device *usb_de
 void fl2000_streaming_free_buffers(struct usb_device *usb_dev,
 				   struct fl2000_stream_buffers *buffers);
 int fl2000_streaming_mode_set(struct usb_device *usb_dev, struct fl2000_stream_buffers **prepared);
-int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch, u32 format,
-			    const struct drm_rect *damage);
+struct iosys_map;
+int fl2000_streaming_update(const struct usb_device *usb_dev, const struct iosys_map *src,
+			    bool read_wc, unsigned int height, unsigned int width,
+			    unsigned int pitch, u32 format, const struct drm_rect *damage);
 int fl2000_streaming_enable(const struct usb_device *usb_dev);
 void fl2000_streaming_disable(const struct usb_device *usb_dev);
 

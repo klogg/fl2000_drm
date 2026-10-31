@@ -608,7 +608,7 @@ static struct drm_plane_state *fl2000_plane_duplicate_state(struct drm_plane *pl
  * @state: Pending plane state receiving mappings and prepared buffers.
  *
  * Runs before atomic state swap. Mapping and allocation errors leave scanout
- * unchanged. I/O-memory mappings are unsupported.
+ * unchanged. Imported and I/O-memory mappings are staged during frame copying.
  *
  * Context: Process context. May sleep.
  * Return: 0 on success or a negative error code.
@@ -630,10 +630,6 @@ static int fl2000_prepare_fb(struct drm_plane *plane, struct drm_plane_state *st
 	ret = drm_gem_fb_vmap(state->fb, shadow->map, shadow->data);
 	if (ret)
 		return ret;
-	if (shadow->data[0].is_iomem) {
-		drm_gem_fb_vunmap(state->fb, shadow->map);
-		return -EOPNOTSUPP;
-	}
 	crtc = state->crtc ? drm_atomic_get_new_crtc_state(state->state, state->crtc) : NULL;
 	if (!crtc || !crtc->active || !drm_atomic_crtc_needs_modeset(crtc))
 		return 0;
@@ -692,6 +688,7 @@ static int fl2000_copy_frame(struct fl2000_drm_if *drm_if, struct drm_plane_stat
 {
 	struct drm_framebuffer *fb = state->fb;
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
+	struct iosys_map src = shadow->data[0];
 	struct drm_rect visible;
 	size_t offset;
 	int idx;
@@ -713,7 +710,9 @@ static int fl2000_copy_frame(struct fl2000_drm_if *drm_if, struct drm_plane_stat
 		visible.y2 -= state->src_y >> 16;
 		damage = &visible;
 	}
-	ret = fl2000_streaming_update(drm_if->usb_dev, (u8 *)shadow->data[0].vaddr + offset,
+	iosys_map_incr(&src, offset);
+	ret = fl2000_streaming_update(drm_if->usb_dev, &src,
+				      !!drm_gem_fb_get_obj(fb, 0)->import_attach,
 				      state->src_h >> 16, state->src_w >> 16, fb->pitches[0],
 				      fb->format->format, damage);
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
@@ -1114,7 +1113,7 @@ static int fl2000_drm_bind(struct device *master)
 	drm->mode_config.max_width = FL20000_MAX_WIDTH;
 	drm->mode_config.min_height = 1;
 	drm->mode_config.max_height = FL20000_MAX_HEIGHT;
-	/* Imported GEM buffers are mapped by the USB controller, not the dongle. */
+	/* Older shmem helpers DMA-map imports against the USB controller. */
 	dma_dev = usb_intf_get_dma_device(usb_ifnum_to_if(usb_dev, FL2000_USBIF_AVCONTROL));
 	if (dma_dev) {
 		drm_dev_set_dma_dev(drm, dma_dev);

@@ -216,6 +216,8 @@ bridge is not treated as a VGA adapter.
 - Linear XRGB8888, RGB888, and RGB565 framebuffers, including pitch and crops.
 - Per-buffer damage tracking, persistent USB transport buffers, and standard
   DRM shmem GEM objects. There is no custom GEM buffer type.
+- Imported GPU buffers and I/O-memory mappings use bounded, WC-aware reads
+  before conversion. Native system-memory buffers retain direct conversion.
 - USB hotplug interrupts with connector polling as an error fallback.
 - Bandwidth-based RGB888/RGB565 selection for XRGB8888 input. Native formats
   retain their representation; modes exceeding their bandwidth are rejected.

@@ -104,6 +104,14 @@ USB stream. The source-level atomic contract is documented in
 [fl2000_drm.c](../fl2000_drm.c), and wire representation, ownership and damage
 tracking in [fl2000_streaming.c](../fl2000_streaming.c).
 
+Imported framebuffers and I/O-memory mappings are read through a reusable
+16 KiB staging buffer with aligned `drm_memcpy_from_wc()` spans. Prefixes and
+tails use mapping-aware copies without reading outside the requested pixels.
+The original source mapping remains the damage-history key; staging does not
+invalidate retained wire images. Native system-memory framebuffers retain
+direct conversion. The standard shmem helper supplies CPU-only PRIME imports
+on Linux 7.3; older helpers retain the USB-controller DMA device for imports.
+
 Damage handling reduces host preparation work while the transport continues
 sending complete frames. Native framebuffer formats avoid color conversion,
 which makes userspace format choice relevant to CPU cost. Flip completion
