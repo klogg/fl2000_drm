@@ -5,6 +5,7 @@
  */
 
 #include "fl2000.h"
+#include "compat/drm_atomic.h"
 #include <linux/component.h>
 #include <linux/dma-mapping.h>
 #include <linux/math64.h>
@@ -232,7 +233,7 @@ static struct drm_driver fl2000_drm_driver = {
  * Context: Process context under DRM atomic/modeset serialization.
  * Return: 0 on success or a negative error code.
  */
-static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_state *state)
+static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_commit *state)
 {
 	const struct drm_plane *plane;
 	const struct drm_plane_state *old_plane;
@@ -785,7 +786,7 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_
  * Context: Process context under DRM atomic/modeset serialization.
  * Return: 0 on success or a negative error code.
  */
-static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_state *state)
+static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_commit *state)
 {
 	int ret;
 
@@ -806,7 +807,7 @@ static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_sta
  * Context: Process context under DRM atomic/modeset serialization.
  * Return: 0 on success or a negative error code.
  */
-static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_state *state)
+static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_commit *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
 	struct drm_plane_state *new_plane = drm_atomic_get_new_plane_state(state, plane);
@@ -830,7 +831,7 @@ static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_
  *
  * Context: Process context under DRM atomic/modeset serialization.
  */
-static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_state *state)
+static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_commit *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
 	struct drm_plane_state *plane = drm_atomic_get_new_plane_state(state, &drm_if->plane);
@@ -864,7 +865,7 @@ static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_s
  * Context: Process context under DRM atomic/modeset serialization.
  */
 static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
-				       struct drm_atomic_state *state __always_unused)
+				       struct drm_atomic_commit *state __always_unused)
 {
 	const struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
 
@@ -881,7 +882,7 @@ static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
  *
  * Context: Process context under DRM atomic/modeset serialization.
  */
-static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomic_state *state)
+static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomic_commit *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
 	const struct drm_crtc_state *crtc = drm_atomic_get_new_crtc_state(state, &drm_if->crtc);

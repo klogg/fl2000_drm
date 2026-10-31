@@ -5,7 +5,8 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=klogg_fl2000_drm&metric=alert_status)](https://sonarcloud.io/dashboard?id=klogg_fl2000_drm)
 
 An out-of-tree DRM/KMS driver for Fresco Logic FL2000 USB display adapters
-(USB ID `1d5c:2000`), targeting **Linux 7.0**. The core connects to an external
+(USB ID `1d5c:2000`), targeting **Linux 7.0**, with build compatibility for
+**Linux 7.3**. The core connects to an external
 bridge; the supplied IT6610/21/22 module adapts Linux v7.0's bridge driver for
 firmware-less attachment and the controller's I2C/reset constraints. Native VGA
 is not implemented.
@@ -22,14 +23,22 @@ libdw for gendwarfksyms on the tested Ubuntu headers).
 Build against the running kernel, or select an installed header tree.
 For distribution kernels lacking `CONFIG_DRM_BRIDGE_CONNECTOR` or its HDMI
 helpers, first run `scripts/fetch-bridge-connector.sh`. It prepares checksum-pinned,
-unmodified Linux 7.0 sources in the ignored `.qemu-build/upstream/` directory,
+unmodified Linux 7.0 sources by default, or Linux 7.3 with the `7.3` argument,
 using vendored files when present or HTTPS with curl otherwise. External builds
-compile only missing helpers.
+compile only missing helpers and select their directory from the target kernel
+version: `.qemu-build/upstream/` for 7.0, `.qemu-build/upstream-7.3/` for 7.3.
 Alternatively, set `FL2000_HELPER_SOURCE_DIR` to the matching kernel source
 `drivers/gpu/drm/display/` directory. In-tree builds use Kconfig-selected helpers.
 
+For your running Linux 7.3 kernel:
+
 ```sh
-scripts/fetch-bridge-connector.sh
+scripts/fetch-bridge-connector.sh 7.3
+make
+```
+
+```sh
+scripts/fetch-bridge-connector.sh 7.0
 ```
 
 Build the modules:
@@ -65,7 +74,7 @@ builds, installation, module precedence and source-upload preparation.
 
 ### In-tree integration
 
-Copy the driver sources, `bridge/`, `frame/`, `Kbuild`, and `Kconfig` into
+Copy the driver sources, `bridge/`, `frame/`, `compat/`, `Kbuild`, and `Kconfig` into
 `drivers/gpu/drm/fl2000/`. Add `source "drivers/gpu/drm/fl2000/Kconfig"` to
 the DRM Kconfig and `obj-$(CONFIG_DRM_FL2000) += fl2000/` to its Makefile.
 Merge this repository's `MAINTAINERS` entry into the kernel's file.

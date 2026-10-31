@@ -112,7 +112,7 @@ struct drm_format_info { u32 format; unsigned int cpp[1]; };
 struct drm_framebuffer { const struct drm_format_info *format; unsigned int pitches[1]; };
 struct drm_plane { struct drm_device *dev; struct drm_plane_state *state; };
 struct drm_crtc;
-struct drm_plane_state { struct drm_atomic_state *state; u32 src_x,src_y,src_w,src_h; struct drm_framebuffer *fb; struct drm_crtc *crtc; bool visible; };
+struct drm_plane_state { struct drm_atomic_commit *state; u32 src_x,src_y,src_w,src_h; struct drm_framebuffer *fb; struct drm_crtc *crtc; bool visible; };
 struct drm_crtc_state { struct drm_display_mode mode,adjusted_mode; bool no_vblank,mode_changed,active; };
 struct iosys_map { bool is_iomem; void *vaddr; };
 struct drm_shadow_plane_state { struct drm_plane_state base; struct iosys_map map[1],data[1]; };
@@ -175,34 +175,34 @@ struct drm_crtc { struct drm_device *dev; struct drm_crtc_state *state; };
 static inline bool fl2000_usb_unavailable(const struct usb_device *usb);
 struct fl2000_drm_if { struct drm_device drm; struct usb_device *usb_dev; struct drm_crtc crtc; };
 static struct fl2000_drm_if test_drm_if;
-struct drm_atomic_state { struct drm_plane plane; struct drm_plane_state *old_plane,*new_plane; struct drm_crtc_state *crtc; int get_error; bool allow_modeset; };
+struct drm_atomic_commit { struct drm_plane plane; struct drm_plane_state *old_plane,*new_plane; struct drm_crtc_state *crtc; int get_error; bool allow_modeset; };
 #define IS_ERR(p) ((uintptr_t)(p)>=(uintptr_t)-4095)
 #define ERR_PTR(e) ((void *)(intptr_t)(e))
 #define PTR_ERR(p) ((intptr_t)(p))
 #define PTR_ERR_OR_ZERO(p) (IS_ERR(p) ? (int)PTR_ERR(p) : 0)
 #define for_each_oldnew_plane_in_state(s,p,o,n,i) \
  for((i)=0,(p)=&(s)->plane,(o)=(s)->old_plane,(n)=(s)->new_plane; (i)<1 && (p); (i)++)
-static struct drm_crtc_state *drm_atomic_get_crtc_state(struct drm_atomic_state *state,struct drm_crtc *crtc)
+static struct drm_crtc_state *drm_atomic_get_crtc_state(struct drm_atomic_commit *state,struct drm_crtc *crtc)
 { (void)crtc; return state->get_error ? (struct drm_crtc_state *)(intptr_t)state->get_error : state->crtc; }
-static int drm_atomic_helper_check(struct drm_device *drm,struct drm_atomic_state *state)
+static int drm_atomic_helper_check(struct drm_device *drm,struct drm_atomic_commit *state)
 { (void)drm; return state->crtc->mode_changed && !state->allow_modeset ? -EINVAL : 0; }
 #define container_of(p,t,m) ((t *)((char *)(p)-offsetof(t,m)))
 #define DRM_PLANE_NO_SCALING 0x10000
 static int primary_check_result,affected_result,affected_calls,plane_check_result;
 static bool plane_visible;
-static int drm_crtc_helper_atomic_check(struct drm_crtc *crtc,struct drm_atomic_state *state)
+static int drm_crtc_helper_atomic_check(struct drm_crtc *crtc,struct drm_atomic_commit *state)
 { (void)crtc;(void)state;return primary_check_result; }
-static int drm_atomic_add_affected_planes(struct drm_atomic_state *state,struct drm_crtc *crtc)
+static int drm_atomic_add_affected_planes(struct drm_atomic_commit *state,struct drm_crtc *crtc)
 { (void)crtc;(void)state;affected_calls++;return affected_result; }
-static struct drm_plane_state *drm_atomic_get_new_plane_state(struct drm_atomic_state *state,struct drm_plane *plane)
+static struct drm_plane_state *drm_atomic_get_new_plane_state(struct drm_atomic_commit *state,struct drm_plane *plane)
 { (void)plane;return state->new_plane; }
-static struct drm_plane_state *drm_atomic_get_old_plane_state(struct drm_atomic_state *state,struct drm_plane *plane)
+static struct drm_plane_state *drm_atomic_get_old_plane_state(struct drm_atomic_commit *state,struct drm_plane *plane)
 { (void)plane;return state->old_plane; }
 static bool damage_merged;
 static struct drm_rect merged_damage;
 static bool drm_atomic_helper_damage_merged(const struct drm_plane_state *old,const struct drm_plane_state *new,struct drm_rect *rect)
 { (void)old;(void)new;*rect=merged_damage;return damage_merged; }
-static struct drm_crtc_state *drm_atomic_get_new_crtc_state(struct drm_atomic_state *state,struct drm_crtc *crtc)
+static struct drm_crtc_state *drm_atomic_get_new_crtc_state(struct drm_atomic_commit *state,struct drm_crtc *crtc)
 { (void)crtc;return state->crtc; }
 static int drm_atomic_helper_check_plane_state(struct drm_plane_state *plane,const struct drm_crtc_state *crtc,int min_scale,int max_scale,bool position,bool disabled)
 {
@@ -470,7 +470,7 @@ static void test_native_formats(void)
  struct drm_framebuffer old_fb={.format=&formats[0]},new_fb={.format=&formats[1]};
  struct drm_crtc_state crtc={.active=true};struct drm_crtc output={.state=&crtc};
  struct drm_plane_state old={.fb=&old_fb,.crtc=&output},new={.fb=&new_fb,.crtc=&output};
- struct drm_atomic_state atomic={.old_plane=&old,.new_plane=&new,.crtc=&crtc,.allow_modeset=true};
+ struct drm_atomic_commit atomic={.old_plane=&old,.new_plane=&new,.crtc=&crtc,.allow_modeset=true};
  struct drm_device drm={0};
  assert(!fl2000_atomic_check(&drm,&atomic) && crtc.mode_changed);
  crtc.mode_changed=false;atomic.allow_modeset=false;
@@ -515,7 +515,7 @@ static void test_native_crop(void)
  struct drm_crtc_state active={.active=true},later={.active=false};
  test_drm_if.crtc.state=&later;
  struct drm_plane plane={.dev=&test_drm_if.drm};
- struct drm_atomic_state atomic={.crtc=&active,.new_plane=&state.base,.old_plane=&state.base};
+ struct drm_atomic_commit atomic={.crtc=&active,.new_plane=&state.base,.old_plane=&state.base};
  stream.enabled=true;int accesses=cpu_access_calls;
  damage_merged=false;
  fl2000_plane_atomic_update(&plane,&atomic);
@@ -917,7 +917,7 @@ static void test_stream_preparation(void)
  struct drm_plane plane={.dev=&test_drm_if.drm};
  struct drm_crtc_state crtc={.active=true,.mode_changed=true,
   .adjusted_mode={.clock=25175,.hdisplay=640,.htotal=800,.vdisplay=480,.vtotal=525}};
- struct drm_atomic_state atomic={.crtc=&crtc};
+ struct drm_atomic_commit atomic={.crtc=&crtc};
  state.shadow.base=(struct drm_plane_state){.fb=&fb,.crtc=&test_drm_if.crtc,.state=&atomic};
  test_drm_if.usb_dev=&usb;
  fail_dma_alloc=true;fail_page_at=page_allocs+1;
@@ -974,7 +974,7 @@ static void test_atomic_state(void)
  assert(fl2000_display_check(&test_drm_if,&old.shadow.base,&crtc)==-EINVAL);
  fb.format=&xrgb;usb.speed=USB_SPEED_SUPER;
  /* CRTC-only changes must pull in planes; failures must propagate unchanged. */
- struct drm_atomic_state atomic={.crtc=&crtc,.new_plane=&old.shadow.base};
+ struct drm_atomic_commit atomic={.crtc=&crtc,.new_plane=&old.shadow.base};
  primary_check_result=-EINVAL;
  assert(fl2000_crtc_atomic_check(&test_drm_if.crtc,&atomic)==-EINVAL && !affected_calls);
  primary_check_result=0;affected_result=-EDEADLK;
