@@ -32,6 +32,10 @@
  * complete uncompressed frames. Three immutable URBs share retained wire
  * images through explicit references; per-buffer damage history avoids full
  * copies when reusing an image after missed updates.
+ *
+ * The controller ends a frame on a zero-length packet. URB_ZERO_PACKET only
+ * emits one when the frame is a multiple of the endpoint packet size, so each
+ * frame URB is followed by a separate zero-length URB.
  */
 #define FL2000_QUEUE_DEPTH	 3
 #define FL2000_RECOVERY_RETRIES	 3
@@ -71,21 +75,25 @@ struct fl2000_frame {
 /**
  * struct fl2000_transfer - Reusable URB and its frame reference
  * @urb: Bulk URB reused after completion or synchronous cancellation.
+ * @zlp: Zero-length URB marking the end of the frame sent by @urb.
  * @sgt: Per-URB page fallback metadata; never shared with another URB.
  * @stream: Owning stream.
  * @frame: Submitted frame, or NULL when not in flight.
  * @sg_frame: Frame whose pages are currently installed in @sgt.
+ * @pending: Submitted URBs of @urb and @zlp not yet completed.
  *
- * The stream spinlock protects submission and @frame ownership. USB core owns
+ * The stream spinlock protects submission, @pending and @frame ownership. USB core owns
  * DMA metadata while the URB is submitted. Completion releases the frame
  * reference before selecting the next retained image.
  */
 struct fl2000_transfer {
 	struct urb *urb;
+	struct urb *zlp;
 	struct sg_table sgt;
 	struct fl2000_stream *stream;
 	struct fl2000_frame *frame;
 	struct fl2000_frame *sg_frame;
+	unsigned int pending;
 };
 
 /**
@@ -261,11 +269,12 @@ stop:
 }
 
 /**
- * fl2000_submit_transfer() - Take a latest-frame reference and submit one URB
+ * fl2000_submit_transfer() - Take a latest-frame reference and submit one frame
  * @transfer: Reusable bulk transfer.
  *
- * Does not allocate or copy pixels. A failed submit drops the frame reference
- * and schedules recovery when scanout is still requested.
+ * Queues the frame URB followed by its zero-length end-of-frame URB. Does not
+ * allocate or copy pixels. A failed submit drops references it took and
+ * schedules recovery when scanout is still requested.
  *
  * Context: Caller holds the stream spinlock with local IRQs saved.
  * Return: 0 on success or a negative error code.
@@ -317,8 +326,68 @@ static int fl2000_submit_transfer(struct fl2000_transfer *transfer)
 		frame->users--;
 		transfer->frame = NULL;
 		fl2000_stream_error(stream, ret);
+		return ret;
 	}
-	return ret;
+	transfer->pending = 1;
+	ret = usb_submit_urb(transfer->zlp, GFP_ATOMIC);
+	if (ret) {
+		/* The frame URB completes without resubmitting a disabled queue. */
+		fl2000_stream_error(stream, ret);
+		return ret;
+	}
+	transfer->pending++;
+	return 0;
+}
+
+/**
+ * fl2000_transfer_status() - Classify one bulk completion status
+ * @stream: Owning bulk stream.
+ * @status: URB completion status.
+ *
+ * Context: Caller holds the stream spinlock.
+ * Return: True for success; otherwise queue state has been updated.
+ */
+static bool fl2000_transfer_status(struct fl2000_stream *stream, int status)
+{
+	switch (status) {
+	case 0:
+		return true;
+	case -ENODEV:
+	case -ESHUTDOWN:
+		stream->enabled = false;
+		stream->running = false;
+		cancel_delayed_work(&stream->recovery);
+		return false;
+	case -ENOENT:
+	case -ECONNRESET:
+		/* Draining a disabled queue must preserve restart intent. */
+		if (stream->enabled) {
+			stream->enabled = false;
+			stream->running = false;
+			cancel_delayed_work(&stream->recovery);
+		}
+		return false;
+	default:
+		if (stream->enabled)
+			fl2000_stream_error(stream, status);
+		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming transfer failed: %d\n",
+				    status);
+		return false;
+	}
+}
+
+/**
+ * fl2000_transfer_done() - Resubmit after both URBs of a frame complete
+ * @transfer: Reusable bulk transfer.
+ *
+ * Context: Caller holds the stream spinlock.
+ * Return: 0 on success or a negative submission error.
+ */
+static int fl2000_transfer_done(struct fl2000_transfer *transfer)
+{
+	if (--transfer->pending || !transfer->stream->enabled)
+		return 0;
+	return fl2000_submit_transfer(transfer);
 }
 
 /**
@@ -332,52 +401,46 @@ static void fl2000_data_completion(struct urb *urb)
 	struct fl2000_transfer *transfer = urb->context;
 	struct fl2000_stream *stream = transfer->stream;
 	unsigned long flags;
-	int status = urb->status;
 	unsigned int actual = urb->actual_length;
-	int ret = 0;
+	int ret;
 
 	spin_lock_irqsave(&stream->lock, flags);
 	transfer->frame->users--;
 	transfer->frame = NULL;
-
-	switch (status) {
-	case 0:
-		break;
-	case -ENODEV:
-	case -ESHUTDOWN:
-		stream->enabled = false;
-		stream->running = false;
-		cancel_delayed_work(&stream->recovery);
-		goto unlock;
-	case -ENOENT:
-	case -ECONNRESET:
-		/* Draining a disabled queue must preserve restart intent. */
-		if (stream->enabled) {
-			stream->enabled = false;
-			stream->running = false;
-			cancel_delayed_work(&stream->recovery);
+	if (fl2000_transfer_status(stream, urb->status)) {
+		if (actual == stream->buf_size) {
+			stream->retries = 0;
+		} else {
+			if (stream->enabled)
+				fl2000_stream_error(stream, -EREMOTEIO);
+			dev_err_ratelimited(&stream->usb_dev->dev,
+					    "Short streaming transfer: %u/%u\n", actual,
+					    stream->buf_size);
 		}
-		goto unlock;
-	default:
-		if (stream->enabled)
-			fl2000_stream_error(stream, status);
-		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming transfer failed: %d\n",
-				    status);
-		goto unlock;
 	}
+	ret = fl2000_transfer_done(transfer);
+	spin_unlock_irqrestore(&stream->lock, flags);
+	if (ret)
+		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming submission failed: %d\n",
+				    ret);
+}
 
-	if (actual != stream->buf_size) {
-		if (stream->enabled)
-			fl2000_stream_error(stream, -EREMOTEIO);
-		dev_err_ratelimited(&stream->usb_dev->dev, "Short streaming transfer: %u/%u\n",
-				    actual, stream->buf_size);
-		goto unlock;
-	}
-	if (stream->enabled) {
-		stream->retries = 0;
-		ret = fl2000_submit_transfer(transfer);
-	}
-unlock:
+/**
+ * fl2000_zlp_completion() - Finish a frame's end marker and advance the queue
+ * @urb: Completed zero-length USB request.
+ *
+ * Context: USB completion context. Takes the stream spinlock.
+ */
+static void fl2000_zlp_completion(struct urb *urb)
+{
+	struct fl2000_transfer *transfer = urb->context;
+	struct fl2000_stream *stream = transfer->stream;
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&stream->lock, flags);
+	fl2000_transfer_status(stream, urb->status);
+	ret = fl2000_transfer_done(transfer);
 	spin_unlock_irqrestore(&stream->lock, flags);
 	if (ret)
 		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming submission failed: %d\n",
@@ -399,8 +462,10 @@ static void fl2000_drain_stream(struct fl2000_stream *stream)
 	spin_lock_irqsave(&stream->lock, flags);
 	stream->enabled = false;
 	spin_unlock_irqrestore(&stream->lock, flags);
-	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++)
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		usb_kill_urb(stream->transfers[i].urb);
+		usb_kill_urb(stream->transfers[i].zlp);
+	}
 }
 
 /**
@@ -441,6 +506,7 @@ static void fl2000_streaming_release(struct device *dev __always_unused, void *r
 	mutex_lock(&stream->mutex);
 	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		usb_free_urb(stream->transfers[i].urb);
+		usb_free_urb(stream->transfers[i].zlp);
 		sg_free_table(&stream->transfers[i].sgt);
 	}
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
@@ -1227,13 +1293,15 @@ int fl2000_streaming_create(struct usb_interface *interface)
 
 		transfer->stream = stream;
 		transfer->urb = usb_alloc_urb(0, GFP_KERNEL);
-		if (!transfer->urb) {
+		transfer->zlp = usb_alloc_urb(0, GFP_KERNEL);
+		if (!transfer->urb || !transfer->zlp) {
 			ret = -ENOMEM;
 			goto fail;
 		}
 		usb_fill_bulk_urb(transfer->urb, usb_dev, usb_sndbulkpipe(usb_dev, STREAMING_EP),
 				  NULL, 0, fl2000_data_completion, transfer);
-		transfer->urb->transfer_flags = URB_ZERO_PACKET;
+		usb_fill_bulk_urb(transfer->zlp, usb_dev, usb_sndbulkpipe(usb_dev, STREAMING_EP),
+				  NULL, 0, fl2000_zlp_completion, transfer);
 	}
 	devres_add(&usb_dev->dev, stream);
 	device->stream = stream;

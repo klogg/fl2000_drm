@@ -899,7 +899,7 @@ static void test_stream_preparation(void)
  struct usb_bus bus={.sg_tablesize=1024};
  struct usb_device usb={.bus=&bus,.speed=USB_SPEED_SUPER};
  struct fl2000_stream stream={.usb_dev=&usb};
- struct urb urbs[FL2000_QUEUE_DEPTH]={0};
+ struct urb urbs[FL2000_QUEUE_DEPTH]={0},zlps[FL2000_QUEUE_DEPTH]={0};
  struct fl2000_stream_buffers *prepared;
  unsigned int dma_live=dma_allocs-dma_frees, pages_live=page_allocs-page_frees;
  test_stream=&stream;fail_at=0;
@@ -909,7 +909,8 @@ static void test_stream_preparation(void)
  assert(PTR_ERR(fl2000_streaming_prepare(&usb,INT_MAX,3))==-EINVAL);
  for(unsigned int i=0;i<FL2000_QUEUE_DEPTH;i++) {
   stream.transfers[i].stream=&stream;stream.transfers[i].urb=&urbs[i];
-  urbs[i].context=&stream.transfers[i];
+  stream.transfers[i].zlp=&zlps[i];
+  urbs[i].context=zlps[i].context=&stream.transfers[i];
  }
  prepared=fl2000_streaming_prepare(&usb,16,3);assert(!IS_ERR(prepared));
  assert(!fl2000_streaming_mode_set(&usb,&prepared) && !prepared);
@@ -1088,22 +1089,33 @@ static void test_register_io(void)
 
 static struct fl2000_stream *fl2000_find_stream(const struct usb_device *usb_dev)
 { (void)usb_dev; return test_stream; }
+static void finish(struct urb *urb)
+{
+ struct fl2000_transfer *t = urb->context;
+ if (urb == t->zlp) fl2000_zlp_completion(urb);
+ else fl2000_data_completion(urb);
+}
 static void usb_kill_urb(struct urb *urb)
 {
  if (urb && urb->submitted) {
   urb->submitted = false;
   urb->status = kill_status;
   urb->actual_length = 0;
-  fl2000_data_completion(urb);
+  finish(urb);
  }
 }
+/* Complete a frame URB with @status, then its queued end-of-frame URB. */
 static void complete(struct urb *urb, int status)
 {
- assert(urb->submitted);
+ struct urb *zlp = ((struct fl2000_transfer *)urb->context)->zlp;
+ assert(urb->submitted && zlp->submitted);
  urb->submitted = false;
  urb->status = status;
  urb->actual_length = urb->transfer_buffer_length;
  fl2000_data_completion(urb);
+ zlp->submitted = false;
+ zlp->status = 0;
+ fl2000_zlp_completion(zlp);
 }
 static void test_stream_release(void)
 {
@@ -1117,12 +1129,13 @@ static void test_stream_release(void)
   for(unsigned int i=0;i<allocated;i++) {
    struct fl2000_transfer *t=&stream.transfers[i];
    t->stream=&stream;t->urb=calloc(1,sizeof(*t->urb));assert(t->urb);
-   t->urb->context=t;assert(!sg_alloc_table(&t->sgt,1,GFP_KERNEL));
+   t->zlp=calloc(1,sizeof(*t->zlp));assert(t->zlp);
+   t->urb->context=t;t->zlp->context=t;assert(!sg_alloc_table(&t->sgt,1,GFP_KERNEL));
    assert(!fl2000_submit_transfer(t));
   }
   assert(stream.frames[0].users==allocated);
   fl2000_streaming_release(NULL,&stream);
-  assert(!stream.enabled && urb_frees==freed+allocated && !stream.frames[0].vaddr);
+  assert(!stream.enabled && urb_frees==freed+2*allocated && !stream.frames[0].vaddr);
  }
 }
 static void cancel_during_halt(void) { test_stream->running=false; }
@@ -1130,7 +1143,7 @@ static void test_queue(void)
 {
  struct fl2000_stream stream = { .buf_size = 8 };
  struct usb_device usb = {0};
- struct urb urbs[FL2000_QUEUE_DEPTH] = {0};
+ struct urb urbs[FL2000_QUEUE_DEPTH] = {0}, zlps[FL2000_QUEUE_DEPTH] = {0};
  struct scatterlist lists[FL2000_QUEUE_DEPTH] = {0};
  struct page pages[FL2000_FRAME_COUNT] = {0};
  struct page *pointers[FL2000_FRAME_COUNT];
@@ -1143,14 +1156,18 @@ static void test_queue(void)
  for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
   stream.transfers[i].stream = &stream;
   stream.transfers[i].urb = &urbs[i];
+  stream.transfers[i].zlp = &zlps[i];
   stream.transfers[i].sgt.sgl = &lists[i];
   stream.transfers[i].sgt.orig_nents = 1;
-  urbs[i].context = &stream.transfers[i];
+  urbs[i].context = zlps[i].context = &stream.transfers[i];
  }
  stream.latest = &stream.frames[0];
  submit_count = fail_at = log_count = 0;
  assert(!fl2000_streaming_enable(&usb));
- assert(submit_count == FL2000_QUEUE_DEPTH);
+ /* Every frame URB is followed by its own zero-length end-of-frame URB. */
+ assert(submit_count == 2 * FL2000_QUEUE_DEPTH);
+ for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++)
+  assert(zlps[i].submitted && !zlps[i].transfer_buffer_length && !urbs[i].transfer_flags);
  assert(stream.frames[0].users == FL2000_QUEUE_DEPTH);
  assert(urbs[0].sg != urbs[1].sg && urbs[1].sg != urbs[2].sg);
  unsigned int sets=sg_sets;
@@ -1163,6 +1180,27 @@ static void test_queue(void)
  assert(!log_count); /* Resubmission changes urb->status to EINPROGRESS. */
  fl2000_stop_stream(&stream);
  assert(!stream.enabled);
+ for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) assert(!stream.frames[i].users);
+ /* Whichever URB of a frame completes last resubmits the pair. */
+ assert(!fl2000_streaming_enable(&usb));
+ int pair_submits=submit_count;
+ zlps[0].submitted=false;zlps[0].status=0;fl2000_zlp_completion(&zlps[0]);
+ assert(submit_count==pair_submits);
+ urbs[0].submitted=false;urbs[0].status=0;urbs[0].actual_length=urbs[0].transfer_buffer_length;
+ fl2000_data_completion(&urbs[0]);
+ assert(submit_count==pair_submits+2 && urbs[0].submitted && zlps[0].submitted);
+ fl2000_stop_stream(&stream);
+ /* A rejected end-of-frame URB disables the queue; its frame URB still drains. */
+ assert(!fl2000_streaming_enable(&usb));
+ fail_at=submit_count+2;
+ complete(&urbs[1],0);
+ assert(!stream.enabled && urbs[1].submitted && !zlps[1].submitted);
+ assert(stream.recovery.work.pending);
+ pair_submits=submit_count;
+ complete(&urbs[2],0);
+ assert(submit_count==pair_submits);
+ fail_at=0;stream.recovery.work.pending=false;
+ fl2000_stop_stream(&stream);
  for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) assert(!stream.frames[i].users);
  struct sg_table dma_sgt={0};
  stream.frames[1].dma_sgt=&dma_sgt;stream.frames[1].dma=0x12340000;
@@ -1398,7 +1436,10 @@ parts += [
         "fl2000_streaming_update",
         "fl2000_stream_error",
         "fl2000_submit_transfer",
+        "fl2000_transfer_status",
+        "fl2000_transfer_done",
         "fl2000_data_completion",
+        "fl2000_zlp_completion",
         "fl2000_drain_stream",
         "fl2000_stop_stream",
         "fl2000_streaming_release",
