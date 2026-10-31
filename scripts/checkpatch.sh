@@ -30,6 +30,10 @@ for file in *.[ch] bridge/*.[ch] frame/*.[ch] compat/*.[ch]; do
             # USB descriptor field names are defined by the kernel ABI.
             options+=(--ignore CAMELCASE)
             ;;
+        compat/drm_atomic.h)
+            # This out-of-tree shim preserves the documented older-kernel API.
+            options+=(--ignore LINUX_VERSION_CODE,CONSTANT_COMPARISON)
+            ;;
         *)
             ;;
     esac

@@ -5,12 +5,17 @@
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=klogg_fl2000_drm&metric=alert_status)](https://sonarcloud.io/dashboard?id=klogg_fl2000_drm)
 
 An out-of-tree DRM/KMS driver for Fresco Logic FL2000 USB display adapters
-(USB ID `1d5c:2000`), targeting **Linux 7.0**. The core connects to an external
-bridge; the supplied IT6610/21/22 module adapts Linux v7.0's bridge driver for
-firmware-less attachment and the controller's I2C/reset constraints. Native VGA
-is not implemented.
+(USB ID `1d5c:2000`), targeting **Linux 7.0**, with build compatibility for
+**Linux 7.3**. The core automatically selects native VGA or an external HDMI
+bridge using the controller's HDMI-enable hardware pin. Native VGA uses the
+integrated DAC and DDC without bridge configuration. The supplied IT6610/21/22
+module adapts Linux v7.0's bridge driver for firmware-less attachment and the
+controller's I2C/reset constraints.
 
-Hardware testing covers one IT66121 HDMI adapter through QEMU/KVM. Other kernel
+Hardware testing covers one IT66121 HDMI adapter through QEMU/KVM and one
+native VGA adapter on Linux 7.3 (detection, EDID and visible output at
+1680x1050). VGA hotplug, extended EDID and DAC blanking still require physical
+validation. Other kernel
 versions require API review. See [validation scope and backlog](docs/DEVELOPMENT.md#validation-scope)
 for tested configurations and remaining limits.
 
@@ -22,14 +27,22 @@ libdw for gendwarfksyms on the tested Ubuntu headers).
 Build against the running kernel, or select an installed header tree.
 For distribution kernels lacking `CONFIG_DRM_BRIDGE_CONNECTOR` or its HDMI
 helpers, first run `scripts/fetch-bridge-connector.sh`. It prepares checksum-pinned,
-unmodified Linux 7.0 sources in the ignored `.qemu-build/upstream/` directory,
+unmodified Linux 7.0 sources by default, or Linux 7.3 with the `7.3` argument,
 using vendored files when present or HTTPS with curl otherwise. External builds
-compile only missing helpers.
+compile only missing helpers and select their directory from the target kernel
+version: `.qemu-build/upstream/` for 7.0, `.qemu-build/upstream-7.3/` for 7.3.
 Alternatively, set `FL2000_HELPER_SOURCE_DIR` to the matching kernel source
 `drivers/gpu/drm/display/` directory. In-tree builds use Kconfig-selected helpers.
 
+For your running Linux 7.3 kernel:
+
 ```sh
-scripts/fetch-bridge-connector.sh
+scripts/fetch-bridge-connector.sh 7.3
+make
+```
+
+```sh
+scripts/fetch-bridge-connector.sh 7.0
 ```
 
 Build the modules:
@@ -41,9 +54,10 @@ make KSRC=/usr/src/linux-headers-7.0.0-38-generic
 
 The resulting modules are `fl2000.ko` and `it66121.ko`. Use this repository's
 adapted bridge module; the stock upstream module is not interchangeable.
-The FL2000 core creates the I2C adapter; the userspace service identifies
-and instantiates its bridge as described below. There is no bridge-selection
-module parameter.
+The FL2000 core creates the I2C adapter. On HDMI adapters, the userspace service
+identifies and instantiates the bridge as described below. Native VGA registers
+its display immediately and does not need `it66121` or the enumerator. There is
+no output-selection module parameter.
 
 `FL2000_FRAME_BACKEND=auto` selects SSSE3 for x86-64 target kernels and portable
 code elsewhere. Explicit choices are `ssse3`, `bmi2`, and `generic`. Optimized
@@ -65,7 +79,7 @@ builds, installation, module precedence and source-upload preparation.
 
 ### In-tree integration
 
-Copy the driver sources, `bridge/`, `frame/`, `Kbuild`, and `Kconfig` into
+Copy the driver sources, `bridge/`, `frame/`, `compat/`, `Kbuild`, and `Kconfig` into
 `drivers/gpu/drm/fl2000/`. Add `source "drivers/gpu/drm/fl2000/Kconfig"` to
 the DRM Kconfig and `obj-$(CONFIG_DRM_FL2000) += fl2000/` to its Makefile.
 Merge this repository's `MAINTAINERS` entry into the kernel's file.
@@ -80,7 +94,9 @@ The external build continues to accept `FL2000_FRAME_BACKEND` overrides.
 
 ## Bridge configuration on x86
 
-FL2000 registers an I2C adapter without assuming which bridge is attached.
+For HDMI-wired adapters, FL2000 registers an I2C adapter without assuming which
+bridge is attached. Native adapters expose a separate `FL2000 VGA DDC` adapter
+name, which does not trigger the HDMI enumeration service.
 Device Tree and a kernel rebuild are not required for userspace enumeration.
 The core supplies adapter software-node properties for transport constraints,
 pixel input wiring and reset ownership. It also exposes the bridge IRQ through
@@ -201,12 +217,16 @@ enumeration data identifies IT66121. The bridge module also retains normal
 firmware-described IT6610/21/22 operation. Other bridges on FL2000 need
 compatible component attachment, IRQ handling, and hardware configuration;
 adding their identities to the config alone does not provide driver support.
-Native VGA through FL2000's integrated DAC is not implemented. A missing
-bridge is not treated as a VGA adapter.
+Native VGA provides monitor detection, interrupt-driven hotplug and synchronous
+EDID reads through FL2000's four-byte DDC commands, including segment selection
+for extended EDID. A missing HDMI bridge or unreadable EDID never selects VGA.
 
 - Linear XRGB8888, RGB888, and RGB565 framebuffers, including pitch and crops.
-- Per-buffer damage tracking, persistent USB transport buffers, and standard
+- Exact-damage conversion into a cached wire image, per-buffer repair by
+  copying, persistent USB transport buffers, and standard
   DRM shmem GEM objects. There is no custom GEM buffer type.
+- Imported GPU buffers and I/O-memory mappings use bounded, WC-aware reads
+  before conversion. Native system-memory buffers retain direct conversion.
 - USB hotplug interrupts with connector polling as an error fallback.
 - Bandwidth-based RGB888/RGB565 selection for XRGB8888 input. Native formats
   retain their representation; modes exceeding their bandwidth are rejected.
@@ -240,7 +260,7 @@ transport tables measure `95a2a7c`.
 Run hardware-free regressions with Python 3 and an ASan/UBSan-capable C compiler:
 
 ```sh
-for test in logic register_locking registers edid bridge bridge_probe \
+for test in logic register_locking registers edid vga bridge bridge_probe \
     driver drm interrupt tools enumerator; do
     UBSAN_OPTIONS=halt_on_error=1 python3 "tests/test_$test.py" || exit 1
 done

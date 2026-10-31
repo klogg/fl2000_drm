@@ -11,8 +11,10 @@ config DRM_FL2000
 	select IRQ_DOMAIN
 	help
 	  DRM/KMS and I2C transport support for Fresco Logic FL2000 USB
-	  display adapters. Configure the attached bridge independently.
-	  The FL2000 transport does not identify or instantiate a bridge.
+	  display adapters with automatic native VGA or external HDMI output
+	  selection. Native VGA needs no bridge configuration. Configure an
+	  external HDMI bridge independently; FL2000 does not identify or
+	  instantiate that bridge.
 
 	  If built as a module, this is called fl2000.
 

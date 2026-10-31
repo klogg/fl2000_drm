@@ -54,6 +54,7 @@ static void fl2000_destroy_interface(struct usb_interface *interface)
  */
 static int fl2000_control_init(struct usb_device *usb_dev)
 {
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	int ret;
 
 	ret = fl2000_regmap_init(usb_dev);
@@ -64,6 +65,8 @@ static int fl2000_control_init(struct usb_device *usb_dev)
 		ret = fl2000_init_clock(usb_dev);
 	if (!ret)
 		ret = fl2000_usb_magic(usb_dev);
+	if (!ret)
+		ret = fl2000_detect_output(usb_dev, &device->native_vga);
 	if (!ret)
 		ret = fl2000_i2c_init(usb_dev);
 	if (ret)

@@ -128,7 +128,7 @@ Run all sanitizer and script harnesses with Python 3 and an ASan/UBSan-capable
 C compiler:
 
 ```sh
-for test in logic register_locking registers edid bridge bridge_probe \
+for test in logic register_locking registers edid vga bridge bridge_probe \
     driver drm interrupt tools enumerator; do
     UBSAN_OPTIONS=halt_on_error=1 python3 "tests/test_$test.py" || exit 1
 done
@@ -136,6 +136,10 @@ done
 
 `test_logic.py` exercises portable, SSSE3 and BMI2 conversion with independent
 byte references. `test_registers.py` includes forced big-endian scalar storage.
+`test_vga.py` checks output-pin selection, native detection, DDC byte order,
+partial blocks, extended segments and recovery, unplug guards and DAC disable.
+The DRM and interrupt harnesses include native bind failures, retained DRM
+files and hotplug after destructive status reads.
 The enumerator harness uses synthetic sysfs and tool responses, including
 built-in drivers, deferred clients and explicit reprobe.
 `tests/source_helpers.py` extracts production functions and structures; these
@@ -270,6 +274,10 @@ CPU and transport datasets are linked from [profiling](PROFILING.md).
 
 ## Validation backlog
 
+- **Native VGA:** one VGA adapter on Linux 7.3 showed correct output
+  selection, EDID, mode listing and visible desktop output at 1680x1050. Still
+  verify boot without a monitor, connection/disconnection, extended EDID,
+  no-EDID displays, DAC blanking and more VGA dongles.
 - **System PM:** the QEMU `pm_test=devices` control timed out after 45 seconds
   with both drivers unloaded; the freezer-only control passed. Diagnose that
   environment, then test S3, s2idle, reset-resume, repeated active/idle cycles
@@ -312,10 +320,11 @@ its Kconfig, rather than a second implementation with the same module name.
 Review the local adapter-property and component-bind contracts as part of that
 integration.
 
-Native VGA requires output selection, VGA connector/EDID handling, monitor
-interrupts and analog validation. LBUF halt and VGA error recovery are not
-implemented; current code only acknowledges overflow/underflow flags. HDMI audio
-transport on FL2000 and color management need implementation. Resolve the AVI
+Native VGA output selection, connector/EDID handling and monitor interrupts
+are implemented and show a picture on one physical adapter; hotplug and
+blanking validation remain pending. LBUF halt and VGA error
+recovery are not implemented; current code only acknowledges overflow/underflow
+flags. HDMI audio transport on FL2000 and color management need implementation. Resolve the AVI
 packet register-layout conflict documented in [the register reference](REGISTERS.md)
 before changing shared bridge programming.
 

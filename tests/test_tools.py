@@ -27,6 +27,49 @@ from source_helpers import _code_mask, function, structure
 
 
 class ToolTests(unittest.TestCase):
+    def test_helper_directory_matches_target_kernel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            makefile = Path(directory) / "Makefile"
+            makefile.write_text(
+                f"include {ROOT / 'Kbuild'}\n"
+                "show:\n\t@echo $(FL2000_HELPER_SOURCE_DIR)\n"
+            )
+            for version, expected in (
+                ("7.0", "upstream"),
+                ("7.3", "upstream-7.3"),
+            ):
+                major, minor = version.split(".")
+                command = [
+                    "make",
+                    "--no-print-directory",
+                    "-f",
+                    str(makefile),
+                    "show",
+                    "KBUILD_EXTMOD=1",
+                    f"src={ROOT}",
+                    f"VERSION={major}",
+                    f"PATCHLEVEL={minor}",
+                    "FL2000_FRAME_BACKEND=generic",
+                ]
+                with self.subTest(version=version):
+                    result = subprocess.check_output(command, text=True).strip()
+                    self.assertEqual(result, str(ROOT / ".qemu-build" / expected))
+                    result = subprocess.check_output(
+                        command + ["FL2000_HELPER_SOURCE_DIR=/custom/helpers"],
+                        text=True,
+                    ).strip()
+                    self.assertEqual(result, "/custom/helpers")
+
+    def test_helper_fetch_rejects_unsupported_kernel(self):
+        result = subprocess.run(
+            [str(ROOT / "scripts/fetch-bridge-connector.sh"), "7.1"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Unsupported helper version", result.stderr)
+
     def test_production_kernel_doc_coverage(self):
         paths = [
             path

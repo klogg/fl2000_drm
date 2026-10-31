@@ -34,6 +34,7 @@
 #include <drm/drm_bridge.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_edid.h>
+#include "../compat/drm_atomic.h"
 #include <drm/drm_print.h>
 
 #include "it66121_registers.h"
@@ -855,7 +856,7 @@ static int it66121_restore_interrupts(struct it66121_ctx *ctx)
  * Context: Process context. May sleep.
  */
 static void it66121_bridge_disable(struct drm_bridge *bridge,
-				   struct drm_atomic_state *state __always_unused)
+				   struct drm_atomic_commit *state __always_unused)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 
@@ -951,7 +952,7 @@ static int it66121_configure_hdmi(struct it66121_ctx *ctx, const struct drm_disp
  *
  * Context: Process context. May sleep.
  */
-static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_state *state)
+static void it66121_bridge_enable(struct drm_bridge *bridge, struct drm_atomic_commit *state)
 {
 	struct it66121_ctx *ctx = container_of(bridge, struct it66121_ctx, bridge);
 	const struct drm_crtc_state *crtc_state;
@@ -1097,7 +1098,11 @@ static const struct drm_edid *it66121_bridge_edid_read(struct drm_bridge *bridge
 static const struct drm_bridge_funcs it66121_bridge_funcs = {
 	.atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
 	.atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
+#ifdef FL2000_DRM_LEGACY_ATOMIC
 	.atomic_reset = drm_atomic_helper_bridge_reset,
+#else
+	.atomic_create_state = drm_atomic_helper_bridge_create_state,
+#endif
 	.attach = it66121_bridge_attach,
 	.atomic_get_output_bus_fmts = it66121_bridge_atomic_get_output_bus_fmts,
 	.atomic_get_input_bus_fmts = it66121_get_input_bus_fmts,

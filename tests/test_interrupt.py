@@ -50,7 +50,7 @@ static void (*mutex_hook)(void);
 struct fl2000_interrupt;
 typedef int atomic_t;
 #define atomic_read(p) (*(p))
-struct fl2000_device { struct fl2000_interrupt *interrupt; atomic_t i2c_errors; };
+struct fl2000_device { struct fl2000_interrupt *interrupt; atomic_t i2c_errors; bool native_vga; };
 static struct fl2000_device device;
 struct irq_domain { int unused; };
 struct fwnode_handle { int unused; };
@@ -266,13 +266,25 @@ int main(void)
  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
  assert(irq_calls==unmask_irqs+2 && !intr.irq_rescan);
  fl2000_intr_stop(&intr);
+ /* Native VGA rescans even when detect consumed the event; there is no bridge IRQ. */
+ device.native_vga=true;status_result=0;urb.status=0;
+ int previous_irqs=irq_calls;
+ previous_hotplugs=hotplugs;
+ assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
+ complete(&intr,0);run_work(&intr);
+ assert(hotplugs==previous_hotplugs+2 && irq_calls==previous_irqs && urb.submitted);
+ complete(&intr,0);status_result=-EIO;run_work(&intr);
+ assert(intr.status_polling && polling_current && irq_calls==previous_irqs);
+ status_result=0;run_work(&intr);
+ assert(!intr.status_polling && !polling_current && urb.submitted && irq_calls==previous_irqs);
+ fl2000_intr_stop(&intr);device.native_vga=false;
  /* Acknowledgment can fail even when a later detect succeeds. */
  urb.status=0;status_result=1;hotplug_result=0;irq_error=true;
  assert(!fl2000_enable_interrupt(&usb));run_work(&intr);
  assert(intr.status_polling && polling_current && intr.work.work.pending);
  complete(&intr,0);run_work(&intr);
  assert(!urb.submitted && intr.rearm && intr.status_polling);
- int previous_irqs=irq_calls;
+ previous_irqs=irq_calls;
  status_result=0;irq_error=false;run_work(&intr);
  assert(irq_calls==previous_irqs+1 && urb.submitted && !intr.status_polling);
  assert(!polling_current && !intr.work.work.pending);

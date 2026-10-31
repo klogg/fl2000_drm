@@ -5,6 +5,7 @@
  */
 
 #include "fl2000.h"
+#include "compat/drm_atomic.h"
 #include <linux/component.h>
 #include <linux/dma-mapping.h>
 #include <linux/math64.h>
@@ -232,7 +233,7 @@ static struct drm_driver fl2000_drm_driver = {
  * Context: Process context under DRM atomic/modeset serialization.
  * Return: 0 on success or a negative error code.
  */
-static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_state *state)
+static int fl2000_atomic_check(struct drm_device *drm, struct drm_atomic_commit *state)
 {
 	const struct drm_plane *plane;
 	const struct drm_plane_state *old_plane;
@@ -607,7 +608,7 @@ static struct drm_plane_state *fl2000_plane_duplicate_state(struct drm_plane *pl
  * @state: Pending plane state receiving mappings and prepared buffers.
  *
  * Runs before atomic state swap. Mapping and allocation errors leave scanout
- * unchanged. I/O-memory mappings are unsupported.
+ * unchanged. Imported and I/O-memory mappings are staged during frame copying.
  *
  * Context: Process context. May sleep.
  * Return: 0 on success or a negative error code.
@@ -629,10 +630,6 @@ static int fl2000_prepare_fb(struct drm_plane *plane, struct drm_plane_state *st
 	ret = drm_gem_fb_vmap(state->fb, shadow->map, shadow->data);
 	if (ret)
 		return ret;
-	if (shadow->data[0].is_iomem) {
-		drm_gem_fb_vunmap(state->fb, shadow->map);
-		return -EOPNOTSUPP;
-	}
 	crtc = state->crtc ? drm_atomic_get_new_crtc_state(state->state, state->crtc) : NULL;
 	if (!crtc || !crtc->active || !drm_atomic_crtc_needs_modeset(crtc))
 		return 0;
@@ -691,6 +688,7 @@ static int fl2000_copy_frame(struct fl2000_drm_if *drm_if, struct drm_plane_stat
 {
 	struct drm_framebuffer *fb = state->fb;
 	struct drm_shadow_plane_state *shadow = to_drm_shadow_plane_state(state);
+	struct iosys_map src = shadow->data[0];
 	struct drm_rect visible;
 	size_t offset;
 	int idx;
@@ -712,7 +710,9 @@ static int fl2000_copy_frame(struct fl2000_drm_if *drm_if, struct drm_plane_stat
 		visible.y2 -= state->src_y >> 16;
 		damage = &visible;
 	}
-	ret = fl2000_streaming_update(drm_if->usb_dev, (u8 *)shadow->data[0].vaddr + offset,
+	iosys_map_incr(&src, offset);
+	ret = fl2000_streaming_update(drm_if->usb_dev, &src,
+				      !!drm_gem_fb_get_obj(fb, 0)->import_attach,
 				      state->src_h >> 16, state->src_w >> 16, fb->pitches[0],
 				      fb->format->format, damage);
 	drm_gem_fb_end_cpu_access(fb, DMA_FROM_DEVICE);
@@ -785,7 +785,7 @@ static int fl2000_configure_mode(struct fl2000_drm_if *drm_if, const struct drm_
  * Context: Process context under DRM atomic/modeset serialization.
  * Return: 0 on success or a negative error code.
  */
-static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_state *state)
+static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_commit *state)
 {
 	int ret;
 
@@ -806,7 +806,7 @@ static int fl2000_crtc_atomic_check(struct drm_crtc *crtc, struct drm_atomic_sta
  * Context: Process context under DRM atomic/modeset serialization.
  * Return: 0 on success or a negative error code.
  */
-static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_state *state)
+static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_commit *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
 	struct drm_plane_state *new_plane = drm_atomic_get_new_plane_state(state, plane);
@@ -830,7 +830,7 @@ static int fl2000_plane_atomic_check(struct drm_plane *plane, struct drm_atomic_
  *
  * Context: Process context under DRM atomic/modeset serialization.
  */
-static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_state *state)
+static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_commit *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
 	struct drm_plane_state *plane = drm_atomic_get_new_plane_state(state, &drm_if->plane);
@@ -864,7 +864,7 @@ static void fl2000_crtc_atomic_enable(struct drm_crtc *crtc, struct drm_atomic_s
  * Context: Process context under DRM atomic/modeset serialization.
  */
 static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
-				       struct drm_atomic_state *state __always_unused)
+				       struct drm_atomic_commit *state __always_unused)
 {
 	const struct fl2000_drm_if *drm_if = container_of(crtc->dev, struct fl2000_drm_if, drm);
 
@@ -881,7 +881,7 @@ static void fl2000_crtc_atomic_disable(struct drm_crtc *crtc,
  *
  * Context: Process context under DRM atomic/modeset serialization.
  */
-static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomic_state *state)
+static void fl2000_plane_atomic_update(struct drm_plane *plane, struct drm_atomic_commit *state)
 {
 	struct fl2000_drm_if *drm_if = container_of(plane->dev, struct fl2000_drm_if, drm);
 	const struct drm_crtc_state *crtc = drm_atomic_get_new_crtc_state(state, &drm_if->crtc);
@@ -1080,14 +1080,14 @@ static void fl2000_bridge_module_put(struct drm_device *drm __always_unused, voi
 
 /**
  * fl2000_drm_bind() - Bind a bridge and publish a DRM display
- * @master: USB parent registered as the component master.
+ * @master: USB parent owning the display's bind resources.
  *
- * The component bind devres group owns the initial DRM reference. Pin the
- * selected provider before calling its callbacks, and retain that module
- * reference until final DRM release, including after open-file unbind. The
- * bridge connector holds callbacks beyond component attachment.
+ * The component or native-VGA bind devres group owns the initial DRM reference.
+ * For HDMI, pin the selected provider before calling its callbacks and retain
+ * that module reference until final DRM release, including after open-file
+ * unbind. The connector holds callbacks beyond component attachment.
  *
- * Context: Process context under component framework serialization.
+ * Context: Process context under component or adapter lifecycle serialization.
  * Return: 0 on success or a negative error code.
  */
 static int fl2000_drm_bind(struct device *master)
@@ -1113,7 +1113,7 @@ static int fl2000_drm_bind(struct device *master)
 	drm->mode_config.max_width = FL20000_MAX_WIDTH;
 	drm->mode_config.min_height = 1;
 	drm->mode_config.max_height = FL20000_MAX_HEIGHT;
-	/* Imported GEM buffers are mapped by the USB controller, not the dongle. */
+	/* Older shmem helpers DMA-map imports against the USB controller. */
 	dma_dev = usb_intf_get_dma_device(usb_ifnum_to_if(usb_dev, FL2000_USBIF_AVCONTROL));
 	if (dma_dev) {
 		drm_dev_set_dma_dev(drm, dma_dev);
@@ -1122,18 +1122,17 @@ static int fl2000_drm_bind(struct device *master)
 	ret = fl2000_pipeline_init(drm_if);
 	if (ret)
 		return ret;
-	/* Component matching and binding run under the same framework lock.
-	 * Pin the selected provider before invoking its callbacks; the connector
-	 * retains those callbacks until the last DRM file is closed.
-	 */
-	if (!try_module_get(device->bridge_owner)) {
-		ret = -ENODEV;
-		return ret;
+	if (device->native_vga) {
+		ret = fl2000_vga_attach(master, drm, &drm_if->encoder);
+	} else {
+		/* The connector retains provider callbacks until the final DRM release. */
+		if (!try_module_get(device->bridge_owner))
+			return -ENODEV;
+		ret = drmm_add_action_or_reset(drm, fl2000_bridge_module_put, device->bridge_owner);
+		if (ret)
+			return ret;
+		ret = component_bind_all(master, &drm_if->encoder);
 	}
-	ret = drmm_add_action_or_reset(drm, fl2000_bridge_module_put, device->bridge_owner);
-	if (ret)
-		return ret;
-	ret = component_bind_all(master, &drm_if->encoder);
 	if (ret)
 		return ret;
 	connector = drm_bridge_connector_init(drm, &drm_if->encoder);
@@ -1169,16 +1168,17 @@ detach:
 	WRITE_ONCE(device->drm, NULL);
 detach_encoder:
 	drm_encoder_cleanup(&drm_if->encoder);
-	component_unbind_all(master, &drm_if->encoder);
+	if (!device->native_vga)
+		component_unbind_all(master, &drm_if->encoder);
 	return ret;
 }
 
 /**
- * fl2000_drm_unbind() - Quiesce display callbacks before provider unbind
- * @master: USB component master device.
+ * fl2000_drm_unbind() - Quiesce display callbacks before bridge detachment
+ * @master: USB parent owning the display's bind resources.
  *
- * Component core releases the bind devres group after this callback. Open
- * files may retain the unplugged DRM allocation and provider module.
+ * The caller releases the bind devres group after this callback. Open files
+ * may retain the unplugged DRM allocation and, for HDMI, the provider module.
  *
  * Context: Process context. May sleep.
  */
@@ -1202,7 +1202,8 @@ static void fl2000_drm_unbind(struct device *master)
 	fl2000_streaming_disable(usb_dev);
 	/* Encoder cleanup owns bridge detachment; do it before its I2C driver can go away. */
 	drm_encoder_cleanup(&drm_if->encoder);
-	component_unbind_all(master, &drm_if->encoder);
+	if (!device->native_vga)
+		component_unbind_all(master, &drm_if->encoder);
 	WRITE_ONCE(device->drm, NULL);
 }
 
@@ -1234,10 +1235,11 @@ static int fl2000_component_compare(struct device *client_dev, void *data)
 }
 
 /**
- * fl2000_drm_init() - Register a component master for this adapter
+ * fl2000_drm_init() - Initialize the selected output's display owner
  * @usb_dev: USB parent whose interface resources remain alive.
  *
- * Matches a component by its owning I2C adapter. Registration can succeed
+ * Native VGA binds immediately in an explicit devres group. HDMI
+ * matches a component by its owning I2C adapter. Registration can succeed
  * without a bridge; DRM registration waits for component binding. The provider
  * receives the encoder and must attach its bridge without creating a connector.
  *
@@ -1246,8 +1248,19 @@ static int fl2000_component_compare(struct device *client_dev, void *data)
  */
 int fl2000_drm_init(struct usb_device *usb_dev)
 {
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
 	struct component_match *match = NULL;
+	int ret;
 
+	if (device->native_vga) {
+		if (!devres_open_group(&usb_dev->dev, &device->native_vga, GFP_KERNEL))
+			return -ENOMEM;
+		ret = fl2000_drm_bind(&usb_dev->dev);
+		devres_close_group(&usb_dev->dev, &device->native_vga);
+		if (ret)
+			devres_release_group(&usb_dev->dev, &device->native_vga);
+		return ret;
+	}
 	component_match_add(&usb_dev->dev, &match, fl2000_component_compare, usb_dev);
 	if (IS_ERR(match))
 		return PTR_ERR_OR_ZERO(match);
@@ -1255,7 +1268,7 @@ int fl2000_drm_init(struct usb_device *usb_dev)
 }
 
 /**
- * fl2000_drm_cleanup() - Remove the component master and bound display
+ * fl2000_drm_cleanup() - Unbind the display and release its bind resources
  * @usb_dev: USB parent whose interface resources remain alive.
  *
  * Unbind drains IRQ work and polling, unplugs DRM, shuts down scanout and
@@ -1266,7 +1279,16 @@ int fl2000_drm_init(struct usb_device *usb_dev)
  */
 void fl2000_drm_cleanup(struct usb_device *usb_dev)
 {
-	component_master_del(&usb_dev->dev, &fl2000_master_ops);
+	struct fl2000_device *device = dev_get_drvdata(&usb_dev->dev);
+
+	if (device->native_vga) {
+		if (device->drm) {
+			fl2000_drm_unbind(&usb_dev->dev);
+			devres_release_group(&usb_dev->dev, &device->native_vga);
+		}
+	} else {
+		component_master_del(&usb_dev->dev, &fl2000_master_ops);
+	}
 }
 
 /**

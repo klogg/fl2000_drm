@@ -5,6 +5,7 @@ fl2000-y := \
 	fl2000_interrupt.o \
 	fl2000_streaming.o \
 	fl2000_i2c.o \
+	fl2000_vga.o \
 	fl2000_drm.o
 
 it66121-y := \
@@ -57,7 +58,11 @@ endif
 
 # External builds may reuse unmodified sources for helpers absent from the kernel.
 ifneq ($(KBUILD_EXTMOD),)
+ifeq ($(VERSION).$(PATCHLEVEL),7.0)
 FL2000_HELPER_SOURCE_DIR ?= $(src)/.qemu-build/upstream
+else
+FL2000_HELPER_SOURCE_DIR ?= $(src)/.qemu-build/upstream-$(VERSION).$(PATCHLEVEL)
+endif
 ifeq ($(CONFIG_DRM_BRIDGE_CONNECTOR),)
 fl2000-y += compat/bridge_connector.o
 endif

@@ -2,12 +2,15 @@
 
 ## Discovery and attachment
 
-FL2000 owns a USB transport, an I2C adapter and a DRM display pipeline. It
-waits for a bridge component on its own I2C adapter before registering the DRM
-device. A udev-activated service identifies configured bridges and creates an
-I2C client through `new_device`; see [enumeration](ENUMERATION.md). Native VGA
-through the integrated DAC is not implemented, including when bridge discovery
-fails.
+FL2000 owns a USB transport, an I2C adapter and a DRM display pipeline. During
+initial controller setup, status bit 27 (the hardware HDMI-enable pin) selects
+the output independently of monitor presence and bridge enumeration. A low pin
+attaches an integrated VGA bridge and immediately registers the DRM device.
+A high pin waits for a bridge component on its own I2C adapter. A udev-activated
+service identifies configured HDMI bridges and creates an I2C client through
+`new_device`; see [enumeration](ENUMERATION.md). Failed bridge discovery never
+falls back to VGA. The pin is named in the vendor driver and is high in recorded
+HDMI captures and low on the tested physical VGA adapter.
 
 The supplied IT6610/21/22 driver derives from the [Linux v7.0 bridge
 driver][upstream-bridge]. It supports two attachment contexts:
@@ -78,12 +81,25 @@ path fails. The domain, worker and provider lifetimes are coupled; their
 synchronization and retry rules are documented at `struct fl2000_interrupt`
 and the interrupt entry points in [fl2000_interrupt.c](../fl2000_interrupt.c).
 
+The native VGA bridge reads monitor presence from status bit 29 and EDID from
+DDC address 0x50 using four-byte controller commands. Extended reads select
+address 0x30's segment pointer and restore zero under the adapter bus lock.
+A failed restoration is retried before subsequent base reads; ordinary base
+reads do not require segment-pointer support. EDID validation uses
+`drm_edid_read_custom()` synchronously, without a cache. Native USB notifications
+rescan connector state even if detection already consumed the event bits, and
+never dispatch the external bridge IRQ. Atomic disable stops DAC output while
+preserving monitor detection; normal CRTC programming re-enables it.
+
 ## Ownership and teardown
 
 Each adapter owns its lifecycle lock and transport resources. The
 `struct fl2000_device` documentation in [fl2000.h](../fl2000.h) describes state
-ownership. Component binding owns the initial DRM reference; open files can
-retain the allocation and provider module after unbind. See
+ownership. A component bind group (HDMI) or explicit devres bind group (VGA)
+owns the initial DRM reference; open files can retain the allocation after
+unbind. HDMI additionally retains its provider module. The native bridge is
+reference-counted, and its callbacks guard USB access with `drm_dev_enter()`
+so retained connectors cannot use resources released after unplug. See
 `fl2000_drm_bind()` and `fl2000_drm_cleanup()` in [fl2000_drm.c](../fl2000_drm.c)
 for the lifetime and teardown contracts.
 
@@ -104,8 +120,20 @@ USB stream. The source-level atomic contract is documented in
 [fl2000_drm.c](../fl2000_drm.c), and wire representation, ownership and damage
 tracking in [fl2000_streaming.c](../fl2000_streaming.c).
 
+Imported framebuffers and I/O-memory mappings are read through a reusable
+16 KiB staging buffer with aligned `drm_memcpy_from_wc()` spans. Prefixes and
+tails use mapping-aware copies without reading outside the requested pixels.
+The original source mapping remains the damage-history key; staging does not
+invalidate retained wire images. Native system-memory framebuffers retain
+direct conversion. The standard shmem helper supplies CPU-only PRIME imports
+on Linux 7.3; older helpers retain the USB-controller DMA device for imports.
+
 Damage handling reduces host preparation work while the transport continues
-sending complete frames. Native framebuffer formats avoid color conversion,
+sending complete frames. Each commit converts only its own damage into a cached
+wire-format shadow image. A free transport buffer then copies from the shadow
+the region it missed while in flight, so damage accumulated over several
+frames costs a memory copy rather than a source reread and conversion. This
+keeps dirty-framebuffer commits short while windows move. Native framebuffer formats avoid color conversion,
 which makes userspace format choice relevant to CPU cost. Flip completion
 provides software synchronization; it is not evidence of physical presentation.
 See [profiling](PROFILING.md) for measurement scope and results.

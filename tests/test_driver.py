@@ -90,6 +90,8 @@ static int fl2000_regmap_init(struct usb_device *usb)
 static int fl2000_reset(struct usb_device *usb) { (void)usb;return operation(); }
 static int fl2000_init_clock(struct usb_device *usb) { (void)usb;return operation(); }
 static int fl2000_usb_magic(struct usb_device *usb) { (void)usb;return operation(); }
+static int fl2000_detect_output(struct usb_device *usb,bool *vga)
+{ (void)usb;int ret=operation();if(!ret)*vga=false;return ret; }
 static int fl2000_i2c_init(struct usb_device *usb)
 { (void)usb;int r=operation();if(!r)live|=2;return r; }
 static void fl2000_i2c_cleanup(struct usb_device *usb)
@@ -165,7 +167,7 @@ int main(void)
  mutex_unlock(&first->lock);
  free(other.dev.data);
  /* Inject failure at every setup operation, then retry using the same state. */
- for(int failure=1;failure<=9;failure++) {
+ for(int failure=1;failure<=10;failure++) {
   fail_step=failure;step=destroy_count=0;
   assert(fl2000_probe(&interfaces[0],NULL)==-EIO);
   assert(step==failure && !live && !drm);

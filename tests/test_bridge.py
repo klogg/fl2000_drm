@@ -57,7 +57,7 @@ struct drm_connector { void *dev; struct drm_display_info display_info; };
 struct drm_crtc_state { struct drm_display_mode mode, adjusted_mode; };
 struct drm_encoder { void *crtc; };
 struct drm_bridge { struct drm_encoder *encoder; void *dev; };
-struct drm_atomic_state { struct drm_connector *connector; struct drm_crtc_state *crtc; };
+struct drm_atomic_commit { struct drm_connector *connector; struct drm_crtc_state *crtc; };
 struct hdmi_avi_infoframe { int unused; };
 #define HDMI_I2S 0
 struct hdmi_codec_daifmt { int fmt; };
@@ -104,9 +104,9 @@ static bool drm_dev_enter(void *dev,int *idx){assert(dev==(void *)1);*idx=0;retu
 static void drm_dev_exit(int idx){(void)idx;}
 static void drm_bridge_hpd_notify(struct drm_bridge *b,enum drm_connector_status s)
 {(void)b;notifications++;notified_status=s;}
-static struct drm_connector *drm_atomic_get_new_connector_for_encoder(struct drm_atomic_state *s,struct drm_encoder *e)
+static struct drm_connector *drm_atomic_get_new_connector_for_encoder(struct drm_atomic_commit *s,struct drm_encoder *e)
 {(void)e;return s->connector;}
-static struct drm_crtc_state *drm_atomic_get_new_crtc_state(struct drm_atomic_state *s,void *crtc)
+static struct drm_crtc_state *drm_atomic_get_new_crtc_state(struct drm_atomic_commit *s,void *crtc)
 {(void)crtc;return s->crtc;}
 static int drm_hdmi_avi_infoframe_from_display_mode(struct hdmi_avi_infoframe *f,struct drm_connector *c,const struct drm_display_mode *m)
 {(void)f;(void)m;assert(c && c->display_info.is_hdmi);return 0;}
@@ -154,7 +154,7 @@ int main(void)
  struct drm_connector connector={.dev=(void *)1,.display_info={.is_hdmi=true}};
  struct it66121_ctx ctx={.regmap=&map,.bridge={.encoder=&encoder},.connector=&connector,.bus_width=24,.id=ID_IT66121,.aligned_i2c=true,.reset_by_controller=true,.component_binding=true,.input_clock_delay=IT66121_INPUT_MODE_PCLK_DELAY1,.hpd_enabled=true};
  struct drm_crtc_state crtc={.adjusted_mode={.clock=32000}};
- struct drm_atomic_state state={.connector=&connector,.crtc=&crtc};
+ struct drm_atomic_commit state={.connector=&connector,.crtc=&crtc};
  /* Simulate the encoder reset immediately before atomic bridge enable. */
  memset(map.values,0xff,sizeof(map.values));
  it66121_bridge_enable(&ctx.bridge,&state);

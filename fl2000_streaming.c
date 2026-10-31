@@ -6,11 +6,14 @@
 /* FL2000 bulk streaming. Interface 0 altsetting 1 avoids shared endpoint 1. */
 #include "fl2000.h"
 #include <linux/dma-mapping.h>
+#include <linux/iosys-map.h>
 #include <linux/scatterlist.h>
+#include <linux/slab.h>
 #include <linux/usb.h>
 #include <linux/vmalloc.h>
 #include <linux/workqueue.h>
 #include <drm/drm_fourcc.h>
+#include <drm/drm_cache.h>
 #include <drm/drm_rect.h>
 #include <linux/overflow.h>
 #include <linux/unaligned.h>
@@ -30,12 +33,17 @@
  * complete uncompressed frames. Three immutable URBs share retained wire
  * images through explicit references; per-buffer damage history avoids full
  * copies when reusing an image after missed updates.
+ *
+ * The controller ends a frame on a zero-length packet. URB_ZERO_PACKET only
+ * emits one when the frame is a multiple of the endpoint packet size, so each
+ * frame URB is followed by a separate zero-length URB.
  */
 #define FL2000_QUEUE_DEPTH	 3
 #define FL2000_RECOVERY_RETRIES	 3
 #define FL2000_RECOVERY_DELAY_MS 100
 /* Three in-flight frames, a latest frame, and a free conversion target. */
 #define FL2000_FRAME_COUNT (FL2000_QUEUE_DEPTH + 2)
+#define FL2000_READ_SIZE   16384
 
 /**
  * struct fl2000_frame - Immutable wire image while submitted
@@ -68,21 +76,25 @@ struct fl2000_frame {
 /**
  * struct fl2000_transfer - Reusable URB and its frame reference
  * @urb: Bulk URB reused after completion or synchronous cancellation.
+ * @zlp: Zero-length URB marking the end of the frame sent by @urb.
  * @sgt: Per-URB page fallback metadata; never shared with another URB.
  * @stream: Owning stream.
  * @frame: Submitted frame, or NULL when not in flight.
  * @sg_frame: Frame whose pages are currently installed in @sgt.
+ * @pending: Submitted URBs of @urb and @zlp not yet completed.
  *
- * The stream spinlock protects submission and @frame ownership. USB core owns
+ * The stream spinlock protects submission, @pending and @frame ownership. USB core owns
  * DMA metadata while the URB is submitted. Completion releases the frame
  * reference before selecting the next retained image.
  */
 struct fl2000_transfer {
 	struct urb *urb;
+	struct urb *zlp;
 	struct sg_table sgt;
 	struct fl2000_stream *stream;
 	struct fl2000_frame *frame;
 	struct fl2000_frame *sg_frame;
+	unsigned int pending;
 };
 
 /**
@@ -91,6 +103,8 @@ struct fl2000_transfer {
  * @tables: Separate page fallback tables for the three URBs.
  * @size: Wire frame size, rounded up to eight bytes.
  * @bytes_pix: Wire bytes per pixel, 2 or 3.
+ * @read_buf: Cached staging buffer for imported or I/O-memory source spans.
+ * @shadow: Cached wire image receiving exact source damage.
  *
  * Owned by pending plane state until fl2000_streaming_mode_set() consumes it.
  * Preparation can fail before atomic state swap; installation allocates nothing.
@@ -100,6 +114,8 @@ struct fl2000_stream_buffers {
 	struct sg_table tables[FL2000_QUEUE_DEPTH];
 	unsigned int size;
 	u32 bytes_pix;
+	u8 *read_buf;
+	u8 *shadow;
 };
 
 /**
@@ -111,6 +127,9 @@ struct fl2000_stream_buffers {
  * @buf_size: Rounded wire frame size.
  * @bytes_pix: Wire pixel size, 2 or 3.
  * @source: Source address used to validate conversion history; not owned.
+ * @read_buf: Cached staging buffer, protected by @mutex.
+ * @shadow: Cached wire image of the newest source, protected by @mutex.
+ * @shadow_valid: Whether @shadow matches the current source layout.
  * @width: Source crop width in pixels.
  * @height: Source crop height in rows.
  * @pitch: Source row stride in bytes.
@@ -137,7 +156,10 @@ struct fl2000_stream {
 	struct fl2000_frame *latest;
 	unsigned int buf_size;
 	u32 bytes_pix;
-	const void *source;
+	struct iosys_map source;
+	u8 *read_buf;
+	u8 *shadow;
+	bool shadow_valid;
 	unsigned int width;
 	unsigned int height;
 	unsigned int pitch;
@@ -254,11 +276,12 @@ stop:
 }
 
 /**
- * fl2000_submit_transfer() - Take a latest-frame reference and submit one URB
+ * fl2000_submit_transfer() - Take a latest-frame reference and submit one frame
  * @transfer: Reusable bulk transfer.
  *
- * Does not allocate or copy pixels. A failed submit drops the frame reference
- * and schedules recovery when scanout is still requested.
+ * Queues the frame URB followed by its zero-length end-of-frame URB. Does not
+ * allocate or copy pixels. A failed submit drops references it took and
+ * schedules recovery when scanout is still requested.
  *
  * Context: Caller holds the stream spinlock with local IRQs saved.
  * Return: 0 on success or a negative error code.
@@ -310,8 +333,68 @@ static int fl2000_submit_transfer(struct fl2000_transfer *transfer)
 		frame->users--;
 		transfer->frame = NULL;
 		fl2000_stream_error(stream, ret);
+		return ret;
 	}
-	return ret;
+	transfer->pending = 1;
+	ret = usb_submit_urb(transfer->zlp, GFP_ATOMIC);
+	if (ret) {
+		/* The frame URB completes without resubmitting a disabled queue. */
+		fl2000_stream_error(stream, ret);
+		return ret;
+	}
+	transfer->pending++;
+	return 0;
+}
+
+/**
+ * fl2000_transfer_status() - Classify one bulk completion status
+ * @stream: Owning bulk stream.
+ * @status: URB completion status.
+ *
+ * Context: Caller holds the stream spinlock.
+ * Return: True for success; otherwise queue state has been updated.
+ */
+static bool fl2000_transfer_status(struct fl2000_stream *stream, int status)
+{
+	switch (status) {
+	case 0:
+		return true;
+	case -ENODEV:
+	case -ESHUTDOWN:
+		stream->enabled = false;
+		stream->running = false;
+		cancel_delayed_work(&stream->recovery);
+		return false;
+	case -ENOENT:
+	case -ECONNRESET:
+		/* Draining a disabled queue must preserve restart intent. */
+		if (stream->enabled) {
+			stream->enabled = false;
+			stream->running = false;
+			cancel_delayed_work(&stream->recovery);
+		}
+		return false;
+	default:
+		if (stream->enabled)
+			fl2000_stream_error(stream, status);
+		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming transfer failed: %d\n",
+				    status);
+		return false;
+	}
+}
+
+/**
+ * fl2000_transfer_done() - Resubmit after both URBs of a frame complete
+ * @transfer: Reusable bulk transfer.
+ *
+ * Context: Caller holds the stream spinlock.
+ * Return: 0 on success or a negative submission error.
+ */
+static int fl2000_transfer_done(struct fl2000_transfer *transfer)
+{
+	if (--transfer->pending || !transfer->stream->enabled)
+		return 0;
+	return fl2000_submit_transfer(transfer);
 }
 
 /**
@@ -325,52 +408,46 @@ static void fl2000_data_completion(struct urb *urb)
 	struct fl2000_transfer *transfer = urb->context;
 	struct fl2000_stream *stream = transfer->stream;
 	unsigned long flags;
-	int status = urb->status;
 	unsigned int actual = urb->actual_length;
-	int ret = 0;
+	int ret;
 
 	spin_lock_irqsave(&stream->lock, flags);
 	transfer->frame->users--;
 	transfer->frame = NULL;
-
-	switch (status) {
-	case 0:
-		break;
-	case -ENODEV:
-	case -ESHUTDOWN:
-		stream->enabled = false;
-		stream->running = false;
-		cancel_delayed_work(&stream->recovery);
-		goto unlock;
-	case -ENOENT:
-	case -ECONNRESET:
-		/* Draining a disabled queue must preserve restart intent. */
-		if (stream->enabled) {
-			stream->enabled = false;
-			stream->running = false;
-			cancel_delayed_work(&stream->recovery);
+	if (fl2000_transfer_status(stream, urb->status)) {
+		if (actual == stream->buf_size) {
+			stream->retries = 0;
+		} else {
+			if (stream->enabled)
+				fl2000_stream_error(stream, -EREMOTEIO);
+			dev_err_ratelimited(&stream->usb_dev->dev,
+					    "Short streaming transfer: %u/%u\n", actual,
+					    stream->buf_size);
 		}
-		goto unlock;
-	default:
-		if (stream->enabled)
-			fl2000_stream_error(stream, status);
-		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming transfer failed: %d\n",
-				    status);
-		goto unlock;
 	}
+	ret = fl2000_transfer_done(transfer);
+	spin_unlock_irqrestore(&stream->lock, flags);
+	if (ret)
+		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming submission failed: %d\n",
+				    ret);
+}
 
-	if (actual != stream->buf_size) {
-		if (stream->enabled)
-			fl2000_stream_error(stream, -EREMOTEIO);
-		dev_err_ratelimited(&stream->usb_dev->dev, "Short streaming transfer: %u/%u\n",
-				    actual, stream->buf_size);
-		goto unlock;
-	}
-	if (stream->enabled) {
-		stream->retries = 0;
-		ret = fl2000_submit_transfer(transfer);
-	}
-unlock:
+/**
+ * fl2000_zlp_completion() - Finish a frame's end marker and advance the queue
+ * @urb: Completed zero-length USB request.
+ *
+ * Context: USB completion context. Takes the stream spinlock.
+ */
+static void fl2000_zlp_completion(struct urb *urb)
+{
+	struct fl2000_transfer *transfer = urb->context;
+	struct fl2000_stream *stream = transfer->stream;
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&stream->lock, flags);
+	fl2000_transfer_status(stream, urb->status);
+	ret = fl2000_transfer_done(transfer);
 	spin_unlock_irqrestore(&stream->lock, flags);
 	if (ret)
 		dev_err_ratelimited(&stream->usb_dev->dev, "Streaming submission failed: %d\n",
@@ -392,8 +469,10 @@ static void fl2000_drain_stream(struct fl2000_stream *stream)
 	spin_lock_irqsave(&stream->lock, flags);
 	stream->enabled = false;
 	spin_unlock_irqrestore(&stream->lock, flags);
-	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++)
+	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		usb_kill_urb(stream->transfers[i].urb);
+		usb_kill_urb(stream->transfers[i].zlp);
+	}
 }
 
 /**
@@ -434,10 +513,13 @@ static void fl2000_streaming_release(struct device *dev __always_unused, void *r
 	mutex_lock(&stream->mutex);
 	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++) {
 		usb_free_urb(stream->transfers[i].urb);
+		usb_free_urb(stream->transfers[i].zlp);
 		sg_free_table(&stream->transfers[i].sgt);
 	}
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		fl2000_free_frame(stream->usb_dev, &stream->frames[i]);
+	kfree(stream->read_buf);
+	kvfree(stream->shadow);
 	mutex_unlock(&stream->mutex);
 }
 
@@ -724,6 +806,91 @@ static void fl2000_convert_damage(u8 *dst, const void *src, unsigned int width, 
 }
 
 /**
+ * fl2000_read_damage() - Stage source spans before conversion and wire reordering
+ * @stream: Stream with an allocated cached staging buffer.
+ * @dst: Writable wire image.
+ * @src: Mapping at the crop origin.
+ * @source_bytes: Source bytes per pixel.
+ * @damage: Crop-relative rectangle to repair.
+ *
+ * Read only the requested pixels. Split unaligned prefixes and tails from
+ * sixteen-byte-aligned WC reads without rounding beyond the source rectangle.
+ * Wire ordering remains global across spans and rows.
+ *
+ * Context: Process context. Caller holds the stream mutex.
+ */
+static void fl2000_read_damage(struct fl2000_stream *stream, u8 *dst, const struct iosys_map *src,
+			       unsigned int source_bytes, const struct drm_rect *damage)
+{
+	for (int y = damage->y1; y < damage->y2; y++) {
+		for (int x = damage->x1; x < damage->x2;) {
+			unsigned int count = min_t(unsigned int, damage->x2 - x,
+						   (FL2000_READ_SIZE - 16) / source_bytes);
+			unsigned int len = count * source_bytes;
+			unsigned int offset = (y * stream->width + x) * stream->bytes_pix;
+			struct iosys_map read = *src;
+			struct iosys_map cached = IOSYS_MAP_INIT_VADDR(stream->read_buf);
+			unsigned long address;
+			unsigned int prefix, aligned;
+
+			iosys_map_incr(&read, (size_t)y * stream->pitch + x * source_bytes);
+			address = read.is_iomem ? (unsigned long)read.vaddr_iomem :
+						  (unsigned long)read.vaddr;
+			prefix = min_t(unsigned int, -address & 15, len);
+			if (prefix)
+				iosys_map_incr(&cached, 16);
+			iosys_map_memcpy_from(stream->read_buf, &read, 0, prefix);
+			iosys_map_incr(&read, prefix);
+			aligned = round_down(len - prefix, 16);
+			if (aligned)
+				drm_memcpy_from_wc(&cached, &read, aligned);
+			iosys_map_memcpy_from((u8 *)cached.vaddr + aligned, &read, aligned,
+					      len - prefix - aligned);
+			if (prefix)
+				memmove(stream->read_buf + prefix, cached.vaddr, len - prefix);
+			if (source_bytes == 4)
+				fl2000_convert_line(dst, stream->read_buf, count, offset,
+						    stream->bytes_pix);
+			else
+				fl2000_reorder_line(dst, stream->read_buf, len, offset);
+			x += count;
+			cond_resched();
+		}
+	}
+}
+
+/**
+ * fl2000_copy_damage() - Repair a wire frame from the shadow image
+ * @stream: Stream with a valid shadow image.
+ * @dst: Writable wire frame with valid history outside @damage.
+ * @damage: Crop-relative rectangle missed by @dst.
+ *
+ * Copies whole eight-byte wire words; bytes outside @damage are already equal
+ * or newer in the shadow, so widening a span cannot publish stale pixels.
+ *
+ * Context: Process context. Caller holds the stream mutex.
+ */
+static void fl2000_copy_damage(struct fl2000_stream *stream, u8 *dst, const struct drm_rect *damage)
+{
+	unsigned int row = stream->width * stream->bytes_pix;
+	int rows = damage->y2 - damage->y1;
+
+	/* Full-width damage is one contiguous wire span. */
+	if (damage->x1 == 0 && damage->x2 == (int)stream->width)
+		rows = 1;
+	for (int y = damage->y1; y < damage->y1 + rows; y++) {
+		unsigned int start = y * row + damage->x1 * stream->bytes_pix;
+		unsigned int end = y * row + damage->x2 * stream->bytes_pix;
+
+		if (rows == 1)
+			end = (damage->y2 - 1) * row + damage->x2 * stream->bytes_pix;
+		start = round_down(start, 8);
+		end = min(ALIGN(end, 8), stream->buf_size);
+		memcpy(dst + start, stream->shadow + start, end - start);
+	}
+}
+
+/**
  * fl2000_frame_layout_valid() - Check crop geometry and installed wire size
  * @stream: Owning bulk stream.
  * @src: Readable source mapping.
@@ -735,14 +902,15 @@ static void fl2000_convert_damage(u8 *dst, const void *src, unsigned int width, 
  * Context: Any context. Does not sleep.
  * Return: True if the mapping and geometry fit the installed stream layout.
  */
-static bool fl2000_frame_layout_valid(const struct fl2000_stream *stream, const void *src,
-				      unsigned int height, unsigned int width, unsigned int pitch,
+static bool fl2000_frame_layout_valid(const struct fl2000_stream *stream,
+				      const struct iosys_map *src, unsigned int height,
+				      unsigned int width, unsigned int pitch,
 				      unsigned int source_bytes)
 {
 	unsigned int size;
 
-	return src && width && height && width <= INT_MAX && height <= INT_MAX && source_bytes &&
-	       width <= pitch / source_bytes &&
+	return src && !iosys_map_is_null(src) && width && height && width <= INT_MAX &&
+	       height <= INT_MAX && source_bytes && width <= pitch / source_bytes &&
 	       (source_bytes == 4 || source_bytes == stream->bytes_pix) &&
 	       !check_mul_overflow(width, height, &size) &&
 	       !check_mul_overflow(size, stream->bytes_pix, &size) && stream->bytes_pix &&
@@ -777,15 +945,18 @@ static struct fl2000_frame *fl2000_find_free_frame(struct fl2000_stream *stream)
  * fl2000_streaming_update() - Prepare a retained image from source damage
  * @usb_dev: Adapter whose streaming resources remain alive for the call.
  * @src: CPU mapping of the crop origin; valid for this call only.
+ * @read_wc: Stage potentially write-combined imported memory before conversion.
  * @height: Crop height in rows.
  * @width: Crop width in pixels.
  * @pitch: Source row stride in bytes, including padding.
  * @format: Linear XRGB8888, RGB888 or RGB565 DRM fourcc.
  * @damage: Crop-relative pixel rectangle, or NULL for the full crop.
  *
- * Copies/converts only regions missed by the chosen free wire buffer. Tracks
- * missed damage even when all candidates are busy. Layout changes invalidate
- * history. Does not modify submitted buffers, retain the source mapping,
+ * Converts only this damage into the cached shadow image, then repairs the
+ * chosen free wire buffer by copying the regions it missed from the shadow.
+ * Accumulated damage can grow while frames are in flight, but repair stays
+ * a memory copy. Tracks missed damage even when all candidates are busy.
+ * Layout changes invalidate history. Does not modify submitted buffers, retain the source mapping,
  * submit USB traffic or start a stopped stream.
  *
  * Context: Process context. Takes the stream mutex; may reschedule during
@@ -793,9 +964,9 @@ static struct fl2000_frame *fl2000_find_free_frame(struct fl2000_stream *stream)
  * Return: 0 on success or empty damage, -EBUSY without a free frame, or an
  *         error.
  */
-int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigned int height,
-			    unsigned int width, unsigned int pitch, u32 format,
-			    const struct drm_rect *damage)
+int fl2000_streaming_update(const struct usb_device *usb_dev, const struct iosys_map *src,
+			    bool read_wc, unsigned int height, unsigned int width,
+			    unsigned int pitch, u32 format, const struct drm_rect *damage)
 {
 	struct fl2000_stream *stream = fl2000_find_stream(usb_dev);
 	struct fl2000_frame *frame;
@@ -821,17 +992,39 @@ int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigne
 	if (damage->x1 == damage->x2 || damage->y1 == damage->y2)
 		goto out;
 	/* A different crop, mapping, layout or format invalidates every cached image. */
-	if (stream->source != src || stream->width != width || stream->height != height ||
-	    stream->pitch != pitch || stream->format != format) {
+	if (!iosys_map_is_equal(&stream->source, src) || stream->width != width ||
+	    stream->height != height || stream->pitch != pitch || stream->format != format) {
 		for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 			stream->frames[i].valid = false;
-		stream->source = src;
+		stream->shadow_valid = false;
+		stream->source = *src;
 		stream->width = width;
 		stream->height = height;
 		stream->pitch = pitch;
 		stream->format = format;
 	}
-	/* Preserve damage even if every candidate is currently in flight. */
+	if (!stream->shadow_valid)
+		damage = &full;
+	/* Convert only this commit's damage, even while every USB frame is busy. */
+	if (read_wc || src->is_iomem) {
+		if (damage == &full) {
+			unsigned int size = width * height * stream->bytes_pix;
+
+			memset(stream->shadow + (size & ~7U), 0, stream->buf_size - (size & ~7U));
+		}
+		fl2000_read_damage(stream, stream->shadow, src, source_bytes, damage);
+	} else if (damage != &full) {
+		fl2000_convert_damage(stream->shadow, src->vaddr, width, pitch, source_bytes,
+				      stream->bytes_pix, damage);
+	} else if (source_bytes == 4) {
+		fl2000_convert_frame(stream->shadow, src->vaddr, height, width, pitch,
+				     stream->bytes_pix, stream->buf_size);
+	} else {
+		fl2000_reorder_frame(stream->shadow, src->vaddr, height, width, pitch,
+				     stream->bytes_pix, stream->buf_size);
+	}
+	stream->shadow_valid = true;
+	/* Preserve damage for frames that are in flight or not yet repaired. */
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		fl2000_damage_add(&stream->frames[i].dirty, damage);
 	frame = fl2000_find_free_frame(stream);
@@ -839,19 +1032,10 @@ int fl2000_streaming_update(const struct usb_device *usb_dev, void *src, unsigne
 		ret = -EBUSY;
 		goto out;
 	}
-
-	if (!frame->valid || (frame->dirty.x1 == 0 && frame->dirty.y1 == 0 &&
-			      frame->dirty.x2 == (int)width && frame->dirty.y2 == (int)height)) {
-		if (source_bytes == 4)
-			fl2000_convert_frame(frame->vaddr, src, height, width, pitch,
-					     stream->bytes_pix, stream->buf_size);
-		else
-			fl2000_reorder_frame(frame->vaddr, src, height, width, pitch,
-					     stream->bytes_pix, stream->buf_size);
-	} else {
-		fl2000_convert_damage(frame->vaddr, src, width, pitch, source_bytes,
-				      stream->bytes_pix, &frame->dirty);
-	}
+	if (frame->valid)
+		fl2000_copy_damage(stream, frame->vaddr, &frame->dirty);
+	else
+		memcpy(frame->vaddr, stream->shadow, stream->buf_size);
 	frame->valid = true;
 	frame->dirty = (struct drm_rect){ 0 };
 	spin_lock_irqsave(&stream->lock, flags);
@@ -880,6 +1064,8 @@ void fl2000_streaming_free_buffers(struct usb_device *usb_dev,
 		fl2000_free_frame(usb_dev, &buffers->frames[i]);
 	for (unsigned int i = 0; i < FL2000_QUEUE_DEPTH; i++)
 		sg_free_table(&buffers->tables[i]);
+	kfree(buffers->read_buf);
+	kvfree(buffers->shadow);
 	kfree(buffers);
 }
 
@@ -913,6 +1099,12 @@ struct fl2000_stream_buffers *fl2000_streaming_prepare(struct usb_device *usb_de
 		return ERR_PTR(-ENOMEM);
 	buffers->size = ALIGN(size, 8);
 	buffers->bytes_pix = bytes_pix;
+	buffers->read_buf = kmalloc(FL2000_READ_SIZE, GFP_KERNEL);
+	buffers->shadow = kvzalloc(buffers->size, GFP_KERNEL);
+	if (!buffers->read_buf || !buffers->shadow) {
+		ret = -ENOMEM;
+		goto fail;
+	}
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++) {
 		ret = fl2000_alloc_frame(usb_dev, &buffers->frames[i], buffers->size);
 		if (ret)
@@ -961,7 +1153,10 @@ int fl2000_streaming_mode_set(struct usb_device *usb_dev, struct fl2000_stream_b
 	mutex_lock(&stream->mutex);
 	fl2000_stop_stream(stream);
 	stream->latest = NULL;
-	stream->source = NULL;
+	iosys_map_clear(&stream->source);
+	swap(stream->read_buf, buffers->read_buf);
+	swap(stream->shadow, buffers->shadow);
+	stream->shadow_valid = false;
 	/* No allocations after atomic state swap. Retire the old set below. */
 	for (unsigned int i = 0; i < FL2000_FRAME_COUNT; i++)
 		swap(stream->frames[i], buffers->frames[i]);
@@ -1148,13 +1343,15 @@ int fl2000_streaming_create(struct usb_interface *interface)
 
 		transfer->stream = stream;
 		transfer->urb = usb_alloc_urb(0, GFP_KERNEL);
-		if (!transfer->urb) {
+		transfer->zlp = usb_alloc_urb(0, GFP_KERNEL);
+		if (!transfer->urb || !transfer->zlp) {
 			ret = -ENOMEM;
 			goto fail;
 		}
 		usb_fill_bulk_urb(transfer->urb, usb_dev, usb_sndbulkpipe(usb_dev, STREAMING_EP),
 				  NULL, 0, fl2000_data_completion, transfer);
-		transfer->urb->transfer_flags = URB_ZERO_PACKET;
+		usb_fill_bulk_urb(transfer->zlp, usb_dev, usb_sndbulkpipe(usb_dev, STREAMING_EP),
+				  NULL, 0, fl2000_zlp_completion, transfer);
 	}
 	devres_add(&usb_dev->dev, stream);
 	device->stream = stream;

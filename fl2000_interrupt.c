@@ -223,10 +223,11 @@ static int fl2000_intr_process_status(struct fl2000_interrupt *intr)
 
 	ret = fl2000_check_interrupt(intr->usb_dev);
 	/* A previous failed read may already have cleared the FL2000 event bit. */
-	if (ret >= 0 && (ret > 0 || intr->status_polling || rescan)) {
+	if (ret >= 0 && (ret > 0 || intr->status_polling || rescan || device->native_vga)) {
 		errors = atomic_read(&device->i2c_errors);
 		/* Nested dispatch finishes bridge acknowledgment before USB rearm. */
-		handle_nested_irq(intr->irq);
+		if (!device->native_vga)
+			handle_nested_irq(intr->irq);
 		ret = fl2000_drm_hotplug(intr->usb_dev);
 		/* IRQ handlers return irqreturn_t, not an I2C transfer errno. */
 		if (!ret && atomic_read(&device->i2c_errors) != errors)
