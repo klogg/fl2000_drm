@@ -2,12 +2,15 @@
 
 ## Discovery and attachment
 
-FL2000 owns a USB transport, an I2C adapter and a DRM display pipeline. It
-waits for a bridge component on its own I2C adapter before registering the DRM
-device. A udev-activated service identifies configured bridges and creates an
-I2C client through `new_device`; see [enumeration](ENUMERATION.md). Native VGA
-through the integrated DAC is not implemented, including when bridge discovery
-fails.
+FL2000 owns a USB transport, an I2C adapter and a DRM display pipeline. During
+initial controller setup, status bit 27 (the hardware HDMI-enable pin) selects
+the output independently of monitor presence and bridge enumeration. A low pin
+attaches an integrated VGA bridge and immediately registers the DRM device.
+A high pin waits for a bridge component on its own I2C adapter. A udev-activated
+service identifies configured HDMI bridges and creates an I2C client through
+`new_device`; see [enumeration](ENUMERATION.md). Failed bridge discovery never
+falls back to VGA. The pin is named in the vendor driver and is high in recorded
+HDMI captures and low on the tested physical VGA adapter.
 
 The supplied IT6610/21/22 driver derives from the [Linux v7.0 bridge
 driver][upstream-bridge]. It supports two attachment contexts:
@@ -78,12 +81,25 @@ path fails. The domain, worker and provider lifetimes are coupled; their
 synchronization and retry rules are documented at `struct fl2000_interrupt`
 and the interrupt entry points in [fl2000_interrupt.c](../fl2000_interrupt.c).
 
+The native VGA bridge reads monitor presence from status bit 29 and EDID from
+DDC address 0x50 using four-byte controller commands. Extended reads select
+address 0x30's segment pointer and restore zero under the adapter bus lock.
+A failed restoration is retried before subsequent base reads; ordinary base
+reads do not require segment-pointer support. EDID validation uses
+`drm_edid_read_custom()` synchronously, without a cache. Native USB notifications
+rescan connector state even if detection already consumed the event bits, and
+never dispatch the external bridge IRQ. Atomic disable stops DAC output while
+preserving monitor detection; normal CRTC programming re-enables it.
+
 ## Ownership and teardown
 
 Each adapter owns its lifecycle lock and transport resources. The
 `struct fl2000_device` documentation in [fl2000.h](../fl2000.h) describes state
-ownership. Component binding owns the initial DRM reference; open files can
-retain the allocation and provider module after unbind. See
+ownership. A component bind group (HDMI) or explicit devres bind group (VGA)
+owns the initial DRM reference; open files can retain the allocation after
+unbind. HDMI additionally retains its provider module. The native bridge is
+reference-counted, and its callbacks guard USB access with `drm_dev_enter()`
+so retained connectors cannot use resources released after unplug. See
 `fl2000_drm_bind()` and `fl2000_drm_cleanup()` in [fl2000_drm.c](../fl2000_drm.c)
 for the lifetime and teardown contracts.
 
